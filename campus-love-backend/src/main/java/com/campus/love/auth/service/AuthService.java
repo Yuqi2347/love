@@ -1,0 +1,76 @@
+package com.campus.love.auth.service;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.campus.love.auth.dto.AuthResponse;
+import com.campus.love.auth.dto.LoginRequest;
+import com.campus.love.auth.dto.RegisterRequest;
+import com.campus.love.common.exception.BusinessException;
+import com.campus.love.common.result.ResultCode;
+import com.campus.love.common.utils.JwtUtil;
+import com.campus.love.user.entity.User;
+import com.campus.love.user.mapper.UserMapper;
+import lombok.RequiredArgsConstructor;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.stereotype.Service;
+
+@Service
+@RequiredArgsConstructor
+public class AuthService {
+
+    private final UserMapper userMapper;
+    private final JwtUtil jwtUtil;
+    private final PasswordEncoder passwordEncoder;
+
+    private static final String CAMPUS_EMAIL_SUFFIX = ".edu.cn";
+
+    public AuthResponse register(RegisterRequest request) {
+        if (!request.getEmail().endsWith(CAMPUS_EMAIL_SUFFIX)) {
+            throw new BusinessException(ResultCode.INVALID_CAMPUS_EMAIL);
+        }
+
+        Long existCount = userMapper.selectCount(
+                new LambdaQueryWrapper<User>().eq(User::getEmail, request.getEmail()));
+        if (existCount > 0) {
+            throw new BusinessException(ResultCode.USER_ALREADY_EXISTS);
+        }
+
+        User user = new User();
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setNickname(request.getNickname());
+        user.setGender(0);
+        user.setProfileComplete(false);
+        user.setStatus(1);
+        userMapper.insert(user);
+
+        return buildAuthResponse(user);
+    }
+
+    public AuthResponse login(LoginRequest request) {
+        User user = userMapper.selectOne(
+                new LambdaQueryWrapper<User>().eq(User::getEmail, request.getEmail()));
+        if (user == null) {
+            throw new BusinessException(ResultCode.INVALID_CREDENTIALS);
+        }
+        if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
+            throw new BusinessException(ResultCode.INVALID_CREDENTIALS);
+        }
+
+        return buildAuthResponse(user);
+    }
+
+    private AuthResponse buildAuthResponse(User user) {
+        String accessToken = jwtUtil.generateAccessToken(user.getId(), user.getEmail());
+        String refreshToken = jwtUtil.generateRefreshToken(user.getId(), user.getEmail());
+
+        return AuthResponse.builder()
+                .userId(user.getId())
+                .email(user.getEmail())
+                .nickname(user.getNickname())
+                .avatarUrl(user.getAvatarUrl())
+                .profileComplete(user.getProfileComplete())
+                .accessToken(accessToken)
+                .refreshToken(refreshToken)
+                .build();
+    }
+}

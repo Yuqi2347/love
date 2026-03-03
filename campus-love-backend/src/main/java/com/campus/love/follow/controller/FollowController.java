@@ -1,0 +1,54 @@
+package com.campus.love.follow.controller;
+
+import com.campus.love.auth.security.CurrentUser;
+import com.campus.love.common.enums.FollowStatusEnum;
+import com.campus.love.common.result.Result;
+import com.campus.love.follow.dto.FollowResponse;
+import com.campus.love.follow.service.FollowService;
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+import lombok.RequiredArgsConstructor;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@Tag(name = "关注", description = "关注/取消关注管理")
+@RestController
+@RequestMapping("/follow")
+@RequiredArgsConstructor
+public class FollowController {
+
+    private final FollowService followService;
+
+    @Operation(summary = "关注用户")
+    @PostMapping("/{targetUserId}")
+    public Result<Void> follow(@PathVariable Long targetUserId) {
+        followService.follow(targetUserId);
+        return Result.success();
+    }
+
+    @Operation(summary = "取消关注")
+    @DeleteMapping("/{targetUserId}")
+    public Result<Void> unfollow(@PathVariable Long targetUserId) {
+        followService.unfollow(targetUserId);
+        return Result.success();
+    }
+
+    @Operation(summary = "获取与目标用户的关注状态")
+    @GetMapping("/status/{targetUserId}")
+    public Result<FollowStatusEnum> getStatus(@PathVariable Long targetUserId) {
+        return Result.success(followService.getFollowStatus(targetUserId));
+    }
+
+    @Operation(summary = "我的关注列表")
+    @GetMapping("/following")
+    public Result<List<FollowResponse>> getFollowing() {
+        return Result.success(followService.getFollowingList(CurrentUser.getId()));
+    }
+
+    @Operation(summary = "我的粉丝列表")
+    @GetMapping("/followers")
+    public Result<List<FollowResponse>> getFollowers() {
+        return Result.success(followService.getFollowerList(CurrentUser.getId()));
+    }
+}
