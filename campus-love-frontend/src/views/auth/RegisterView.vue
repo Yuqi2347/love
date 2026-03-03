@@ -66,7 +66,11 @@ const loading = ref(false)
 
 const form = reactive({ nickname: '', email: '', password: '', confirmPassword: '' })
 
-const validateConfirm = (_rule: any, value: string, callback: any) => {
+const validateConfirm = (
+  _rule: unknown,
+  value: string,
+  callback: (err?: Error) => void
+) => {
   if (value !== form.password) callback(new Error('两次密码不一致'))
   else callback()
 }

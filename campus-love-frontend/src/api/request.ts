@@ -2,7 +2,7 @@ import axios from 'axios'
 import type { AxiosInstance, InternalAxiosRequestConfig, AxiosResponse } from 'axios'
 import { ElMessage } from 'element-plus'
 
-export interface ApiResult<T = any> {
+export interface ApiResult<T = unknown> {
   code: number
   message: string
   data: T

@@ -4,11 +4,12 @@
       <h2 class="page-title">朋友圈</h2>
     </div>
 
-    <div class="feed-list" v-if="posts.length">
+    <div v-if="posts.length" class="feed-list">
       <div v-for="post in posts" :key="post.id" class="feed-item">
         <div class="feed-author">
-          <img :src="post.avatarUrl || defaultAvatar" class="avatar" width="44" height="44"
-            @click="$router.push(`/profile/${post.userId}`)" style="cursor:pointer;" />
+          <img
+:src="post.avatarUrl || defaultAvatar" class="avatar" width="44" height="44"
+            style="cursor:pointer;" @click="$router.push(`/profile/${post.userId}`)" />
           <div class="author-info">
             <span class="author-name" @click="$router.push(`/profile/${post.userId}`)">{{ post.nickname }}</span>
             <span class="post-time">{{ post.createdAt }}</span>

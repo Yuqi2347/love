@@ -14,8 +14,9 @@
       </button>
     </div>
 
-    <div class="message-list" ref="messageListRef">
-      <div v-for="msg in messages" :key="msg.id"
+    <div ref="messageListRef" class="message-list">
+      <div
+v-for="msg in messages" :key="msg.id"
         :class="['message-row', { mine: msg.senderId === myId }]">
         <img v-if="msg.senderId !== myId" :src="msg.senderAvatar || defaultAvatar" class="avatar msg-avatar" width="36" height="36" />
         <div class="message-bubble">
@@ -26,9 +27,9 @@
     </div>
 
     <div class="chat-input-area">
-      <el-input v-model="inputText" placeholder="输入消息..." @keyup.enter="handleSend" size="large">
+      <el-input v-model="inputText" placeholder="输入消息..." size="large" @keyup.enter="handleSend">
         <template #append>
-          <button class="send-btn" @click="handleSend" :disabled="!inputText.trim()">
+          <button class="send-btn" :disabled="!inputText.trim()" @click="handleSend">
             <el-icon :size="20"><Promotion /></el-icon>
           </button>
         </template>

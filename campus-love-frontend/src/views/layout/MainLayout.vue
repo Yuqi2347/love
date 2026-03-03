@@ -9,7 +9,8 @@
         </router-link>
 
         <nav class="nav-menu">
-          <router-link v-for="item in navItems" :key="item.path" :to="item.path"
+          <router-link
+v-for="item in navItems" :key="item.path" :to="item.path"
             class="nav-item" :class="{ active: isActive(item.path) }">
             <el-icon :size="24"><component :is="item.icon" /></el-icon>
             <span class="nav-label">{{ item.label }}</span>
@@ -22,7 +23,7 @@
           发布动态
         </button>
 
-        <div class="sidebar-user" v-if="userStore.user" @click="$router.push('/profile')">
+        <div v-if="userStore.user" class="sidebar-user" @click="$router.push('/profile')">
           <img :src="userStore.user.avatarUrl || defaultAvatar" class="avatar" width="40" height="40" />
           <div class="user-info">
             <div class="user-name text-ellipsis">{{ userStore.user.nickname }}</div>
@@ -46,7 +47,8 @@
       <div class="panel-card">
         <h3 class="panel-title">今日推荐</h3>
         <div v-if="topMatches.length" class="recommend-list">
-          <div v-for="m in topMatches" :key="m.userId" class="recommend-item"
+          <div
+v-for="m in topMatches" :key="m.userId" class="recommend-item"
             @click="$router.push(`/profile/${m.userId}`)">
             <img :src="m.avatarUrl || defaultAvatar" class="avatar" width="40" height="40" />
             <div class="recommend-info">
@@ -79,7 +81,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { getRecommendations, type MatchResult } from '@/api/matchApi'
 import { followUser } from '@/api/followApi'
@@ -88,7 +90,6 @@ import { ElMessage } from 'element-plus'
 import { INTEREST_TAGS } from '@/constants/matchConst'
 
 const route = useRoute()
-const router = useRouter()
 const userStore = useUserStore()
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f0f2f5" width="40" height="40" rx="20"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="18">👤</text></svg>'

@@ -14,7 +14,8 @@
         <el-form :model="form" size="large" label-position="top">
           <el-form-item label="性别">
             <div class="gender-select">
-              <div v-for="g in genderOptions" :key="g.value"
+              <div
+v-for="g in genderOptions" :key="g.value"
                    class="gender-card" :class="{ active: form.gender === g.value }"
                    @click="form.gender = g.value">
                 <span class="gender-emoji">{{ g.value === 1 ? '👨' : '👩' }}</span>
@@ -23,7 +24,8 @@
             </div>
           </el-form-item>
           <el-form-item label="生日">
-            <el-date-picker v-model="form.birthDate" type="date" placeholder="选择生日"
+            <el-date-picker
+v-model="form.birthDate" type="date" placeholder="选择生日"
                             value-format="YYYY-MM-DD" style="width:100%" />
           </el-form-item>
           <el-form-item label="学校">
@@ -46,7 +48,8 @@
       <!-- Step 2: MBTI -->
       <div v-if="step === 2" class="step-content">
         <div class="mbti-grid">
-          <div v-for="mbti in mbtiTypes" :key="mbti"
+          <div
+v-for="mbti in mbtiTypes" :key="mbti"
                class="mbti-card" :class="{ active: form.mbti === mbti }"
                @click="form.mbti = mbti">
             <div class="mbti-type">{{ mbti }}</div>
@@ -59,7 +62,8 @@
       <div v-if="step === 3" class="step-content">
         <p class="interest-hint">选择你感兴趣的标签（至少3个）</p>
         <div class="interest-grid">
-          <div v-for="tag in interestTags" :key="tag"
+          <div
+v-for="tag in interestTags" :key="tag"
                class="interest-tag" :class="{ active: selectedInterests.includes(tag) }"
                @click="toggleInterest(tag)">
             {{ tag }}

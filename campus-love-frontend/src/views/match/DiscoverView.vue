@@ -8,8 +8,9 @@
       </div>
     </div>
 
-    <div class="user-grid" v-if="users.length">
-      <div v-for="user in users" :key="user.userId" class="user-card card"
+    <div v-if="users.length" class="user-grid">
+      <div
+v-for="user in users" :key="user.userId" class="user-card card"
         @click="$router.push(`/profile/${user.userId}`)">
         <div class="card-top">
           <img :src="user.avatarUrl || defaultAvatar" class="card-avatar" />
@@ -22,7 +23,7 @@
             <span v-if="user.mbti" class="meta-tag accent">{{ user.mbti }}</span>
           </div>
           <p class="card-bio text-ellipsis">{{ user.bio || user.major || '这个人很神秘~' }}</p>
-          <div class="card-interests" v-if="user.interests">
+          <div v-if="user.interests" class="card-interests">
             <span v-for="tag in user.interests.split(',').slice(0, 3)" :key="tag" class="interest-chip">{{ tag }}</span>
           </div>
         </div>
