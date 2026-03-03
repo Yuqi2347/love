@@ -237,7 +237,25 @@ src/
 
 - 禁止直接向 `master` 强制推送；合并前需经过 Code Review（可由管理者规定）。
 
-### 7.2 提交信息（约定式提交）
+### 7.2 推送与合并流程（GitHub）
+
+本仓库托管于 **GitHub**，推送与合并须遵守以下规则。
+
+**开发者日常流程：**
+
+1. **拉取与分支**：从远程拉取最新代码（如 `git pull origin develop`），在 `develop` 上开发，或从 `develop` 拉出功能分支（如 `git checkout -b feature/xxx`）。
+2. **本地提交**：在本地完成开发后，按「7.4 提交前自检」执行自检（含前端 `npm run lint`），再按「7.3 提交信息」规范执行 `git add`、`git commit`。
+3. **推送到远程**：将当前分支推送到 GitHub（如 `git push origin feature/xxx` 或 `git push origin develop`）。**禁止直接向 `master` 推送**；若仓库已配置分支保护，向 `master` 的 push 将被拒绝。
+4. **发起 Pull Request（PR）**：在 GitHub 仓库页面选择「Compare & pull request」，将分支合并目标设为 `master`（或先合并到 `develop` 再对 `master` 提 PR）。填写 PR 标题与说明，便于管理者 Review。
+5. **等待 Review**：由管理者（或指定审核人）进行 Code Review；根据反馈修改后可在同一 PR 内继续推送，无需新开 PR。
+6. **合并**：Review 通过后，由管理者或具备合并权限者在 GitHub 上合并 PR；合并后可在本地切回 `develop` 并执行 `git pull` 同步。
+
+**管理者：**
+
+- 具备合并 PR 及配置仓库设置的权限。合并前应完成 Code Review（参见「八、管理者与流程建议」）。
+- 分支保护与强制 Review 在 GitHub 仓库设置中配置（见「8.4 GitHub 仓库设置」）。
+
+### 7.3 提交信息（约定式提交）
 
 格式：`<type>(<scope>): <subject>`，可带可选的 `body`、`footer`。
 
@@ -263,7 +281,7 @@ chore(deps): 升级 Vue 到 3.5.x
 
 - **subject**：中文或英文均可，同一项目内统一；简短、祈使句、无句号结尾。
 
-### 7.3 提交前自检
+### 7.4 提交前自检
 
 - 本地能正常启动后端与前端。
 - 新代码符合本规范（目录、命名、接口格式）。
@@ -290,6 +308,30 @@ chore(deps): 升级 Vue 到 3.5.x
 
 - 接口变更：同步更新 Swagger 与前端类型/注释；重大变更在 README 或 CHANGELOG 中说明。
 - 新成员：以 README + 本文档 + 本地可运行项目为准入门槛。
+
+### 8.4 GitHub 仓库设置（分支保护与强制 Review）
+
+本仓库使用 **GitHub**。管理者应在仓库中配置分支保护，使合并到 `master` 必须通过 Pull Request 且经审核通过，禁止直接 push 到 `master`。
+
+**配置步骤：**
+
+1. 打开 GitHub 仓库页面，进入 **Settings** → **Branches**。
+2. 在 **Branch protection rules** 中点击 **Add branch protection rule**（或 **Add rule**）。
+3. **Branch name pattern** 填写 `master`（若主分支名为 `main` 则填 `main`）；如需同时保护 `develop`，可再添加一条规则，pattern 填 `develop`。
+4. 勾选并设置以下项：
+   - **Require a pull request before merging**：必须通过 PR 才能合并。
+     - 可选勾选 **Require approvals**，数量设为至少 **1**；审核通过后该 PR 才可合并。
+   - **Restrict who can push to matching branches**：可选；若希望只有管理者能推送到受保护分支，可在此指定允许名单（通常留空即可，因已禁止直接 push，仅通过合并 PR 更新）。
+5. 可选：**Require status checks to pass before merging** — 若已配置 CI（如 GitHub Actions 运行 `npm run lint`），可勾选并选择对应 status check，确保 PR 通过检查后才可合并。
+6. 保存：点击 **Create** 或 **Save changes**。
+
+**效果：**
+
+- 任何人无法直接 `git push origin master` 更新 `master`，必须通过 PR 合并。
+- PR 需经至少 1 人审核（Approve）后方可合并；管理者可将自己设为默认 reviewer，或在 **Required reviewers** 中指定成员。
+- 若配置了 status checks，PR 还需通过 CI（如前端 lint）才能合并。
+
+**首次建库建议：** 在本地创建 `develop` 并推送到 GitHub（`git checkout -b develop` → `git push -u origin develop`），便于团队在 `develop` 或从 `develop` 拉出的分支上开发，再通过 PR 合并到 `master`。
 
 ---
 
