@@ -4,7 +4,7 @@
       <div class="profile-cover"></div>
       <div class="profile-main">
         <img :src="profile?.avatarUrl || defaultAvatar" class="profile-avatar avatar" width="100" height="100" />
-        <div class="profile-actions" v-if="!isMe">
+        <div v-if="!isMe" class="profile-actions">
           <button :class="['btn-primary', { 'btn-outline': followStatus !== 'NONE' }]" @click="handleFollowToggle">
             {{ followLabel }}
           </button>
@@ -12,7 +12,7 @@
             <el-icon><ChatDotRound /></el-icon> 聊天
           </button>
         </div>
-        <div class="profile-actions" v-else>
+        <div v-else class="profile-actions">
           <button class="btn-outline" @click="$router.push('/setup-profile')">
             <el-icon><Edit /></el-icon> 编辑资料
           </button>
@@ -21,10 +21,10 @@
       </div>
     </div>
 
-    <div class="profile-info" v-if="profile">
+    <div v-if="profile" class="profile-info">
       <h2 class="profile-name">{{ profile.nickname }}</h2>
       <p class="profile-email">{{ profile.email }}</p>
-      <p class="profile-bio" v-if="profile.bio">{{ profile.bio }}</p>
+      <p v-if="profile.bio" class="profile-bio">{{ profile.bio }}</p>
 
       <div class="profile-meta">
         <span v-if="profile.school" class="meta-item">🎓 {{ profile.school }}</span>
@@ -35,7 +35,7 @@
         <span v-if="profile.bazi" class="meta-item">🔮 {{ profile.bazi }}</span>
       </div>
 
-      <div class="profile-interests" v-if="profile.interests">
+      <div v-if="profile.interests" class="profile-interests">
         <span v-for="tag in profile.interests.split(',')" :key="tag" class="interest-tag">{{ tag }}</span>
       </div>
 

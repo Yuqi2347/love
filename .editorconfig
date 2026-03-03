@@ -1,0 +1,24 @@
+# EditorConfig: https://editorconfig.org
+# Campus Love 项目统一编辑器与格式化基础配置
+
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+[*.{java,xml,yml,yaml,properties}]
+indent_style = space
+indent_size = 4
+
+[*.{js,ts,vue,json,scss,css,html,md}]
+indent_style = space
+indent_size = 2
+
+[*.md]
+trim_trailing_whitespace = false
+
+[*.{cmd,bat}]
+end_of_line = crlf

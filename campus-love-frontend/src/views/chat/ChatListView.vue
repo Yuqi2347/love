@@ -5,7 +5,8 @@
     </div>
 
     <div v-if="conversations.length" class="conversation-list">
-      <div v-for="conv in conversations" :key="conv.userId" class="conversation-item"
+      <div
+v-for="conv in conversations" :key="conv.userId" class="conversation-item"
         @click="$router.push(`/chat/${conv.userId}`)">
         <div class="conv-avatar-wrap">
           <img :src="conv.avatarUrl || defaultAvatar" class="avatar" width="48" height="48" />

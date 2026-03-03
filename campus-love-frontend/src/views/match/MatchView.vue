@@ -5,8 +5,9 @@
       <span class="page-subtitle">基于多维度画像精准匹配</span>
     </div>
 
-    <div class="card-stack" v-if="cards.length">
-      <div class="swipe-card card"
+    <div v-if="cards.length" class="card-stack">
+      <div
+class="swipe-card card"
         :style="currentCardStyle"
         @mousedown="startDrag"
         @touchstart.passive="startDrag">

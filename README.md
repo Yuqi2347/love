@@ -83,3 +83,7 @@ openclaw/
 │       └── views/                # 页面组件
 └── README.md
 ```
+
+## 开发规范
+
+开发者与管理者请阅读 **[开发规范文档](docs/DEVELOPMENT_STANDARDS.md)**，包含：技术栈与版本、项目结构、命名规范、接口约定、Git 提交规范、Code Review 与发布流程等。
