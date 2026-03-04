@@ -40,13 +40,17 @@ public class MatchService {
                         .select(Follow::getFollowingId)
         ).stream().map(Follow::getFollowingId).toList();
 
-        List<User> candidates = userMapper.selectList(
-                new LambdaQueryWrapper<User>()
-                        .ne(User::getId, currentUserId)
-                        .eq(User::getStatus, 1)
-                        .eq(User::getProfileComplete, true)
-                        .notIn(User::getId, followingIds)  // 排除已关注的用户
-        );
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
+                .ne(User::getId, currentUserId)
+                .eq(User::getStatus, 1)
+                .eq(User::getProfileComplete, true);
+
+        // 仅在已关注列表非空时排除，避免生成 `NOT IN ()` 语法错误
+        if (!followingIds.isEmpty()) {
+            wrapper.notIn(User::getId, followingIds);
+        }
+
+        List<User> candidates = userMapper.selectList(wrapper);
 
         List<MatchResultResponse> results = candidates.stream()
                 .map(candidate -> calculateMatch(currentUser, candidate))
