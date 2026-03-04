@@ -17,11 +17,24 @@
 1. **Java 21** — [Eclipse Temurin 21](https://adoptium.net/)，配置 `JAVA_HOME` 和 `PATH`
 2. **Maven 3.9+** — [下载](https://maven.apache.org/download.cgi)，配置 `PATH`
 3. **Node.js 18+** — [下载](https://nodejs.org/)
-4. **MySQL 8.0** — 安装后创建数据库：
-   ```sql
-   CREATE DATABASE campus_love DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-   ```
-   然后执行 `campus-love-backend/src/main/resources/db/schema.sql` 初始化表结构
+4. **MySQL 8.0**
+   - **全新环境初始化（本地第一次搭建）**：
+     ```sql
+     CREATE DATABASE campus_love DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+     ```
+     然后在项目根目录执行（或进入 `db` 目录后执行）：
+     - 在 CMD 中：`mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/schema.sql`
+     - 或在 MySQL 客户端中：`SOURCE campus-love-backend/src/main/resources/db/schema.sql;`
+     完成后会一次性创建所有基础表（用户、关注、聊天、朋友圈等）。
+
+   - **已有数据库升级到最新版本（例如从 V1.0.0 升级到 V1.0.1）**：
+     在 `campus-love-backend/src/main/resources/db/` 目录下，按顺序执行尚未执行过的增量脚本，例如：
+     ```bash
+     mysql -uroot -p campus_love < schema_v1.0.1.sql
+     mysql -uroot -p campus_love < update_post_type.sql
+     mysql -uroot -p campus_love < set_admin.sql
+     ```
+     增量脚本只负责在已有结构上做“补充/升级”，不会重复创建基础表。
 5. **Redis** — Windows: [下载](https://github.com/tporadowski/redis/releases)，默认端口 6379
 
 ## 数据库配置
