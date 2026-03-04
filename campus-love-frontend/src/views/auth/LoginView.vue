@@ -71,7 +71,7 @@ async function handleLogin() {
   loading.value = true
   try {
     const res = await login(form)
-    userStore.setAuth(res.data.data)
+    await userStore.setAuth(res.data.data)
     ElMessage.success('登录成功')
     if (!res.data.data.profileComplete) {
       router.push('/setup-profile')

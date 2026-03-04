@@ -51,4 +51,16 @@ public class FollowController {
     public Result<List<FollowResponse>> getFollowers() {
         return Result.success(followService.getFollowerList(CurrentUser.getId()));
     }
+
+    @Operation(summary = "获取指定用户的关注列表")
+    @GetMapping("/user/{userId}/following")
+    public Result<List<FollowResponse>> getUserFollowing(@PathVariable Long userId) {
+        return Result.success(followService.getFollowingList(userId));
+    }
+
+    @Operation(summary = "获取指定用户的粉丝列表")
+    @GetMapping("/user/{userId}/followers")
+    public Result<List<FollowResponse>> getUserFollowers(@PathVariable Long userId) {
+        return Result.success(followService.getFollowerList(userId));
+    }
 }

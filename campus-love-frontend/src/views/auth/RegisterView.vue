@@ -98,7 +98,7 @@ async function handleRegister() {
   loading.value = true
   try {
     const res = await register({ email: form.email, password: form.password, nickname: form.nickname })
-    userStore.setAuth(res.data.data)
+    await userStore.setAuth(res.data.data)
     ElMessage.success('注册成功，请完善个人资料')
     router.push('/setup-profile')
   } finally {

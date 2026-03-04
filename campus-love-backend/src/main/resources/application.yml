@@ -47,7 +47,7 @@ app:
     access-token-expiration: 7200000    # 2 hours
     refresh-token-expiration: 604800000 # 7 days
   upload:
-    path: ./uploads/
+    path: D:/study_resources/Githubpro/Love/campus-love-backend/uploads/
     max-size: 10485760  # 10MB
   follow:
     daily-chat-limit: 5

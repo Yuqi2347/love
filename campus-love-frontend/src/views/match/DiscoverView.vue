@@ -2,56 +2,195 @@
   <div class="discover-page">
     <div class="page-header">
       <h2 class="page-title">发现</h2>
-      <div class="header-tabs">
-        <button :class="['tab', { active: tab === 'recommend' }]" @click="tab = 'recommend'">推荐</button>
-        <button :class="['tab', { active: tab === 'nearby' }]" @click="tab = 'nearby'">同校</button>
+      <div class="header-right">
+        <!-- 始终显示等级信息 -->
+        <div v-if="levelInfo" class="level-info">
+          <span class="level-badge">Lv{{ levelInfo.level }}</span>
+          <span class="level-progress">{{ levelInfo.score }}/{{ levelInfo.scoreToNext }}</span>
+        </div>
+        <!-- 可发布时显示发布按钮 -->
+        <button v-if="canPost" class="btn-primary post-btn" @click="showPostDialog = true">
+          <el-icon><Plus /></el-icon> 发布
+        </button>
       </div>
     </div>
 
-    <div v-if="users.length" class="user-grid">
-      <div
-v-for="user in users" :key="user.userId" class="user-card card"
-        @click="$router.push(`/profile/${user.userId}`)">
-        <div class="card-top">
-          <img :src="user.avatarUrl || defaultAvatar" class="card-avatar" />
-          <div class="match-badge">{{ user.matchScore }}%</div>
+    <!-- 发布动态弹窗 -->
+    <el-dialog v-model="showPostDialog" title="发布动态" width="500px">
+      <el-form @submit.prevent="handlePost">
+        <el-form-item>
+          <el-input
+            v-model="postContent"
+            type="textarea"
+            :rows="4"
+            placeholder="分享你的想法..."
+            maxlength="500"
+            show-word-limit
+          />
+        </el-form-item>
+        <div v-if="levelInfo && levelInfo.level < 3" class="post-tip">
+          当前等级 Lv{{ levelInfo.level }}，升级到 Lv3 可发布动态
         </div>
-        <div class="card-body">
-          <div class="card-name">{{ user.nickname }}</div>
-          <div class="card-meta">
-            <span v-if="user.zodiac" class="meta-tag">{{ user.zodiac }}</span>
-            <span v-if="user.mbti" class="meta-tag accent">{{ user.mbti }}</span>
+      </el-form>
+      <template #footer>
+        <el-button @click="showPostDialog = false">取消</el-button>
+        <el-button type="primary" :disabled="posting || !postContent.trim()" @click="handlePost">
+          {{ posting ? '发布中...' : '发布' }}
+        </el-button>
+      </template>
+    </el-dialog>
+
+    <div v-if="posts.length" class="feed-list">
+      <div v-for="post in posts" :key="post.id" class="feed-card card">
+        <div class="feed-header">
+          <img :src="post.avatarUrl || defaultAvatar" class="feed-avatar" @click="$router.push(`/profile/${post.userId}`)" />
+          <div class="feed-user" @click="$router.push(`/profile/${post.userId}`)">
+            <div class="feed-name">{{ post.nickname }}</div>
+            <div class="feed-time">{{ formatTime(post.createdAt) }}</div>
           </div>
-          <p class="card-bio text-ellipsis">{{ user.bio || user.major || '这个人很神秘~' }}</p>
-          <div v-if="user.interests" class="card-interests">
-            <span v-for="tag in user.interests.split(',').slice(0, 3)" :key="tag" class="interest-chip">{{ tag }}</span>
-          </div>
+        </div>
+        <div class="feed-content">{{ post.content }}</div>
+        <div v-if="post.images" class="feed-images">
+          <img v-for="(img, idx) in post.images.split(',').slice(0, 3)" :key="idx" :src="img" class="feed-image" />
+        </div>
+        <div class="feed-actions">
+          <button :class="['action-btn', { active: post.liked }]" @click="handleLike(post.id, post.liked)">
+            <span class="action-icon">{{ post.liked ? '❤️' : '🤍' }}</span>
+            <span>{{ post.likeCount }}</span>
+          </button>
+          <button class="action-btn" @click="$router.push(`/profile/${post.userId}`)">
+            <span class="action-icon">💬</span>
+            <span>{{ post.commentCount }}</span>
+          </button>
+          <button v-if="canDeletePost(post)" class="action-btn delete-btn" @click="handleDeletePost(post.id)">
+            <span class="action-icon">🗑️</span>
+          </button>
         </div>
       </div>
     </div>
 
     <div v-else class="empty-state">
-      <div class="empty-icon">🔍</div>
-      <p>暂无推荐，请先完善个人资料</p>
-      <button class="btn-primary" @click="$router.push('/setup-profile')">完善资料</button>
+      <div class="empty-icon">📭</div>
+      <p>暂无动态</p>
+      <p v-if="canPost" class="empty-hint">成为第一个发布动态的人吧！</p>
+      <p v-else class="empty-hint">达到 Lv3 等级即可发布动态</p>
     </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
-import { getRecommendations, type MatchResult } from '@/api/matchApi'
+import { ref, computed, onMounted } from 'vue'
+import { getDiscoveryPosts, likePost, unlikePost, getLevelInfo, createDiscoveryPost, deletePost, type FeedPost, type UserLevelInfo } from '@/api/feedApi'
+import { useUserStore } from '@/store/userStore'
+import { ElMessage } from 'element-plus'
+import { Plus } from '@element-plus/icons-vue'
 
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect fill="%23f0f2f5" width="200" height="200" rx="16"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="64">👤</text></svg>'
-const tab = ref('recommend')
-const users = ref<MatchResult[]>([])
+const userStore = useUserStore()
+const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
+const posts = ref<FeedPost[]>([])
+const levelInfo = ref<UserLevelInfo | null>(null)
+const showPostDialog = ref(false)
+const postContent = ref('')
+const posting = ref(false)
+
+// 管理员或Lv3及以上可以发布
+const canPost = computed(() => {
+  const isAdmin = userStore.user?.isAdmin || false
+  const level = levelInfo.value?.level || 0
+  return isAdmin || level >= 3
+})
+
+// 判断是否可以删除帖子（管理员或帖子作者）
+function canDeletePost(post: FeedPost): boolean {
+  const isAdmin = userStore.user?.isAdmin || false
+  const isOwner = post.userId === userStore.user?.id
+  return isAdmin || isOwner
+}
 
 onMounted(async () => {
-  try {
-    const res = await getRecommendations(0, 20)
-    users.value = res.data.data || []
-  } catch { /* empty */ }
+  await loadPosts()
+  await loadLevelInfo()
 })
+
+async function loadPosts() {
+  try {
+    const res = await getDiscoveryPosts(0, 20)
+    posts.value = res.data.data || []
+  } catch { /* empty */ }
+}
+
+async function loadLevelInfo() {
+  try {
+    const res = await getLevelInfo()
+    levelInfo.value = res.data.data
+  } catch { /* empty */ }
+}
+
+async function handleLike(postId: number, liked: boolean) {
+  try {
+    if (liked) {
+      await unlikePost(postId)
+      const post = posts.value.find(p => p.id === postId)
+      if (post) {
+        post.liked = false
+        post.likeCount--
+      }
+    } else {
+      await likePost(postId)
+      const post = posts.value.find(p => p.id === postId)
+      if (post) {
+        post.liked = true
+        post.likeCount++
+      }
+    }
+  } catch {
+    ElMessage.error('操作失败')
+  }
+}
+
+function formatTime(timeStr: string): string {
+  const date = new Date(timeStr)
+  const now = new Date()
+  const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
+
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return Math.floor(diff / 60) + '分钟前'
+  if (diff < 86400) return Math.floor(diff / 3600) + '小时前'
+  if (diff < 604800) return Math.floor(diff / 86400) + '天前'
+  return timeStr.split(' ')[0] || timeStr
+}
+
+async function handlePost() {
+  if (!postContent.value.trim()) {
+    ElMessage.warning('请输入内容')
+    return
+  }
+
+  posting.value = true
+  try {
+    const res = await createDiscoveryPost({ content: postContent.value.trim() })
+    posts.value.unshift(res.data.data)
+    postContent.value = ''
+    showPostDialog.value = false
+    await loadLevelInfo()
+    ElMessage.success('发布成功')
+  } catch (err: unknown) {
+    const error = err as { response?: { data?: { message?: string } } }
+    ElMessage.error(error.response?.data?.message || '发布失败')
+  } finally {
+    posting.value = false
+  }
+}
+
+async function handleDeletePost(postId: number) {
+  try {
+    await deletePost(postId)
+    posts.value = posts.value.filter(p => p.id !== postId)
+    ElMessage.success('删除成功')
+  } catch {
+    ElMessage.error('删除失败')
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -72,118 +211,131 @@ onMounted(async () => {
 
 .page-title { font-size: 20px; font-weight: 700; }
 
-.header-tabs {
+.header-right {
   display: flex;
-  gap: 4px;
-  background: $bg-tertiary;
-  border-radius: $radius-full;
-  padding: 3px;
+  align-items: center;
+  gap: 12px;
 }
 
-.tab {
-  padding: 6px 18px;
-  border-radius: $radius-full;
-  font-size: 14px;
-  font-weight: 500;
-  color: $text-secondary;
-  transition: all $transition-fast;
-
-  &.active {
-    background: $bg-primary;
-    color: $text-primary;
-    font-weight: 600;
-    box-shadow: $shadow-sm;
-  }
+.post-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
 }
 
-.user-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 16px;
-  padding: 20px 24px;
+.level-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.user-card {
-  cursor: pointer;
-  overflow: hidden;
-  transition: all $transition-base;
-
-  &:hover {
-    transform: translateY(-4px);
-    box-shadow: $shadow-lg;
-  }
+.post-tip {
+  font-size: 13px;
+  color: $warning;
+  margin-top: 8px;
 }
 
-.card-top {
-  position: relative;
-  height: 180px;
-  overflow: hidden;
-}
-
-.card-avatar {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.match-badge {
-  position: absolute;
-  top: 10px;
-  right: 10px;
+.level-badge {
+  padding: 4px 12px;
   background: $primary-gradient;
   color: white;
-  padding: 4px 10px;
   border-radius: $radius-full;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
 }
 
-.card-body { padding: 14px; }
-
-.card-name {
-  font-size: 16px;
-  font-weight: 700;
-  margin-bottom: 6px;
-}
-
-.card-meta {
-  display: flex;
-  gap: 6px;
-  margin-bottom: 8px;
-}
-
-.meta-tag {
-  font-size: 12px;
-  padding: 2px 8px;
-  border-radius: $radius-full;
-  background: $bg-tertiary;
-  color: $text-secondary;
-
-  &.accent {
-    background: rgba($primary, 0.1);
-    color: $primary;
-  }
-}
-
-.card-bio {
+.level-progress {
   font-size: 13px;
   color: $text-secondary;
-  margin-bottom: 8px;
 }
 
-.card-interests {
+.feed-list {
   display: flex;
-  gap: 4px;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px 24px;
 }
 
-.interest-chip {
-  font-size: 11px;
-  padding: 2px 8px;
-  background: rgba($info, 0.1);
-  color: $info;
-  border-radius: $radius-full;
+.feed-card {
+  padding: 16px;
 }
+
+.feed-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.feed-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  cursor: pointer;
+}
+
+.feed-user {
+  cursor: pointer;
+}
+
+.feed-name {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.feed-time {
+  font-size: 12px;
+  color: $text-muted;
+  margin-top: 2px;
+}
+
+.feed-content {
+  font-size: 15px;
+  line-height: 1.6;
+  color: $text-primary;
+  margin-bottom: 12px;
+}
+
+.feed-images {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.feed-image {
+  width: 100px;
+  height: 100px;
+  object-fit: cover;
+  border-radius: $radius-md;
+}
+
+.feed-actions {
+  display: flex;
+  gap: 20px;
+  padding-top: 8px;
+  border-top: 1px solid $border-light;
+}
+
+.action-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: $text-secondary;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover { color: $primary; }
+  &.active { color: #ff4757; }
+  &.delete-btn { color: $text-muted; }
+  &.delete-btn:hover { color: #ff4757; }
+}
+
+.action-icon { font-size: 18px; }
 
 .empty-state {
   display: flex;
@@ -191,9 +343,10 @@ onMounted(async () => {
   align-items: center;
   justify-content: center;
   padding: 80px 20px;
-  gap: 16px;
+  gap: 12px;
 
   .empty-icon { font-size: 64px; }
   p { color: $text-muted; font-size: 15px; }
+  .empty-hint { font-size: 13px; color: $text-secondary; }
 }
 </style>

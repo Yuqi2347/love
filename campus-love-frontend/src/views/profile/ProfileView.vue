@@ -3,7 +3,13 @@
     <div class="profile-header">
       <div class="profile-cover"></div>
       <div class="profile-main">
-        <img :src="profile?.avatarUrl || defaultAvatar" class="profile-avatar avatar" width="100" height="100" />
+        <div class="avatar-wrapper">
+          <img :src="profile?.avatarUrl || defaultAvatar" class="profile-avatar avatar" width="100" height="100" />
+          <input ref="avatarInput" type="file" accept="image/*" style="display: none" @change="handleAvatarChange" />
+          <button v-if="isMe" class="avatar-upload-btn" @click="avatarInput?.click()">
+            <el-icon><Camera /></el-icon>
+          </button>
+        </div>
         <div v-if="!isMe" class="profile-actions">
           <button :class="['btn-primary', { 'btn-outline': followStatus !== 'NONE' }]" @click="handleFollowToggle">
             {{ followLabel }}
@@ -22,9 +28,30 @@
     </div>
 
     <div v-if="profile" class="profile-info">
-      <h2 class="profile-name">{{ profile.nickname }}</h2>
+      <div class="profile-name-row">
+        <h2 class="profile-name">{{ profile.nickname }}</h2>
+        <div class="level-display">
+          <span class="level-badge large">Lv{{ profile.userLevel }}</span>
+          <span v-if="profile.isAdmin" class="admin-badge">管理员</span>
+        </div>
+      </div>
       <p class="profile-email">{{ profile.email }}</p>
       <p v-if="profile.bio" class="profile-bio">{{ profile.bio }}</p>
+
+      <!-- 等级进度条 -->
+      <div v-if="isMe" class="level-progress-card">
+        <div class="level-progress-header">
+          <span class="level-progress-label">活跃度</span>
+          <span class="level-progress-score">{{ profile.activityScore }}分</span>
+        </div>
+        <div class="level-progress-bar">
+          <div class="level-progress-fill" :style="{ width: getLevelProgress(profile.activityScore) + '%' }"></div>
+        </div>
+        <div class="level-progress-text">
+          <span>当前等级 Lv{{ profile.userLevel }}</span>
+          <span>{{ getNextLevelScore(profile.activityScore) }}分升级</span>
+        </div>
+      </div>
 
       <div class="profile-meta">
         <span v-if="profile.school" class="meta-item">🎓 {{ profile.school }}</span>
@@ -40,11 +67,11 @@
       </div>
 
       <div class="profile-stats">
-        <div class="stat-item" @click="showFollowing = true">
+        <div class="stat-item" @click="handleOpenFollowing">
           <span class="stat-num">{{ followingCount }}</span>
           <span class="stat-label">关注</span>
         </div>
-        <div class="stat-item" @click="showFollowers = true">
+        <div class="stat-item" @click="handleOpenFollowers">
           <span class="stat-num">{{ followerCount }}</span>
           <span class="stat-label">粉丝</span>
         </div>
@@ -69,17 +96,75 @@
 
     <!-- User's Posts -->
     <div class="profile-posts">
-      <h3 class="section-title" style="padding: 16px 24px;">动态</h3>
-      <div v-for="post in posts" :key="post.id" class="feed-item">
-        <p class="feed-content">{{ post.content }}</p>
-        <div class="feed-meta">
-          <span>{{ post.createdAt }}</span>
-          <span>❤️ {{ post.likeCount }} · 💬 {{ post.commentCount }}</span>
-        </div>
+      <div class="posts-tabs">
+        <button
+          :class="['tab-btn', { active: postsTab === 'timeline' }]"
+          @click="postsTab = 'timeline'; loadPostsByType()"
+        >
+          朋友圈
+        </button>
+        <button
+          :class="['tab-btn', { active: postsTab === 'discovery' }]"
+          @click="postsTab = 'discovery'; loadPostsByType()"
+        >
+          发现动态
+        </button>
       </div>
-      <div v-if="!posts.length" class="empty-hint">暂无动态</div>
+
+      <div v-for="post in posts" :key="post.id" class="feed-item">
+        <div class="feed-item-content">
+          <p class="feed-content">{{ post.content }}</p>
+          <div class="feed-meta">
+            <span>{{ formatTime(post.createdAt) }}</span>
+            <span>❤️ {{ post.likeCount }} · 💬 {{ post.commentCount }}</span>
+          </div>
+        </div>
+        <button
+          v-if="canDeletePost(post)"
+          class="feed-delete-btn"
+          title="删除"
+          @click="handleDeletePost(post.id)"
+        >
+          🗑️
+        </button>
+      </div>
+      <div v-if="!posts.length" class="empty-hint">
+        {{ postsTab === 'timeline' ? '暂无朋友圈动态' : '暂无发现动态' }}
+      </div>
     </div>
   </div>
+
+  <!-- 关注列表弹窗 -->
+  <el-dialog :title="isMe ? '我的关注' : `${profile?.nickname || 'TA'}的关注`" width="500px" :model-value="showFollowing" @update:model-value="showFollowing = false">
+    <div v-if="followingList.length" class="user-list">
+      <div v-for="user in followingList" :key="user.userId" class="user-list-item" @click="goToUserProfile(user.userId)">
+        <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
+        <div class="user-list-info">
+          <div class="user-list-name">{{ user.nickname }}</div>
+        </div>
+        <button class="user-list-action" title="聊天" @click.stop="goToChat(user.userId)">
+          <el-icon><ChatDotRound /></el-icon>
+        </button>
+      </div>
+    </div>
+    <div v-else class="empty-hint">{{ isMe ? '暂无关注' : 'TA暂无关注' }}</div>
+  </el-dialog>
+
+  <!-- 粉丝列表弹窗 -->
+  <el-dialog :title="isMe ? '我的粉丝' : `${profile?.nickname || 'TA'}的粉丝`" width="500px" :model-value="showFollowers" @update:model-value="showFollowers = false">
+    <div v-if="followerList.length" class="user-list">
+      <div v-for="user in followerList" :key="user.userId" class="user-list-item" @click="goToUserProfile(user.userId)">
+        <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
+        <div class="user-list-info">
+          <div class="user-list-name">{{ user.nickname }}</div>
+        </div>
+        <button class="user-list-action" title="聊天" @click.stop="goToChat(user.userId)">
+          <el-icon><ChatDotRound /></el-icon>
+        </button>
+      </div>
+    </div>
+    <div v-else class="empty-hint">{{ isMe ? '暂无粉丝' : 'TA暂无粉丝' }}</div>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -88,11 +173,13 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { getMatchDetail, type MatchResult } from '@/api/matchApi'
-import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList } from '@/api/followApi'
-import { getUserPosts, type FeedPost } from '@/api/feedApi'
+import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, type FollowUser } from '@/api/followApi'
+import { getUserTimelinePosts, getUserDiscoveryPosts, deletePost, type FeedPost } from '@/api/feedApi'
 import { ElMessage } from 'element-plus'
+import { Camera, ChatDotRound } from '@element-plus/icons-vue'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { FOLLOW_STATUS_LABELS, FollowStatus } from '@/constants/followConst'
+import { uploadAvatar } from '@/api/userApi'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
 const dimensionLabels = MATCH_DIMENSION_LABELS
@@ -108,12 +195,43 @@ const profile = ref<UserProfile | null>(null)
 const followStatus = ref<string>(FollowStatus.NONE)
 const matchResult = ref<MatchResult | null>(null)
 const posts = ref<FeedPost[]>([])
+const postsTab = ref<'timeline' | 'discovery'>('timeline')
 const followingCount = ref(0)
 const followerCount = ref(0)
 const showFollowing = ref(false)
 const showFollowers = ref(false)
+const followingList = ref<FollowUser[]>([])
+const followerList = ref<FollowUser[]>([])
+const avatarInput = ref<HTMLInputElement | null>(null)
 
 const followLabel = computed(() => FOLLOW_STATUS_LABELS[followStatus.value as FollowStatus] || '关注')
+
+// 判断是否可以删除帖子（管理员或帖子作者）
+function canDeletePost(post: FeedPost): boolean {
+  const isAdmin = userStore.user?.isAdmin || false
+  const isOwner = post.userId === userStore.user?.id
+  return isAdmin || isOwner
+}
+
+// 打开关注列表
+function handleOpenFollowing() {
+  const isAdmin = userStore.user?.isAdmin || false
+  if (!isMe.value && !isAdmin) {
+    ElMessage.warning('只有管理员可以查看他人的关注列表')
+    return
+  }
+  showFollowing.value = true
+}
+
+// 打开粉丝列表
+function handleOpenFollowers() {
+  const isAdmin = userStore.user?.isAdmin || false
+  if (!isMe.value && !isAdmin) {
+    ElMessage.warning('只有管理员可以查看他人的粉丝列表')
+    return
+  }
+  showFollowers.value = true
+}
 
 async function loadProfile() {
   if (!profileId.value) return
@@ -121,23 +239,114 @@ async function loadProfile() {
     const res = await getUserProfile(profileId.value)
     profile.value = res.data.data
 
-    const [postsRes] = await Promise.all([
-      getUserPosts(profileId.value, 0, 20),
-    ])
-    posts.value = postsRes.data.data || []
+    // 加载帖子
+    await loadPostsByType()
 
-    if (isMe.value) {
-      const [fing, fers] = await Promise.all([getFollowingList(), getFollowerList()])
-      followingCount.value = fing.data.data?.length || 0
-      followerCount.value = fers.data.data?.length || 0
-    } else {
+    // 他人页面：获取关注状态和匹配度（先加载这些重要数据）
+    if (!isMe.value) {
       const statusRes = await getFollowStatus(profileId.value)
       followStatus.value = statusRes.data.data || FollowStatus.NONE
       const matchRes = await getMatchDetail(profileId.value)
       matchResult.value = matchRes.data.data
     }
+
+    // 最后加载关注/粉丝数量（独立处理，不影响其他数据）
+    loadFollowCounts()
+  } catch (err) {
+    console.error('loadProfile error:', err)
+  }
+}
+
+// 独立函数加载关注/粉丝数量
+async function loadFollowCounts() {
+  try {
+    const [fing, fers] = await Promise.all([
+      isMe.value ? getFollowingList() : getUserFollowing(profileId.value!),
+      isMe.value ? getFollowerList() : getUserFollowers(profileId.value!)
+    ])
+    followingCount.value = fing.data.data?.length || 0
+    followerCount.value = fers.data.data?.length || 0
+  } catch (err) {
+    console.error('load follow/follower count error:', err)
+    followingCount.value = 0
+    followerCount.value = 0
+  }
+}
+
+async function loadPostsByType() {
+  if (!profileId.value) return
+  try {
+    let res
+    if (postsTab.value === 'timeline') {
+      res = await getUserTimelinePosts(profileId.value, 0, 20)
+    } else {
+      res = await getUserDiscoveryPosts(profileId.value, 0, 20)
+    }
+    posts.value = res.data.data || []
   } catch { /* handled */ }
 }
+
+async function handleDeletePost(postId: number) {
+  try {
+    await deletePost(postId)
+    posts.value = posts.value.filter(p => p.id !== postId)
+    ElMessage.success('删除成功')
+  } catch {
+    ElMessage.error('删除失败')
+  }
+}
+
+function formatTime(timeStr: string): string {
+  const date = new Date(timeStr)
+  const now = new Date()
+  const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
+
+  if (diff < 60) return '刚刚'
+  if (diff < 3600) return Math.floor(diff / 60) + '分钟前'
+  if (diff < 86400) return Math.floor(diff / 3600) + '小时前'
+  if (diff < 604800) return Math.floor(diff / 86400) + '天前'
+  return timeStr.split(' ')[0] || timeStr
+}
+
+// 跳转到用户主页并关闭弹窗
+function goToUserProfile(userId: number) {
+  showFollowing.value = false
+  showFollowers.value = false
+  router.push(`/profile/${userId}`)
+}
+
+// 跳转到聊天页面（暂时提示功能开发中）
+function goToChat(_userId: number) {
+  showFollowing.value = false
+  showFollowers.value = false
+  ElMessage.info('聊天功能开发中，敬请期待！')
+  // router.push(`/chat/${userId}`)  // 聊天功能实现后启用
+}
+
+// 监听弹窗打开，加载用户列表
+watch(showFollowing, async (val) => {
+  if (val) {
+    try {
+      const res = isMe.value ? await getFollowingList() : await getUserFollowing(profileId.value!)
+      followingList.value = res.data.data || []
+    } catch (err) {
+      console.error('load following error:', err)
+      ElMessage.error('加载关注列表失败')
+    }
+  }
+})
+
+watch(showFollowers, async (val) => {
+  if (val) {
+    try {
+      const res = isMe.value ? await getFollowerList() : await getUserFollowers(profileId.value!)
+      followerList.value = res.data.data || []
+    } catch (err) {
+      console.error('load followers error:', err)
+      ElMessage.error('加载粉丝列表失败')
+    }
+  }
+})
 
 onMounted(loadProfile)
 watch(() => route.params.userId, loadProfile)
@@ -161,6 +370,60 @@ function handleLogout() {
   userStore.logout()
   router.push('/login')
 }
+
+// 等级配置
+const levelThresholds = [0, 50, 150, 300, 500, 800, 1200, 1700, 2300, 3000]
+
+function getLevelProgress(score: number): number {
+  const currentLevel = getLevelByScore(score)
+  if (currentLevel >= 10) return 100
+  const currentThreshold = levelThresholds[currentLevel - 1]!
+  const nextThreshold = levelThresholds[currentLevel]!
+  return Math.round(((score - currentThreshold) / (nextThreshold - currentThreshold)) * 100)
+}
+
+function getNextLevelScore(score: number): number {
+  const currentLevel = getLevelByScore(score)
+  if (currentLevel >= 10) return 0
+  return levelThresholds[currentLevel]! - score
+}
+
+function getLevelByScore(score: number): number {
+  for (let i = levelThresholds.length - 1; i >= 0; i--) {
+    if (score >= levelThresholds[i]!) return i + 1
+  }
+  return 1
+}
+
+async function handleAvatarChange(event: Event) {
+  const target = event.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  // 验证文件类型和大小
+  if (!file.type.startsWith('image/')) {
+    ElMessage.error('请选择图片文件')
+    return
+  }
+  if (file.size > 5 * 1024 * 1024) {
+    ElMessage.error('图片大小不能超过5MB')
+    return
+  }
+
+  try {
+    ElMessage.info('上传中...')
+    const res = await uploadAvatar(file)
+    if (profile.value) {
+      profile.value.avatarUrl = res.data.data
+    }
+    await userStore.fetchProfile()
+    ElMessage.success('头像上传成功')
+  } catch {
+    ElMessage.error('头像上传失败')
+  } finally {
+    if (target) target.value = ''
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -181,9 +444,49 @@ function handleLogout() {
   margin-top: -50px;
 }
 
+.avatar-wrapper {
+  position: relative;
+  display: inline-block;
+}
+
 .profile-avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
   border: 4px solid $bg-primary;
   box-shadow: $shadow-md;
+}
+
+.avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.avatar-upload-btn {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: $primary;
+  color: white;
+  border: 2px solid $bg-primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all $transition-base;
+
+  &:hover {
+    background: darken($primary, 10%);
+    transform: scale(1.1);
+  }
+
+  .el-icon { font-size: 16px; }
 }
 
 .profile-actions {
@@ -194,7 +497,94 @@ function handleLogout() {
 
 .profile-info { padding: 16px 24px; }
 
+.profile-name-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
 .profile-name { font-size: 22px; font-weight: 800; }
+
+.level-display {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.level-badge {
+  padding: 4px 12px;
+  background: $primary-gradient;
+  color: white;
+  border-radius: $radius-full;
+  font-size: 14px;
+  font-weight: 700;
+  white-space: nowrap;
+
+  &.large {
+    padding: 6px 16px;
+    font-size: 16px;
+  }
+}
+
+.admin-badge {
+  padding: 4px 12px;
+  background: linear-gradient(135deg, #ff6b6b, #ee5a24);
+  color: white;
+  border-radius: $radius-full;
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.level-progress-card {
+  margin-top: 12px;
+  padding: 16px;
+  background: rgba($primary, 0.06);
+  border-radius: $radius-lg;
+  border: 1px solid rgba($primary, 0.15);
+}
+
+.level-progress-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.level-progress-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.level-progress-score {
+  font-size: 16px;
+  font-weight: 700;
+  color: $primary;
+}
+
+.level-progress-bar {
+  height: 8px;
+  background: $bg-tertiary;
+  border-radius: $radius-full;
+  overflow: hidden;
+  margin-bottom: 8px;
+}
+
+.level-progress-fill {
+  height: 100%;
+  background: $primary-gradient;
+  border-radius: $radius-full;
+  transition: width 0.6s ease;
+}
+
+.level-progress-text {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: $text-secondary;
+}
 .profile-email { font-size: 14px; color: $text-muted; margin-top: 2px; }
 .profile-bio { font-size: 15px; color: $text-primary; margin-top: 10px; line-height: 1.5; }
 
@@ -273,9 +663,47 @@ function handleLogout() {
 
 .profile-posts { border-top: 1px solid $border-light; margin-top: 8px; }
 
+.posts-tabs {
+  display: flex;
+  gap: 8px;
+  padding: 16px 24px;
+  border-bottom: 1px solid $border-light;
+}
+
+.tab-btn {
+  padding: 8px 20px;
+  border: none;
+  background: transparent;
+  color: $text-secondary;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: $radius-full;
+  transition: all $transition-fast;
+
+  &:hover {
+    background: rgba($primary, 0.08);
+    color: $primary;
+  }
+
+  &.active {
+    background: $primary;
+    color: white;
+  }
+}
+
 .feed-item {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
   padding: 14px 24px;
   border-bottom: 1px solid $border-light;
+  gap: 12px;
+}
+
+.feed-item-content {
+  flex: 1;
+  min-width: 0;
 }
 
 .feed-content { font-size: 14px; line-height: 1.6; margin-bottom: 8px; }
@@ -287,10 +715,91 @@ function handleLogout() {
   color: $text-muted;
 }
 
+.feed-delete-btn {
+  flex-shrink: 0;
+  padding: 4px 8px;
+  border: none;
+  background: transparent;
+  font-size: 16px;
+  cursor: pointer;
+  opacity: 0.6;
+  transition: opacity $transition-fast;
+
+  &:hover {
+    opacity: 1;
+  }
+}
+
 .empty-hint {
   text-align: center;
   padding: 40px;
   color: $text-muted;
   font-size: 14px;
+}
+
+.user-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.user-list-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-radius: $radius-lg;
+  cursor: pointer;
+  transition: background $transition-fast;
+
+  &:hover {
+    background: $bg-secondary;
+  }
+}
+
+.user-list-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  object-fit: cover;
+}
+
+.user-list-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.user-list-name {
+  font-size: 15px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.user-list-email {
+  font-size: 13px;
+  color: $text-secondary;
+}
+
+.user-list-action {
+  flex-shrink: 0;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid $border-color;
+  background: transparent;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all $transition-fast;
+  color: $primary;
+
+  &:hover {
+    background: $primary;
+    color: white;
+    border-color: $primary;
+  }
 }
 </style>

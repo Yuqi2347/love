@@ -16,6 +16,7 @@ import com.campus.love.feed.mapper.FeedPostMapper;
 import com.campus.love.follow.service.FollowService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
+import com.campus.love.user.service.ActivityService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,22 +34,87 @@ public class FeedService {
     private final FeedCommentMapper feedCommentMapper;
     private final UserMapper userMapper;
     private final FollowService followService;
+    private final ActivityService activityService;
 
     private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
+    /**
+     * 创建朋友圈帖子
+     */
     public FeedPostResponse createPost(FeedPostRequest request) {
         Long userId = CurrentUser.getId();
+
         FeedPost post = new FeedPost();
         post.setUserId(userId);
         post.setContent(request.getContent());
         post.setImages(request.getImages());
+        // 默认发到朋友圈
+        post.setPostType(request.getPostType() != null ? request.getPostType() : "TIMELINE");
+        post.setRequiredLevel(3);
         post.setLikeCount(0);
         post.setCommentCount(0);
         feedPostMapper.insert(post);
 
+        // 记录发布活跃度
+        activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.POST, post.getId());
+
         return toResponse(post, userId);
     }
 
+    /**
+     * 创建发现模块帖子（需要权限检查）
+     */
+    public FeedPostResponse createDiscoveryPost(FeedPostRequest request) {
+        Long userId = CurrentUser.getId();
+
+        // 检查用户是否有发布权限
+        if (!activityService.canPostFeed(userId)) {
+            throw new BusinessException(ResultCode.INSUFFICIENT_LEVEL);
+        }
+
+        FeedPost post = new FeedPost();
+        post.setUserId(userId);
+        post.setContent(request.getContent());
+        post.setImages(request.getImages());
+        // 发现模块帖子
+        post.setPostType("DISCOVERY");
+        post.setRequiredLevel(3);
+        post.setLikeCount(0);
+        post.setCommentCount(0);
+        feedPostMapper.insert(post);
+
+        // 记录发布活跃度
+        activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.POST, post.getId());
+
+        return toResponse(post, userId);
+    }
+
+    /**
+     * 获取发现模块帖子列表（按时间排序）
+     * 只显示 DISCOVERY 类型的帖子
+     */
+    public List<FeedPostResponse> getDiscoveryPosts(int page, int size) {
+        Long currentUserId = CurrentUser.getId();
+
+        // 只查询发现模块类型的帖子
+        List<FeedPost> posts = feedPostMapper.selectList(
+                new LambdaQueryWrapper<FeedPost>()
+                        .eq(FeedPost::getPostType, "DISCOVERY")
+                        .orderByDesc(FeedPost::getCreatedAt)
+                        .last("LIMIT " + (page * size) + "," + size)
+        );
+
+        return posts.stream().map(p -> {
+            FeedPostResponse response = toResponse(p, currentUserId);
+            // 记录浏览活跃度
+            activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.VIEW, p.getId());
+            return response;
+        }).collect(Collectors.toList());
+    }
+
+    /**
+     * 获取朋友圈动态流（互相关注用户的 TIMELINE 类型帖子）
+     */
     public List<FeedPostResponse> getTimeline(int page, int size) {
         Long currentUserId = CurrentUser.getId();
         List<Long> mutualIds = followService.getMutualFollowIds(currentUserId);
@@ -57,6 +123,7 @@ public class FeedService {
         List<FeedPost> posts = feedPostMapper.selectList(
                 new LambdaQueryWrapper<FeedPost>()
                         .in(FeedPost::getUserId, mutualIds)
+                        .eq(FeedPost::getPostType, "TIMELINE")
                         .orderByDesc(FeedPost::getCreatedAt)
                         .last("LIMIT " + (page * size) + "," + size)
         );
@@ -69,6 +136,36 @@ public class FeedService {
         List<FeedPost> posts = feedPostMapper.selectList(
                 new LambdaQueryWrapper<FeedPost>()
                         .eq(FeedPost::getUserId, userId)
+                        .orderByDesc(FeedPost::getCreatedAt)
+                        .last("LIMIT " + (page * size) + "," + size)
+        );
+        return posts.stream().map(p -> toResponse(p, currentUserId)).collect(Collectors.toList());
+    }
+
+    /**
+     * 获取用户的朋友圈帖子（TIMELINE类型）
+     */
+    public List<FeedPostResponse> getUserTimelinePosts(Long userId, int page, int size) {
+        Long currentUserId = CurrentUser.getId();
+        List<FeedPost> posts = feedPostMapper.selectList(
+                new LambdaQueryWrapper<FeedPost>()
+                        .eq(FeedPost::getUserId, userId)
+                        .eq(FeedPost::getPostType, "TIMELINE")
+                        .orderByDesc(FeedPost::getCreatedAt)
+                        .last("LIMIT " + (page * size) + "," + size)
+        );
+        return posts.stream().map(p -> toResponse(p, currentUserId)).collect(Collectors.toList());
+    }
+
+    /**
+     * 获取用户的发现模块帖子（DISCOVERY类型）
+     */
+    public List<FeedPostResponse> getUserDiscoveryPosts(Long userId, int page, int size) {
+        Long currentUserId = CurrentUser.getId();
+        List<FeedPost> posts = feedPostMapper.selectList(
+                new LambdaQueryWrapper<FeedPost>()
+                        .eq(FeedPost::getUserId, userId)
+                        .eq(FeedPost::getPostType, "DISCOVERY")
                         .orderByDesc(FeedPost::getCreatedAt)
                         .last("LIMIT " + (page * size) + "," + size)
         );
@@ -94,6 +191,9 @@ public class FeedService {
 
         post.setLikeCount(post.getLikeCount() + 1);
         feedPostMapper.updateById(post);
+
+        // 记录点赞活跃度
+        activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.LIKE, postId);
     }
 
     @Transactional
@@ -132,7 +232,18 @@ public class FeedService {
         Long userId = CurrentUser.getId();
         FeedPost post = feedPostMapper.selectById(postId);
         if (post == null) throw new BusinessException(ResultCode.FEED_NOT_FOUND);
-        if (!post.getUserId().equals(userId)) throw new BusinessException(ResultCode.FORBIDDEN);
+
+        // 检查权限：管理员可以删除所有帖子，普通用户只能删除自己的
+        User currentUser = userMapper.selectById(userId);
+        if (currentUser == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
+
+        boolean isAdmin = Boolean.TRUE.equals(currentUser.getIsAdmin());
+        boolean isOwner = post.getUserId().equals(userId);
+
+        if (!isAdmin && !isOwner) {
+            throw new BusinessException(ResultCode.FORBIDDEN);
+        }
+
         feedPostMapper.deleteById(postId);
     }
 

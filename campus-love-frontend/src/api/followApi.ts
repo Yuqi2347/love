@@ -27,3 +27,11 @@ export function getFollowingList() {
 export function getFollowerList() {
   return request.get<ApiResult<FollowUser[]>>('/follow/followers')
 }
+
+export function getUserFollowing(userId: number) {
+  return request.get<ApiResult<FollowUser[]>>(`/follow/user/${userId}/following`)
+}
+
+export function getUserFollowers(userId: number) {
+  return request.get<ApiResult<FollowUser[]>>(`/follow/user/${userId}/followers`)
+}

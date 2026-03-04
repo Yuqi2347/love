@@ -16,6 +16,8 @@ public class UserProfileRequest {
     @NotBlank(message = "生日不能为空")
     private String birthDate;
 
+    private String birthTime;
+
     private String school;
     private String major;
     private String grade;

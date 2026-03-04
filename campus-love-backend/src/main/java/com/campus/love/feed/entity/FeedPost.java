@@ -14,6 +14,11 @@ public class FeedPost {
 
     private Long userId;
     private String content;
+    /**
+     * 帖子类型：TIMELINE(朋友圈) / DISCOVERY(发现模块)
+     */
+    private String postType;
+    private Integer requiredLevel;
     private String images;
     private Integer likeCount;
     private Integer commentCount;

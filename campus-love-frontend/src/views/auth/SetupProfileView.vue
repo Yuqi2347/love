@@ -5,8 +5,8 @@
         <div class="step-indicator">
           <div v-for="i in 3" :key="i" class="step-dot" :class="{ active: step >= i, done: step > i }" />
         </div>
-        <h2 class="setup-title">{{ stepTitles[step - 1] }}</h2>
-        <p class="setup-desc">{{ stepDescs[step - 1] }}</p>
+        <h2 class="setup-title">{{ displayTitles[step - 1] }}</h2>
+        <p class="setup-desc">{{ displayDescs[step - 1] }}</p>
       </div>
 
       <!-- Step 1: Basic Info -->
@@ -28,6 +28,11 @@ v-for="g in genderOptions" :key="g.value"
 v-model="form.birthDate" type="date" placeholder="选择生日"
                             value-format="YYYY-MM-DD" style="width:100%" />
           </el-form-item>
+          <el-form-item label="出生时间（可选，用于八字精确计算）">
+            <el-time-picker
+v-model="form.birthTime" placeholder="选择出生时间"
+                              value-format="HH:mm" format="HH:mm" style="width:100%" />
+          </el-form-item>
           <el-form-item label="学校">
             <el-input v-model="form.school" placeholder="你的学校" />
           </el-form-item>
@@ -47,6 +52,12 @@ v-model="form.birthDate" type="date" placeholder="选择生日"
 
       <!-- Step 2: MBTI -->
       <div v-if="step === 2" class="step-content">
+        <div class="mbti-test-tip">
+          <span>不确定自己的类型？</span>
+          <a href="https://www.16personalities.com/ch" target="_blank" rel="noopener noreferrer" class="test-link">
+            免费人格测试 →
+          </a>
+        </div>
         <div class="mbti-grid">
           <div
 v-for="mbti in mbtiTypes" :key="mbti"
@@ -75,7 +86,7 @@ v-for="tag in interestTags" :key="tag"
         <button v-if="step > 1" class="btn-outline" @click="step--">上一步</button>
         <button v-if="step < 3" class="btn-primary" @click="step++">下一步</button>
         <button v-if="step === 3" class="btn-primary" :disabled="saving" @click="handleSave">
-          {{ saving ? '保存中...' : '完成设置' }}
+          {{ saving ? '保存中...' : (isEditMode ? '保存修改' : '完成设置') }}
         </button>
       </div>
     </div>
@@ -83,10 +94,10 @@ v-for="tag in interestTags" :key="tag"
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
-import { updateProfile } from '@/api/userApi'
+import { updateProfile, getMyProfile } from '@/api/userApi'
 import { useUserStore } from '@/store/userStore'
 import { MBTI_TYPES, MBTI_LABELS, INTEREST_TAGS } from '@/constants/matchConst'
 import { GENDER_OPTIONS } from '@/constants/genderConst'
@@ -96,6 +107,7 @@ const userStore = useUserStore()
 const step = ref(1)
 const saving = ref(false)
 const selectedInterests = ref<string[]>([])
+const isEditMode = ref(false)
 
 const mbtiTypes = MBTI_TYPES
 const mbtiLabels = MBTI_LABELS
@@ -106,14 +118,45 @@ const grades = ['大一', '大二', '大三', '大四', '研一', '研二', '研
 const stepTitles = ['完善基础信息', '选择你的MBTI', '选择兴趣爱好']
 const stepDescs = ['让大家更好地认识你', '性格匹配的重要依据', '找到志同道合的朋友']
 
+// 根据是否编辑模式显示不同标题
+const displayTitles = computed(() => isEditMode.value ? ['编辑基础信息', '选择你的MBTI', '选择兴趣爱好'] : stepTitles)
+const displayDescs = computed(() => isEditMode.value ? ['更新你的个人信息', '性格匹配的重要依据', '找到志同道合的朋友'] : stepDescs)
+
 const form = reactive({
   gender: 0,
   birthDate: '',
+  birthTime: '',
   school: '',
   major: '',
   grade: '',
   mbti: '',
   bio: '',
+})
+
+// 加载用户原有数据
+onMounted(async () => {
+  if (userStore.user?.profileComplete) {
+    isEditMode.value = true
+    try {
+      const res = await getMyProfile()
+      const data = res.data.data
+      if (data) {
+        form.gender = data.gender ?? 0
+        form.birthDate = data.birthDate ?? ''
+        form.birthTime = data.birthTime ?? ''
+        form.school = data.school ?? ''
+        form.major = data.major ?? ''
+        form.grade = data.grade ?? ''
+        form.mbti = data.mbti ?? ''
+        form.bio = data.bio ?? ''
+        if (data.interests) {
+          selectedInterests.value = data.interests.split(',')
+        }
+      }
+    } catch {
+      // 加载失败，使用空表单
+    }
+  }
 })
 
 function toggleInterest(tag: string) {
@@ -137,6 +180,7 @@ async function handleSave() {
       nickname: userStore.user?.nickname || '',
       gender: form.gender,
       birthDate: form.birthDate,
+      birthTime: form.birthTime,
       school: form.school,
       major: form.major,
       grade: form.grade,
@@ -145,8 +189,10 @@ async function handleSave() {
       interests: selectedInterests.value.join(','),
     })
     await userStore.fetchProfile()
-    ElMessage.success('资料完善成功！')
-    router.push('/')
+    const message = isEditMode.value ? '资料更新成功！' : '资料完善成功！'
+    ElMessage.success(message)
+    // 编辑模式返回我的页面，首次完善返回首页
+    router.push(isEditMode.value ? '/profile' : '/')
   } finally {
     saving.value = false
   }
@@ -210,6 +256,24 @@ async function handleSave() {
 
 .step-content {
   min-height: 300px;
+}
+
+.mbti-test-tip {
+  text-align: center;
+  margin-bottom: 20px;
+  font-size: 14px;
+  color: $text-secondary;
+
+  .test-link {
+    color: $primary;
+    text-decoration: none;
+    font-weight: 500;
+    margin-left: 4px;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 }
 
 .gender-select {

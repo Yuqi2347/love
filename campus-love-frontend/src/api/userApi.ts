@@ -7,9 +7,13 @@ export interface UserProfile {
   nickname: string
   gender: number
   birthDate: string | null
+  birthTime: string | null
   school: string | null
   major: string | null
   grade: string | null
+  activityScore: number
+  userLevel: number
+  isAdmin: boolean
   mbti: string | null
   zodiac: string | null
   bazi: string | null
@@ -23,6 +27,7 @@ export interface UpdateProfileParams {
   nickname: string
   gender: number
   birthDate: string
+  birthTime?: string
   school?: string
   major?: string
   grade?: string

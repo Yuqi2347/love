@@ -5,6 +5,7 @@ import com.campus.love.feed.dto.FeedCommentRequest;
 import com.campus.love.feed.dto.FeedPostRequest;
 import com.campus.love.feed.dto.FeedPostResponse;
 import com.campus.love.feed.service.FeedService;
+import com.campus.love.user.service.ActivityService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -20,11 +21,18 @@ import java.util.List;
 public class FeedController {
 
     private final FeedService feedService;
+    private final ActivityService activityService;
 
     @Operation(summary = "发布动态")
     @PostMapping
     public Result<FeedPostResponse> createPost(@Valid @RequestBody FeedPostRequest request) {
         return Result.success(feedService.createPost(request));
+    }
+
+    @Operation(summary = "发布发现模块动态")
+    @PostMapping("/discovery")
+    public Result<FeedPostResponse> createDiscoveryPost(@Valid @RequestBody FeedPostRequest request) {
+        return Result.success(feedService.createDiscoveryPost(request));
     }
 
     @Operation(summary = "获取朋友圈动态流", description = "互相关注用户的动态")
@@ -42,6 +50,24 @@ public class FeedController {
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size) {
         return Result.success(feedService.getUserPosts(userId, page, size));
+    }
+
+    @Operation(summary = "获取用户的朋友圈帖子")
+    @GetMapping("/user/{userId}/timeline")
+    public Result<List<FeedPostResponse>> getUserTimelinePosts(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return Result.success(feedService.getUserTimelinePosts(userId, page, size));
+    }
+
+    @Operation(summary = "获取用户的发现模块帖子")
+    @GetMapping("/user/{userId}/discovery")
+    public Result<List<FeedPostResponse>> getUserDiscoveryPosts(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return Result.success(feedService.getUserDiscoveryPosts(userId, page, size));
     }
 
     @Operation(summary = "点赞")
@@ -70,5 +96,19 @@ public class FeedController {
     public Result<Void> deletePost(@PathVariable Long postId) {
         feedService.deletePost(postId);
         return Result.success();
+    }
+
+    @Operation(summary = "获取发现模块帖子列表", description = "按时间排序，展示管理员和高级用户发布的帖子")
+    @GetMapping("/discovery")
+    public Result<List<FeedPostResponse>> getDiscoveryPosts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "10") int size) {
+        return Result.success(feedService.getDiscoveryPosts(page, size));
+    }
+
+    @Operation(summary = "获取我的等级信息")
+    @GetMapping("/level-info")
+    public Result<ActivityService.UserLevelInfo> getLevelInfo() {
+        return Result.success(activityService.getUserLevelInfo(null));
     }
 }

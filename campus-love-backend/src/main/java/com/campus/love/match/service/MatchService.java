@@ -5,6 +5,8 @@ import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.common.utils.BaziUtil;
+import com.campus.love.follow.entity.Follow;
+import com.campus.love.follow.mapper.FollowMapper;
 import com.campus.love.match.constants.MatchWeights;
 import com.campus.love.match.constants.MbtiCompatibilityMatrix;
 import com.campus.love.match.constants.ZodiacCompatibilityTable;
@@ -24,17 +26,26 @@ import java.util.stream.Collectors;
 public class MatchService {
 
     private final UserMapper userMapper;
+    private final FollowMapper followMapper;
 
     public List<MatchResultResponse> getRecommendations(int page, int size) {
         Long currentUserId = CurrentUser.getId();
         User currentUser = userMapper.selectById(currentUserId);
         if (currentUser == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
 
+        // 查询已关注的用户ID列表
+        List<Long> followingIds = followMapper.selectList(
+                new LambdaQueryWrapper<Follow>()
+                        .eq(Follow::getFollowerId, currentUserId)
+                        .select(Follow::getFollowingId)
+        ).stream().map(Follow::getFollowingId).toList();
+
         List<User> candidates = userMapper.selectList(
                 new LambdaQueryWrapper<User>()
                         .ne(User::getId, currentUserId)
                         .eq(User::getStatus, 1)
                         .eq(User::getProfileComplete, true)
+                        .notIn(User::getId, followingIds)  // 排除已关注的用户
         );
 
         List<MatchResultResponse> results = candidates.stream()

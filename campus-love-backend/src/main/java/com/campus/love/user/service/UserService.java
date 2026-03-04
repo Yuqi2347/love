@@ -17,6 +17,7 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.File;
 import java.io.IOException;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.util.UUID;
 
 @Service
@@ -52,7 +53,13 @@ public class UserService {
             LocalDate birthDate = LocalDate.parse(request.getBirthDate());
             user.setBirthDate(birthDate);
             user.setZodiac(ZodiacUtil.getZodiac(birthDate));
-            user.setBazi(BaziUtil.getBazi(birthDate));
+
+            LocalTime birthTime = null;
+            if (request.getBirthTime() != null && !request.getBirthTime().isEmpty()) {
+                birthTime = LocalTime.parse(request.getBirthTime());
+            }
+            user.setBirthTime(birthTime);
+            user.setBazi(BaziUtil.getBazi(birthDate, birthTime));
         }
 
         boolean complete = user.getNickname() != null && user.getGender() != null
@@ -96,9 +103,13 @@ public class UserService {
                 .nickname(user.getNickname())
                 .gender(user.getGender())
                 .birthDate(user.getBirthDate() != null ? user.getBirthDate().toString() : null)
+                .birthTime(user.getBirthTime() != null ? user.getBirthTime().toString() : null)
                 .school(user.getSchool())
                 .major(user.getMajor())
                 .grade(user.getGrade())
+                .activityScore(user.getActivityScore() != null ? user.getActivityScore() : 0)
+                .userLevel(user.getUserLevel() != null ? user.getUserLevel() : 1)
+                .isAdmin(user.getIsAdmin() != null ? user.getIsAdmin() : false)
                 .mbti(user.getMbti())
                 .zodiac(user.getZodiac())
                 .bazi(user.getBazi())

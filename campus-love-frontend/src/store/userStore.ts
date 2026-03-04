@@ -8,7 +8,7 @@ export const useUserStore = defineStore('user', () => {
   const user = ref<UserProfile | null>(null)
   const isLoggedIn = ref(!!localStorage.getItem('access_token'))
 
-  function setAuth(auth: AuthResponse) {
+  async function setAuth(auth: AuthResponse) {
     localStorage.setItem('access_token', auth.accessToken)
     localStorage.setItem('refresh_token', auth.refreshToken)
     isLoggedIn.value = true
@@ -19,6 +19,8 @@ export const useUserStore = defineStore('user', () => {
       avatarUrl: auth.avatarUrl,
       profileComplete: auth.profileComplete,
     } as UserProfile
+    // 立即获取完整用户信息（包含isAdmin和userLevel）
+    await fetchProfile()
   }
 
   async function fetchProfile() {

@@ -33,6 +33,7 @@ public enum ResultCode {
     // 朋友圈模块 4xxx
     FEED_NOT_FOUND(4001, "动态不存在"),
     ALREADY_LIKED(4002, "已点赞"),
+    INSUFFICIENT_LEVEL(4003, "等级不足，需要达到Lv3才能发布动态"),
 
     // 匹配模块 5xxx
     MATCH_CALCULATION_FAILED(5001, "匹配计算失败"),

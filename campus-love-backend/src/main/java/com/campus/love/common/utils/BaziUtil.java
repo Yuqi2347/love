@@ -1,6 +1,7 @@
 package com.campus.love.common.utils;
 
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.temporal.ChronoField;
 
 /**
@@ -24,6 +25,37 @@ public final class BaziUtil {
 
     public static String getBazi(LocalDate date) {
         return getYearPillar(date.getYear());
+    }
+
+    /**
+     * 支持精确时间的八字计算（提供时间后计算更准确）
+     */
+    public static String getBazi(LocalDate date, LocalTime time) {
+        if (date == null) return getYearPillar(LocalDate.now().getYear());
+        if (time == null) return getBazi(date);
+        // MVP阶段：如果有时间，在年柱基础上标注"时辰"
+        String yearPillar = getYearPillar(date.getYear());
+        int hour = time.getHour();
+        String shiChen = getShiChen(hour);
+        return yearPillar + " (" + shiChen + "时生)";
+    }
+
+    /**
+     * 根据小时数获取时辰
+     */
+    private static String getShiChen(int hour) {
+        if (hour >= 23 || hour < 1) return "子";
+        if (hour >= 1 && hour < 3) return "丑";
+        if (hour >= 3 && hour < 5) return "寅";
+        if (hour >= 5 && hour < 7) return "卯";
+        if (hour >= 7 && hour < 9) return "辰";
+        if (hour >= 9 && hour < 11) return "巳";
+        if (hour >= 11 && hour < 13) return "午";
+        if (hour >= 13 && hour < 15) return "未";
+        if (hour >= 15 && hour < 17) return "申";
+        if (hour >= 17 && hour < 19) return "酉";
+        if (hour >= 19 && hour < 21) return "戌";
+        return "亥";
     }
 
     public static String getWuxing(LocalDate date) {

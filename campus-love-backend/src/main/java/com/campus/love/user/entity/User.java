@@ -5,6 +5,7 @@ import lombok.Data;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
 
 @Data
 @TableName("t_user")
@@ -18,9 +19,13 @@ public class User {
     private String nickname;
     private Integer gender;
     private LocalDate birthDate;
+    private LocalTime birthTime;
     private String school;
     private String major;
     private String grade;
+    private Integer activityScore;
+    private Integer userLevel;
+    private Boolean isAdmin;
     private String mbti;
     private String zodiac;
     private String bazi;

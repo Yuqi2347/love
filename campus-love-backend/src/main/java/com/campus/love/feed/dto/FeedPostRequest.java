@@ -10,4 +10,10 @@ public class FeedPostRequest {
     private String content;
 
     private String images;
+
+    /**
+     * 帖子类型：TIMELINE(朋友圈) / DISCOVERY(发现模块)
+     * 默认为 TIMELINE
+     */
+    private String postType;
 }
