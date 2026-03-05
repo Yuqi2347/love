@@ -96,51 +96,74 @@ public class UserWeightService {
     /**
      * 用户触发行为后更新其个性化权重
      *
+     * 保守策略说明（V2.1）：
+     * 1. 只有"关注"行为才更新权重（明确的正向信号）
+     * 2. "忽略"行为不更新权重（原因不明，可能是长相、距离等非匹配因素）
+     * 3. 关注时：根据被关注用户的各维度得分，提高相应维度权重
+     * 4. 每次调整极其微小（0.001级别），需要大量行为才能看到明显变化
+     *
+     * 设计理念：
+     * - 用户忽略一个人可能是因为长相、距离、个人简介等非匹配因素
+     * - 用户关注一个人说明整体画像有吸引力，但不知道具体是哪方面吸引
+     * - 因此关注时均匀提高所有维度的权重，让系统更多样化推荐
+     *
      * @param userId       操作用户
      * @param targetUserId 被操作的目标用户
      * @param actionType   行为类型
-     * @param signalStrength 信号强度（+1关注, -1忽略, +2聊天, -3拉黑, 0查看）
+     * @param signalStrength 信号强度
      */
     @Transactional
     public void updateWeightsOnAction(Long userId, Long targetUserId, String actionType, int signalStrength) {
-        // 1. 读取当前用户权重
+        // 保守策略：只有关注行为才更新权重
+        if (!"FOLLOW".equals(actionType)) {
+            // 其他行为（忽略、查看等）不更新权重
+            return;
+        }
+
+        // 读取当前用户权重
         UserWeights weights = getUserWeights(userId);
 
-        // 2. 计算各维度得分
+        // 计算各维度得分（用于分析）
         Map<String, Integer> dimensionScores = calculateDimensionScores(userId, targetUserId);
         if (dimensionScores.isEmpty()) {
             log.warn("Failed to calculate dimension scores for users: {} -> {}", userId, targetUserId);
             return;
         }
 
-        // 3. 归一化维度得分到[-1, 1]
-        Map<String, Double> normalizedScores = normalizeScores(dimensionScores);
+        // 计算综合匹配分（用于判断推荐质量）
+        double avgScore = dimensionScores.values().stream().mapToInt(Integer::intValue).average().orElse(50.0);
 
-        // 4. EMA更新各维度权重
+        // 保守的权重更新策略
         Map<String, Double> newWeights = new HashMap<>(weights.getWeightMap());
 
-        for (String dim : GlobalWeights.getAllDimensions()) {
-            double currentWeight = newWeights.get(dim);
-            double dimScore = normalizedScores.getOrDefault(dim, 0.0);
+        // 如果关注的是高质量匹配（综合分>60），说明用户认可系统的推荐逻辑
+        // 轻微提高所有维度权重，让系统继续按现有逻辑推荐
+        if (avgScore > 60) {
+            for (String dim : GlobalWeights.getAllDimensions()) {
+                double currentWeight = newWeights.get(dim);
+                double dimScore = dimensionScores.getOrDefault(dim, 50);
 
-            // 权重调整量 = EMA_ALPHA × 信号强度 × 维度归一化得分
-            double adjustment = GlobalWeights.EMA_ALPHA * signalStrength * dimScore * 0.01;
-            double newWeight = currentWeight + adjustment;
+                // 该维度得分越高，权重增加越多（但总量很小）
+                double scoreFactor = dimScore / 100.0; // 0.0~1.0
+                double adjustment = 0.001 * scoreFactor * GlobalWeights.EMA_ALPHA;
 
-            // 限制在边界内
-            newWeights.put(dim, GlobalWeights.clipWeightToBounds(dim, newWeight));
+                newWeights.put(dim, GlobalWeights.clipWeightToBounds(dim, currentWeight + adjustment));
+            }
         }
 
-        // 5. 归一化，确保所有权重之和 = 1.0
+        // 归一化，确保所有权重之和 = 1.0
         newWeights = GlobalWeights.normalizeWeights(newWeights);
 
-        // 6. 保存更新后的权重
+        // 保存更新后的权重
         weights.updateWeights(newWeights);
         weights.incrementActionCount();
-        userWeightsMapper.updateById(weights);
-
-        log.debug("Updated weights for user {} after {} action: new weights = {}",
-                userId, actionType, newWeights);
+        try {
+            userWeightsMapper.updateById(weights);
+            log.info("User {} followed target {} (avg score: {}), slight weight adjustment applied",
+                    userId, targetUserId, String.format("%.1f", avgScore));
+        } catch (Exception e) {
+            log.warn("Failed to save weights to database (table may not exist), using in-memory weights for user: {}", userId, e);
+        }
     }
 
     /**
@@ -150,7 +173,18 @@ public class UserWeightService {
     @Scheduled(cron = "0 0 3 * * MON")
     @Transactional
     public void decayWeightsTowardDefault() {
-        List<UserWeights> allWeights = userWeightsMapper.selectList(null);
+        List<UserWeights> allWeights;
+        try {
+            allWeights = userWeightsMapper.selectList(null);
+        } catch (Exception e) {
+            log.warn("Failed to query weights for decay (table may not exist), skipping decay: {}", e.getMessage());
+            return;
+        }
+
+        if (allWeights.isEmpty()) {
+            log.debug("No weights to decay");
+            return;
+        }
 
         for (UserWeights uw : allWeights) {
             Map<String, Double> decayed = new HashMap<>();
@@ -171,10 +205,16 @@ public class UserWeightService {
         }
 
         // 批量更新
+        int successCount = 0;
         for (UserWeights uw : allWeights) {
-            userWeightsMapper.updateById(uw);
+            try {
+                userWeightsMapper.updateById(uw);
+                successCount++;
+            } catch (Exception e) {
+                log.warn("Failed to update decayed weights for user {}: {}", uw.getUserId(), e.getMessage());
+            }
         }
-        log.info("Decayed weights for {} users toward default", allWeights.size());
+        log.info("Decayed weights for {} / {} users toward default", successCount, allWeights.size());
     }
 
     /**
@@ -268,8 +308,13 @@ public class UserWeightService {
         UserWeights weights = getUserWeights(userId);
         weights.updateWeights(GlobalWeights.DEFAULT_WEIGHTS);
         weights.setActionCount(0);
-        userWeightsMapper.updateById(weights);
-        log.info("Reset weights for user {} to default", userId);
+        try {
+            userWeightsMapper.updateById(weights);
+            log.info("Reset weights for user {} to default", userId);
+        } catch (Exception e) {
+            log.warn("Failed to save reset weights to database (table may not exist) for user: {}", userId, e);
+            log.info("Reset in-memory weights for user {} to default", userId);
+        }
     }
 
     /**

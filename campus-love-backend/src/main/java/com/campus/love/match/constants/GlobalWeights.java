@@ -63,9 +63,10 @@ public final class GlobalWeights {
     /**
      * EMA（指数移动平均）平滑系数
      * 值越大，权重学习越快；值越小，权重越稳定
-     * 范围：[0.01, 0.30]，推荐值：0.10
+     * 范围：[0.001, 0.30]，推荐值：0.01（超保守策略）
+     * 降为0.01以实现极保守的权重调整
      */
-    public static final double EMA_ALPHA = 0.10;
+    public static final double EMA_ALPHA = 0.01;
 
     /**
      * 权重周衰减率

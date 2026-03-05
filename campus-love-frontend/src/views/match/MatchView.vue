@@ -10,7 +10,8 @@
 class="swipe-card card"
         :style="currentCardStyle"
         @mousedown="startDrag"
-        @touchstart.passive="startDrag">
+        @touchstart.passive="startDrag"
+        @dblclick="handleViewProfile">
         <div class="swipe-overlay like" :style="{ opacity: likeOpacity }">LIKE 💕</div>
         <div class="swipe-overlay nope" :style="{ opacity: nopeOpacity }">SKIP ✋</div>
 
@@ -49,6 +50,8 @@ class="swipe-card card"
           <el-icon :size="28"><Check /></el-icon>
         </button>
       </div>
+
+      <div class="hint-text">双击卡片查看详情</div>
     </div>
 
     <div v-else class="empty-state">
@@ -60,10 +63,13 @@ class="swipe-card card"
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getRecommendations, type MatchResult } from '@/api/matchApi'
+import { getRecommendations, reportUserAction, type MatchResult } from '@/api/matchApi'
 import { followUser } from '@/api/followApi'
 import { ElMessage } from 'element-plus'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500"><rect fill="%23f0f2f5" width="400" height="500" rx="24"/><text x="50%" y="45%" text-anchor="middle" fill="%23adb5bd" font-size="80">👤</text></svg>'
 const dimensionLabels = MATCH_DIMENSION_LABELS
@@ -128,6 +134,10 @@ function nextCard() {
 async function handleLike() {
   const card = currentCard.value
   dragX.value = 400
+
+  // 上报用户行为（关注）
+  reportUserAction(card.userId, 'FOLLOW').catch(() => {})
+
   setTimeout(() => {
     nextCard()
     followUser(card.userId).then(() => {
@@ -137,8 +147,21 @@ async function handleLike() {
 }
 
 function handleSkip() {
+  const card = currentCard.value
   dragX.value = -400
+
+  // 上报用户行为（忽略）
+  reportUserAction(card.userId, 'IGNORE').catch(() => {})
+
   setTimeout(nextCard, 300)
+}
+
+function handleViewProfile() {
+  const card = currentCard.value
+  if (!card.userId) return
+
+  // 跳转到个人主页（不上报行为，因为我们只在关注时更新权重）
+  router.push(`/profile/${card.userId}`)
 }
 </script>
 
@@ -272,5 +295,12 @@ function handleSkip() {
   gap: 16px;
   .empty-icon { font-size: 64px; }
   p { color: $text-muted; font-size: 15px; }
+}
+
+.hint-text {
+  text-align: center;
+  margin-top: 16px;
+  font-size: 13px;
+  color: $text-muted;
 }
 </style>
