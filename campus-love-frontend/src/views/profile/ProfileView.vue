@@ -17,6 +17,9 @@
           <button class="btn-outline" @click="$router.push(`/chat/${profileId}`)">
             <el-icon><ChatDotRound /></el-icon> 聊天
           </button>
+          <button v-if="followStatus === 'MUTUAL'" class="btn-primary" @click="handleInviteUser">
+            <el-icon><Calendar /></el-icon> 约TA一下
+          </button>
         </div>
         <div v-else class="profile-actions">
           <button class="btn-outline" @click="$router.push('/setup-profile')">
@@ -50,6 +53,44 @@
         <div class="level-progress-text">
           <span>当前等级 Lv{{ profile.userLevel }}</span>
           <span>{{ getNextLevelScore(profile.activityScore) }}分升级</span>
+        </div>
+      </div>
+
+      <!-- 邀约成就 & 平均评分（仅本人主页） -->
+      <div v-if="isMe" class="invite-stats-card">
+        <div class="invite-stats-header">
+          <div>
+            <span class="invite-stats-title">邀约成就</span>
+            <span class="invite-stats-subtitle">个人主页展示邀约次数与平均评分</span>
+          </div>
+          <div class="invite-credit">
+            <span class="label">信用分</span>
+            <span class="value">{{ profile.creditScore ?? 100 }}</span>
+          </div>
+        </div>
+        <div class="invite-stats-body">
+          <div class="invite-score-block">
+            <div class="score-main">
+              <span class="score-value">
+                {{ inviteStats?.receivedSocialRating != null ? inviteStats.receivedSocialRating.toFixed(1) : '-' }}
+              </span>
+              <span class="score-unit">/ 5.0</span>
+            </div>
+            <div class="score-label">社交体验平均评分</div>
+            <div class="score-desc">
+              来自所有邀约中的他人评价
+            </div>
+          </div>
+          <div class="invite-count-block">
+            <div class="count-item">
+              <span class="count-label">发起邀约</span>
+              <span class="count-value">{{ inviteStats?.inviteCount ?? profile.inviteCount ?? 0 }}</span>
+            </div>
+            <div class="count-item">
+              <span class="count-label">参与邀约</span>
+              <span class="count-value">{{ inviteStats?.participateCount ?? profile.participateCount ?? 0 }}</span>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -173,10 +214,11 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { getMatchDetail, type MatchResult } from '@/api/matchApi'
+import { getInviteStats, type InviteStats } from '@/api/inviteApi'
 import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, type FollowUser } from '@/api/followApi'
 import { getUserTimelinePosts, getUserDiscoveryPosts, deletePost, type FeedPost } from '@/api/feedApi'
 import { ElMessage } from 'element-plus'
-import { Camera, ChatDotRound } from '@element-plus/icons-vue'
+import { Camera, ChatDotRound, Calendar } from '@element-plus/icons-vue'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { FOLLOW_STATUS_LABELS, FollowStatus } from '@/constants/followConst'
 import { uploadAvatar } from '@/api/userApi'
@@ -194,6 +236,7 @@ const isMe = computed(() => profileId.value === userStore.user?.id)
 const profile = ref<UserProfile | null>(null)
 const followStatus = ref<string>(FollowStatus.NONE)
 const matchResult = ref<MatchResult | null>(null)
+const inviteStats = ref<InviteStats | null>(null)
 const posts = ref<FeedPost[]>([])
 const postsTab = ref<'timeline' | 'discovery'>('timeline')
 const followingCount = ref(0)
@@ -238,6 +281,18 @@ async function loadProfile() {
   try {
     const res = await getUserProfile(profileId.value)
     profile.value = res.data.data
+
+    // 本人主页：加载邀约统计（成就与平均评分）
+    if (isMe.value) {
+      try {
+        const statsRes = await getInviteStats()
+        inviteStats.value = statsRes.data.data || null
+      } catch {
+        inviteStats.value = null
+      }
+    } else {
+      inviteStats.value = null
+    }
 
     // 加载帖子
     await loadPostsByType()
@@ -366,6 +421,14 @@ async function handleFollowToggle() {
   } catch { /* handled */ }
 }
 
+function handleInviteUser() {
+  if (!profileId.value) return
+  router.push({
+    path: '/invite/create',
+    query: { target: profileId.value }
+  })
+}
+
 function handleLogout() {
   userStore.logout()
   router.push('/login')
@@ -427,6 +490,7 @@ async function handleAvatarChange(event: Event) {
 </script>
 
 <style lang="scss" scoped>
+@use 'sass:color';
 .profile-page { padding: 0; }
 
 .profile-header { position: relative; }
@@ -482,7 +546,7 @@ async function handleAvatarChange(event: Event) {
   transition: all $transition-base;
 
   &:hover {
-    background: darken($primary, 10%);
+    background: color.adjust($primary, $lightness: -10%);
     transform: scale(1.1);
   }
 
@@ -543,6 +607,126 @@ async function handleAvatarChange(event: Event) {
   background: rgba($primary, 0.06);
   border-radius: $radius-lg;
   border: 1px solid rgba($primary, 0.15);
+}
+
+.invite-stats-card {
+  margin-top: 12px;
+  padding: 16px;
+  background: linear-gradient(135deg, rgba($primary, 0.08), rgba($primary, 0.02));
+  border-radius: $radius-lg;
+  border: 1px solid rgba($primary, 0.2);
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.invite-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.invite-stats-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.invite-stats-subtitle {
+  display: block;
+  margin-top: 4px;
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.invite-credit {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+}
+
+.invite-credit .label {
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.invite-credit .value {
+  font-size: 20px;
+  font-weight: 800;
+  color: $primary;
+}
+
+.invite-stats-body {
+  display: flex;
+  align-items: stretch;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.invite-score-block {
+  flex: 1.3;
+  padding: 10px 12px;
+  border-radius: $radius-md;
+  background: rgba(#ffffff, 0.6);
+}
+
+.score-main {
+  display: flex;
+  align-items: baseline;
+  gap: 4px;
+}
+
+.score-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: $primary;
+}
+
+.score-unit {
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.score-label {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.score-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.invite-count-block {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 8px;
+}
+
+.count-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  border-radius: $radius-md;
+  background: rgba(#ffffff, 0.6);
+  font-size: 13px;
+}
+
+.count-label {
+  color: $text-secondary;
+}
+
+.count-value {
+  font-weight: 700;
+  color: $text-primary;
 }
 
 .level-progress-header {

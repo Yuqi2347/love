@@ -46,9 +46,39 @@ const router = createRouter({
           component: () => import('@/views/chat/ChatRoomView.vue'),
         },
         {
+          path: 'chat/group/:groupId',
+          name: 'GroupChatRoom',
+          component: () => import('@/views/chat/GroupChatRoomView.vue'),
+        },
+        {
           path: 'feed',
           name: 'Feed',
           component: () => import('@/views/feed/FeedView.vue'),
+        },
+        {
+          path: 'invite',
+          name: 'Invite',
+          component: () => import('@/views/invite/InviteView.vue'),
+        },
+        {
+          path: 'invite/create',
+          name: 'InviteCreate',
+          component: () => import('@/views/invite/InviteCreateView.vue'),
+        },
+        {
+          path: 'invite/wait',
+          name: 'InviteWait',
+          component: () => import('@/views/invite/InviteWaitView.vue'),
+        },
+        {
+          path: 'invite/:id',
+          name: 'InviteDetail',
+          component: () => import('@/views/invite/InviteDetailView.vue'),
+        },
+        {
+          path: 'invite/history',
+          name: 'InviteHistory',
+          component: () => import('@/views/invite/InviteHistoryView.vue'),
         },
         {
           path: 'profile',

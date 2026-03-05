@@ -35,6 +35,13 @@ public class User {
     private Boolean profileComplete;
     private Integer status;
 
+    /** 邀约模块：发起邀约次数 */
+    private Integer inviteCount;
+    /** 邀约模块：参与邀约次数 */
+    private Integer participateCount;
+    /** 邀约模块：信用分，默认 100 */
+    private Integer creditScore;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

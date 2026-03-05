@@ -16,12 +16,37 @@
 
     <div ref="messageListRef" class="message-list">
       <div
-v-for="msg in messages" :key="msg.id"
-        :class="['message-row', { mine: msg.senderId === myId }]">
-        <img v-if="msg.senderId !== myId" :src="msg.senderAvatar || defaultAvatar" class="avatar msg-avatar" width="36" height="36" />
+        v-for="msg in messages"
+        :key="msg.id"
+        :class="['message-row', { mine: msg.senderId === myId }]"
+      >
+        <img
+          v-if="msg.senderId !== myId"
+          :src="msg.senderAvatar || defaultAvatar"
+          class="avatar msg-avatar"
+          width="36"
+          height="36"
+        />
         <div class="message-bubble">
-          <p class="msg-content">{{ msg.content }}</p>
-          <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
+          <!-- 邀约消息：带查看详情按钮 -->
+          <template v-if="msg.msgType === 2">
+            <p class="msg-content">{{ msg.content }}</p>
+            <el-button
+              class="invite-link-btn"
+              type="primary"
+              text
+              size="small"
+              @click="goToInvite(msg.content)"
+            >
+              查看邀约详情
+            </el-button>
+            <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
+          </template>
+          <!-- 普通文本消息 -->
+          <template v-else>
+            <p class="msg-content">{{ msg.content }}</p>
+            <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
+          </template>
         </div>
       </div>
     </div>
@@ -40,16 +65,18 @@ v-for="msg in messages" :key="msg.id"
 
 <script setup lang="ts">
 import { ref, computed, onMounted, nextTick, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useChatStore } from '@/store/chatStore'
 import { useUserStore } from '@/store/userStore'
 import { getChatHistory, markAsRead } from '@/api/chatApi'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { storeToRefs } from 'pinia'
+import { ElMessage } from 'element-plus'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect fill="%23f0f2f5" width="36" height="36" rx="18"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="16">👤</text></svg>'
 
 const route = useRoute()
+const router = useRouter()
 const chatStore = useChatStore()
 const userStore = useUserStore()
 const { currentMessages } = storeToRefs(chatStore)
@@ -92,6 +119,16 @@ function handleSend() {
   if (!inputText.value.trim()) return
   chatStore.sendMessage(otherUserId.value, inputText.value.trim())
   inputText.value = ''
+}
+
+function goToInvite(content: string) {
+  const match = content.match(/INVITE#(\d+)/)
+  if (match && match[1]) {
+    const inviteId = match[1]
+    router.push(`/invite/${inviteId}`)
+  } else {
+    ElMessage.warning('未找到邀约信息')
+  }
 }
 </script>
 
@@ -162,6 +199,12 @@ function handleSend() {
 
   .msg-content { font-size: 14px; line-height: 1.5; word-wrap: break-word; }
   .msg-time { font-size: 11px; color: $text-muted; display: block; text-align: right; margin-top: 4px; }
+}
+
+.invite-link-btn {
+  margin-top: 4px;
+  padding: 0;
+  font-size: 12px;
 }
 
 .chat-input-area {

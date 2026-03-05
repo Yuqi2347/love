@@ -38,6 +38,18 @@ public enum ResultCode {
     // 匹配模块 5xxx
     MATCH_CALCULATION_FAILED(5001, "匹配计算失败"),
 
+    // 邀约模块 6xxx
+    INVITE_NOT_FOUND(6001, "邀约不存在"),
+    INVITE_FULL(6002, "邀约已满员"),
+    ALREADY_JOINED(6003, "已加入该邀约"),
+    NOT_MUTUAL_FOLLOW(6004, "只能邀约互相关注的用户"),
+    INVITE_LIMIT_EXCEEDED(6005, "今日邀约次数已达上限"),
+    CREDIT_TOO_LOW(6006, "信用分过低"),
+    INVITE_TIME_PASSED(6007, "邀约时间已过"),
+    CANCEL_TOO_CLOSE(6008, "活动即将开始，无法取消"),
+    ALREADY_RATED(6009, "已评价过该邀约"),
+    PARTICIPATE_LIMIT_EXCEEDED(6010, "同时参与的邀约已达上限"),
+
     // 系统错误 9xxx
     INTERNAL_ERROR(9999, "系统内部错误");
 

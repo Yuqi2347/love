@@ -5,6 +5,7 @@ export interface ChatMessage {
   id: number
   senderId: number
   receiverId: number
+  groupId?: number | null
   senderNickname: string
   senderAvatar: string | null
   content: string

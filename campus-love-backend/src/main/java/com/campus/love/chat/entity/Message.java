@@ -14,6 +14,10 @@ public class Message {
 
     private Long senderId;
     private Long receiverId;
+    /**
+     * 群聊ID（单聊消息为空）
+     */
+    private Long groupId;
     private String content;
     private Integer msgType;
     private Boolean isRead;

@@ -97,6 +97,7 @@ const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg
 const navItems = computed(() => [
   { path: '/discover', label: '发现', icon: 'Compass' },
   { path: '/match', label: '匹配', icon: 'MagicStick' },
+  { path: '/invite', label: '邀约', icon: 'Calendar' },
   { path: '/chat', label: '消息', icon: 'ChatDotRound', badge: 0 },
   { path: '/feed', label: '朋友圈', icon: 'Notebook' },
   { path: '/profile', label: '我的', icon: 'User' },

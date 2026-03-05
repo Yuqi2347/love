@@ -7,6 +7,7 @@ import com.campus.love.chat.dto.ChatMessageResponse;
 import com.campus.love.chat.dto.ConversationResponse;
 import com.campus.love.chat.entity.Message;
 import com.campus.love.chat.mapper.MessageMapper;
+import com.campus.love.chat.service.ChatGroupService;
 import com.campus.love.common.constants.RedisKeyConstants;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
@@ -33,6 +34,7 @@ public class ChatService {
     private final UserMapper userMapper;
     private final FollowService followService;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final ChatGroupService chatGroupService;
 
     @Value("${app.follow.daily-chat-limit}")
     private int dailyChatLimit;
@@ -54,6 +56,7 @@ public class ChatService {
         Message message = new Message();
         message.setSenderId(senderId);
         message.setReceiverId(receiverId);
+        message.setGroupId(null);
         message.setContent(content);
         message.setMsgType(msgType != null ? msgType : 1);
         message.setIsRead(false);
@@ -64,6 +67,7 @@ public class ChatService {
                 .id(message.getId())
                 .senderId(senderId)
                 .receiverId(receiverId)
+                .groupId(null)
                 .senderNickname(sender != null ? sender.getNickname() : "")
                 .senderAvatar(sender != null ? sender.getAvatarUrl() : "")
                 .content(content)
@@ -81,6 +85,7 @@ public class ChatService {
                                 .and(q -> q.eq(Message::getSenderId, currentUserId).eq(Message::getReceiverId, otherUserId))
                                 .or(q -> q.eq(Message::getSenderId, otherUserId).eq(Message::getReceiverId, currentUserId))
                         )
+                        .isNull(Message::getGroupId)
                         .orderByDesc(Message::getCreatedAt)
                         .last("LIMIT " + (page * size) + "," + size)
         );
@@ -106,6 +111,7 @@ public class ChatService {
         Long currentUserId = CurrentUser.getId();
         List<Message> allMessages = messageMapper.selectList(
                 new LambdaQueryWrapper<Message>()
+                        .isNull(Message::getGroupId)
                         .and(w -> w
                                 .eq(Message::getSenderId, currentUserId)
                                 .or(q -> q.eq(Message::getReceiverId, currentUserId))
@@ -143,9 +149,40 @@ public class ChatService {
         Long currentUserId = CurrentUser.getId();
         messageMapper.update(null,
                 new LambdaUpdateWrapper<Message>()
+                        .isNull(Message::getGroupId)
                         .eq(Message::getSenderId, otherUserId)
                         .eq(Message::getReceiverId, currentUserId)
                         .eq(Message::getIsRead, false)
                         .set(Message::getIsRead, true));
+    }
+
+    /**
+     * 向群聊发送消息（不做互关/频率限制）
+     */
+    public ChatMessageResponse sendGroupMessage(Long senderId, Long groupId, String content, Integer msgType) {
+        // 这里只负责持久化消息，具体的 WebSocket 广播由 WebSocketHandler 根据 groupId + 群成员列表完成
+        Message message = new Message();
+        message.setSenderId(senderId);
+        // 群聊消息不依赖 receiverId，可设为 0
+        message.setReceiverId(0L);
+        message.setGroupId(groupId);
+        message.setContent(content);
+        message.setMsgType(msgType != null ? msgType : 1);
+        message.setIsRead(false);
+        messageMapper.insert(message);
+
+        User sender = userMapper.selectById(senderId);
+        return ChatMessageResponse.builder()
+                .id(message.getId())
+                .senderId(senderId)
+                .receiverId(0L)
+                .groupId(groupId)
+                .senderNickname(sender != null ? sender.getNickname() : "")
+                .senderAvatar(sender != null ? sender.getAvatarUrl() : "")
+                .content(content)
+                .msgType(message.getMsgType())
+                .isRead(false)
+                .createdAt(message.getCreatedAt() != null ? message.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "")
+                .build();
     }
 }

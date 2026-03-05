@@ -14,6 +14,9 @@ export interface UserProfile {
   activityScore: number
   userLevel: number
   isAdmin: boolean
+  creditScore: number
+  inviteCount: number
+  participateCount: number
   mbti: string | null
   zodiac: string | null
   bazi: string | null

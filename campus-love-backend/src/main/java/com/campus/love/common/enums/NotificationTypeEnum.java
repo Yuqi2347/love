@@ -1,0 +1,52 @@
+package com.campus.love.common.enums;
+
+import lombok.Getter;
+
+/**
+ * 站内通知类型枚举
+ */
+@Getter
+public enum NotificationTypeEnum {
+
+    /**
+     * 报名成功（发送给参与者自己）
+     */
+    INVITE_JOIN_SUCCESS("报名成功"),
+
+    /**
+     * 有人加入邀约（发送给发起人）
+     */
+    INVITE_NEW_PARTICIPANT("有人加入你的邀约"),
+
+    /**
+     * 邀约被取消（发送给所有参与者）
+     */
+    INVITE_CANCELLED("邀约被取消"),
+
+    /**
+     * 参与者退出邀约（发送给发起人）
+     */
+    INVITE_PARTICIPANT_LEAVE("参与者退出邀约"),
+
+    /**
+     * 匹配到合适邀约（发送给等待邀约用户）
+     */
+    INVITE_MATCH_FOUND("找到匹配邀约"),
+
+    /**
+     * 活动开始前1天提醒
+     */
+    INVITE_REMIND_1D("活动开始前1天提醒"),
+
+    /**
+     * 活动开始前1小时提醒
+     */
+    INVITE_REMIND_1H("活动开始前1小时提醒");
+
+    private final String description;
+
+    NotificationTypeEnum(String description) {
+        this.description = description;
+    }
+}
+

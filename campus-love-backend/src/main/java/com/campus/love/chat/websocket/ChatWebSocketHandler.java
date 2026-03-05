@@ -2,6 +2,7 @@ package com.campus.love.chat.websocket;
 
 import com.campus.love.chat.dto.ChatMessageResponse;
 import com.campus.love.chat.service.ChatService;
+import com.campus.love.chat.service.ChatGroupService;
 import com.campus.love.common.utils.JwtUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -23,6 +24,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
 
     private final JwtUtil jwtUtil;
     private final ChatService chatService;
+    private final ChatGroupService chatGroupService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
     private static final Map<Long, WebSocketSession> SESSIONS = new ConcurrentHashMap<>();
@@ -44,17 +46,40 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         if (senderId == null) return;
 
         JsonNode node = objectMapper.readTree(message.getPayload());
-        Long receiverId = node.get("receiverId").asLong();
+        Long receiverId = node.has("receiverId") && !node.get("receiverId").isNull()
+                ? node.get("receiverId").asLong()
+                : null;
+        Long groupId = node.has("groupId") && !node.get("groupId").isNull()
+                ? node.get("groupId").asLong()
+                : null;
         String content = node.get("content").asText();
         Integer msgType = node.has("msgType") ? node.get("msgType").asInt() : 1;
 
-        ChatMessageResponse response = chatService.sendMessage(senderId, receiverId, content, msgType);
+        ChatMessageResponse response;
+        if (groupId != null) {
+            // 群聊消息
+            response = chatService.sendGroupMessage(senderId, groupId, content, msgType);
+        } else if (receiverId != null) {
+            // 单聊消息
+            response = chatService.sendMessage(senderId, receiverId, content, msgType);
+        } else {
+            return;
+        }
         String responseJson = objectMapper.writeValueAsString(response);
 
         // Send to sender
         sendToUser(senderId, responseJson);
-        // Send to receiver if online
-        sendToUser(receiverId, responseJson);
+        if (groupId != null) {
+            // 群聊广播：发送给所有群成员
+            chatGroupService.getMembers(groupId).forEach(member -> {
+                if (!member.getUserId().equals(senderId)) {
+                    sendToUser(member.getUserId(), responseJson);
+                }
+            });
+        } else if (receiverId != null) {
+            // 单聊：发送给对方
+            sendToUser(receiverId, responseJson);
+        }
     }
 
     @Override

@@ -42,6 +42,12 @@ export const useChatStore = defineStore('chat', () => {
     }
   }
 
+  function sendGroupMessage(groupId: number, content: string, msgType = 1) {
+    if (ws.value?.readyState === WebSocket.OPEN) {
+      ws.value.send(JSON.stringify({ groupId, content, msgType }))
+    }
+  }
+
   function disconnect() {
     ws.value?.close()
     ws.value = null
@@ -63,6 +69,6 @@ export const useChatStore = defineStore('chat', () => {
 
   return {
     conversations, currentMessages, connected,
-    fetchConversations, connectWebSocket, sendMessage, disconnect,
+    fetchConversations, connectWebSocket, sendMessage, sendGroupMessage, disconnect,
   }
 })

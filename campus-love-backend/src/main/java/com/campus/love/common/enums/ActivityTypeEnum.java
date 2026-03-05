@@ -36,7 +36,22 @@ public enum ActivityTypeEnum {
     /**
      * 发表评论
      */
-    COMMENT("发表评论", 5);
+    COMMENT("发表评论", 5),
+
+    /**
+     * 发起邀约
+     */
+    INVITE_CREATE("发起邀约", 10),
+
+    /**
+     * 加入邀约
+     */
+    INVITE_JOIN("加入邀约", 5),
+
+    /**
+     * 完成邀约
+     */
+    INVITE_COMPLETE("完成邀约", 5);
 
     /**
      * 活动描述

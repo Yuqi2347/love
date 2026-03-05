@@ -10,6 +10,10 @@ public class ChatMessageResponse {
     private Long id;
     private Long senderId;
     private Long receiverId;
+    /**
+     * 群聊消息时的群ID，可为空
+     */
+    private Long groupId;
     private String senderNickname;
     private String senderAvatar;
     private String content;
