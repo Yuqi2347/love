@@ -56,12 +56,12 @@
         </div>
       </div>
 
-      <!-- 邀约成就 & 平均评分（仅本人主页） -->
-      <div v-if="isMe" class="invite-stats-card">
+      <!-- 邀约成就 & 平均评分 -->
+      <div v-if="inviteStats || profile.inviteCount || profile.participateCount" class="invite-stats-card">
         <div class="invite-stats-header">
           <div>
-            <span class="invite-stats-title">邀约成就</span>
-            <span class="invite-stats-subtitle">个人主页展示邀约次数与平均评分</span>
+            <span class="invite-stats-title">{{ isMe ? '邀约成就' : `${profile?.nickname || 'TA'}的邀约成就` }}</span>
+            <span class="invite-stats-subtitle">展示邀约次数与平均评分</span>
           </div>
           <div class="invite-credit">
             <span class="label">信用分</span>
@@ -214,7 +214,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { getMatchDetail, type MatchResult } from '@/api/matchApi'
-import { getInviteStats, type InviteStats } from '@/api/inviteApi'
+import { getInviteStats, getUserInviteStats, type InviteStats } from '@/api/inviteApi'
 import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, type FollowUser } from '@/api/followApi'
 import { getUserTimelinePosts, getUserDiscoveryPosts, deletePost, type FeedPost } from '@/api/feedApi'
 import { ElMessage } from 'element-plus'
@@ -282,15 +282,11 @@ async function loadProfile() {
     const res = await getUserProfile(profileId.value)
     profile.value = res.data.data
 
-    // 本人主页：加载邀约统计（成就与平均评分）
-    if (isMe.value) {
-      try {
-        const statsRes = await getInviteStats()
-        inviteStats.value = statsRes.data.data || null
-      } catch {
-        inviteStats.value = null
-      }
-    } else {
+    // 加载邀约统计（成就与平均评分）
+    try {
+      const statsRes = isMe.value ? await getInviteStats() : await getUserInviteStats(profileId.value)
+      inviteStats.value = statsRes.data.data || null
+    } catch {
       inviteStats.value = null
     }
 

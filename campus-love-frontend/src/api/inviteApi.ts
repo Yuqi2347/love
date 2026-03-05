@@ -114,7 +114,7 @@ export function createInvite(data: InviteCreateRequest) {
  * 获取邀约列表
  */
 export function getInviteList(type?: string, status?: string, page = 0, size = 20) {
-  return service.get<ApiResult<any>>('/invite/list', { params: { type, status, page, size } })
+  return service.get<ApiResult<{ records: Invite[]; total: number; current: number; size: number }>>('/invite/list', { params: { type, status, page, size } })
 }
 
 /**
@@ -185,6 +185,13 @@ export function createRating(data: InviteRatingCreateRequest) {
  */
 export function getInviteStats() {
   return service.get<ApiResult<InviteStats>>('/invite/stats')
+}
+
+/**
+ * 获取指定用户的邀约统计
+ */
+export function getUserInviteStats(userId: number) {
+  return service.get<ApiResult<InviteStats>>(`/invite/user/${userId}/stats`)
 }
 
 /**

@@ -119,6 +119,13 @@ public class InviteController {
         return Result.success(stats);
     }
 
+    @Operation(summary = "获取指定用户的邀约统计")
+    @GetMapping("/user/{userId}/stats")
+    public Result<InviteStatsResponse> getUserInviteStats(@PathVariable Long userId) {
+        InviteStatsResponse stats = inviteService.getUserInviteStats(userId);
+        return Result.success(stats);
+    }
+
     @Operation(summary = "获取推荐邀约列表")
     @GetMapping("/recommend")
     public Result<List<InviteResponse>> getRecommendInvites(

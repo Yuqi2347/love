@@ -196,6 +196,7 @@ import type { Invite } from '@/api/inviteApi'
 import {
   InviteType,
   InviteStatus,
+  InviteMode,
   INVITE_TYPE_LABELS,
   INVITE_STATUS_LABELS,
   INVITE_STATUS_COLORS,

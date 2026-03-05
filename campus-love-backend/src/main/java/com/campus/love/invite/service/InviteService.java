@@ -784,6 +784,82 @@ public class InviteService {
     }
 
     /**
+     * 获取指定用户的邀约统计
+     */
+    public InviteStatsResponse getUserInviteStats(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        }
+
+        // 统计发起的邀约
+        long totalInvites = inviteMapper.selectCount(
+                new LambdaQueryWrapper<Invite>()
+                        .eq(Invite::getCreatorId, userId)
+                        .eq(Invite::getDeleted, false));
+
+        // 统计完成的邀约
+        long completedInvites = inviteMapper.selectCount(
+                new LambdaQueryWrapper<Invite>()
+                        .eq(Invite::getCreatorId, userId)
+                        .eq(Invite::getStatus, InviteStatusEnum.ENDED.name())
+                        .eq(Invite::getDeleted, false));
+
+        // 统计获得的评价
+        List<InviteRating> receivedRatings = ratingMapper.selectList(
+                new LambdaQueryWrapper<InviteRating>()
+                        .eq(InviteRating::getRatedUserId, userId));
+
+        BigDecimal avgSocialRating = receivedRatings.stream()
+                .map(InviteRating::getSocialRating)
+                .filter(r -> r != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(receivedRatings.isEmpty() ? BigDecimal.ONE : BigDecimal.valueOf(receivedRatings.size()), 1, RoundingMode.HALF_UP);
+
+        BigDecimal avgOrgRating = receivedRatings.stream()
+                .map(InviteRating::getOrgRating)
+                .filter(r -> r != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(receivedRatings.isEmpty() || receivedRatings.stream().noneMatch(r -> r.getOrgRating() != null)
+                        ? BigDecimal.ONE : BigDecimal.valueOf(receivedRatings.stream().filter(r -> r.getOrgRating() != null).count()), 1, RoundingMode.HALF_UP);
+
+        // 统计发起邀约获得的评价（无发起邀约时跳过 IN 查询，避免 SQL invite_id IN () 语法错误）
+        List<Long> myInviteIds = inviteMapper.selectList(
+                        new LambdaQueryWrapper<Invite>()
+                                .eq(Invite::getCreatorId, userId)
+                                .select(Invite::getId))
+                .stream()
+                .map(Invite::getId)
+                .collect(Collectors.toList());
+
+        List<InviteRating> orgRatings = myInviteIds.isEmpty()
+                ? List.of()
+                : ratingMapper.selectList(
+                        new LambdaQueryWrapper<InviteRating>()
+                                .in(InviteRating::getInviteId, myInviteIds)
+                                .eq(InviteRating::getRatedUserId, userId));
+
+        BigDecimal receivedOrgRating = orgRatings.stream()
+                .map(InviteRating::getOrgRating)
+                .filter(r -> r != null)
+                .reduce(BigDecimal.ZERO, BigDecimal::add)
+                .divide(orgRatings.isEmpty() || orgRatings.stream().noneMatch(r -> r.getOrgRating() != null)
+                        ? BigDecimal.ONE : BigDecimal.valueOf(orgRatings.stream().filter(r -> r.getOrgRating() != null).count()), 1, RoundingMode.HALF_UP);
+
+        return InviteStatsResponse.builder()
+                .inviteCount((int) totalInvites)
+                .participateCount(user.getParticipateCount() != null ? user.getParticipateCount() : 0)
+                .successRate(totalInvites > 0 ? BigDecimal.valueOf(completedInvites)
+                        .multiply(BigDecimal.valueOf(100))
+                        .divide(BigDecimal.valueOf(totalInvites), 1, RoundingMode.HALF_UP) : BigDecimal.ZERO)
+                .avgSocialRating(avgSocialRating.compareTo(BigDecimal.ZERO) == 0 && !receivedRatings.isEmpty() ? null : avgSocialRating)
+                .avgOrgRating(avgOrgRating.compareTo(BigDecimal.ZERO) == 0 && receivedRatings.stream().noneMatch(r -> r.getOrgRating() != null) ? null : avgOrgRating)
+                .receivedSocialRating(avgSocialRating.compareTo(BigDecimal.ZERO) == 0 && !receivedRatings.isEmpty() ? null : avgSocialRating)
+                .receivedOrgRating(receivedOrgRating.compareTo(BigDecimal.ZERO) == 0 && !orgRatings.isEmpty() ? null : receivedOrgRating)
+                .build();
+    }
+
+    /**
      * 检查用户信用分
      */
     private void checkUserCredit(Long userId, int minScore) {
