@@ -9,7 +9,9 @@ public enum MsgTypeEnum {
 
     TEXT(1, "文字"),
     IMAGE(2, "图片"),
-    EMOJI(3, "表情");
+    EMOJI(3, "表情"),
+    /** 邀约消息（用于一对一邀约推送） */
+    INVITE(4, "邀约");
 
     private final Integer code;
     private final String label;

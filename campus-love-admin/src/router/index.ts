@@ -1,0 +1,55 @@
+import { createRouter, createWebHistory } from 'vue-router'
+
+const router = createRouter({
+  history: createWebHistory(),
+  routes: [
+    {
+      path: '/login',
+      name: 'Login',
+      component: () => import('@/views/LoginView.vue'),
+      meta: { public: true },
+    },
+    {
+      path: '/',
+      component: () => import('@/views/Layout.vue'),
+      meta: { requiresAuth: true },
+      children: [
+        { path: '', redirect: '/dashboard' },
+        {
+          path: 'dashboard',
+          name: 'Dashboard',
+          component: () => import('@/views/DashboardView.vue'),
+        },
+        {
+          path: 'users',
+          name: 'Users',
+          component: () => import('@/views/UserListView.vue'),
+        },
+        {
+          path: 'invites',
+          name: 'Invites',
+          component: () => import('@/views/InviteListView.vue'),
+        },
+      ],
+    },
+  ],
+})
+
+router.beforeEach((to, _from, next) => {
+  const token = localStorage.getItem('admin_token')
+  if (to.meta.public) {
+    if (token && to.name === 'Login') {
+      next('/dashboard')
+    } else {
+      next()
+    }
+    return
+  }
+  if (!token) {
+    next('/login')
+  } else {
+    next()
+  }
+})
+
+export default router

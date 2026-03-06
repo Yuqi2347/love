@@ -2,8 +2,10 @@ package com.campus.love.feed.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.love.auth.security.CurrentUser;
+import com.campus.love.common.constants.UserLevelConstants;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
+import com.campus.love.feed.constants.PostTypeConstants;
 import com.campus.love.feed.dto.FeedCommentRequest;
 import com.campus.love.feed.dto.FeedPostRequest;
 import com.campus.love.feed.dto.FeedPostResponse;
@@ -21,9 +23,12 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.format.DateTimeFormatter;
+import com.campus.love.common.constants.DateTimeConstants;
+
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static java.util.stream.Collectors.toMap;
 
 @Service
 @RequiredArgsConstructor
@@ -36,8 +41,6 @@ public class FeedService {
     private final FollowService followService;
     private final ActivityService activityService;
 
-    private static final DateTimeFormatter FMT = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
-
     /**
      * 创建朋友圈帖子
      */
@@ -49,8 +52,8 @@ public class FeedService {
         post.setContent(request.getContent());
         post.setImages(request.getImages());
         // 默认发到朋友圈
-        post.setPostType(request.getPostType() != null ? request.getPostType() : "TIMELINE");
-        post.setRequiredLevel(3);
+        post.setPostType(request.getPostType() != null ? request.getPostType() : PostTypeConstants.TIMELINE);
+        post.setRequiredLevel(UserLevelConstants.POST_FEED_MIN_LEVEL);
         post.setLikeCount(0);
         post.setCommentCount(0);
         feedPostMapper.insert(post);
@@ -76,9 +79,8 @@ public class FeedService {
         post.setUserId(userId);
         post.setContent(request.getContent());
         post.setImages(request.getImages());
-        // 发现模块帖子
-        post.setPostType("DISCOVERY");
-        post.setRequiredLevel(3);
+        post.setPostType(PostTypeConstants.DISCOVERY);
+        post.setRequiredLevel(UserLevelConstants.POST_FEED_MIN_LEVEL);
         post.setLikeCount(0);
         post.setCommentCount(0);
         feedPostMapper.insert(post);
@@ -96,16 +98,15 @@ public class FeedService {
     public List<FeedPostResponse> getDiscoveryPosts(int page, int size) {
         Long currentUserId = CurrentUser.getId();
 
-        // 只查询发现模块类型的帖子
         List<FeedPost> posts = feedPostMapper.selectList(
                 new LambdaQueryWrapper<FeedPost>()
-                        .eq(FeedPost::getPostType, "DISCOVERY")
+                        .eq(FeedPost::getPostType, PostTypeConstants.DISCOVERY)
                         .orderByDesc(FeedPost::getCreatedAt)
                         .last("LIMIT " + (page * size) + "," + size)
         );
-
+        Map<Long, User> authorMap = batchLoadAuthors(posts);
         return posts.stream().map(p -> {
-            FeedPostResponse response = toResponse(p, currentUserId);
+            FeedPostResponse response = toResponse(p, currentUserId, authorMap);
             // 记录浏览活跃度
             activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.VIEW, p.getId());
             return response;
@@ -123,12 +124,12 @@ public class FeedService {
         List<FeedPost> posts = feedPostMapper.selectList(
                 new LambdaQueryWrapper<FeedPost>()
                         .in(FeedPost::getUserId, mutualIds)
-                        .eq(FeedPost::getPostType, "TIMELINE")
+                        .eq(FeedPost::getPostType, PostTypeConstants.TIMELINE)
                         .orderByDesc(FeedPost::getCreatedAt)
                         .last("LIMIT " + (page * size) + "," + size)
         );
-
-        return posts.stream().map(p -> toResponse(p, currentUserId)).collect(Collectors.toList());
+        Map<Long, User> authorMap = batchLoadAuthors(posts);
+        return posts.stream().map(p -> toResponse(p, currentUserId, authorMap)).collect(Collectors.toList());
     }
 
     public List<FeedPostResponse> getUserPosts(Long userId, int page, int size) {
@@ -139,7 +140,8 @@ public class FeedService {
                         .orderByDesc(FeedPost::getCreatedAt)
                         .last("LIMIT " + (page * size) + "," + size)
         );
-        return posts.stream().map(p -> toResponse(p, currentUserId)).collect(Collectors.toList());
+        Map<Long, User> authorMap = batchLoadAuthors(posts);
+        return posts.stream().map(p -> toResponse(p, currentUserId, authorMap)).collect(Collectors.toList());
     }
 
     /**
@@ -150,11 +152,12 @@ public class FeedService {
         List<FeedPost> posts = feedPostMapper.selectList(
                 new LambdaQueryWrapper<FeedPost>()
                         .eq(FeedPost::getUserId, userId)
-                        .eq(FeedPost::getPostType, "TIMELINE")
+                        .eq(FeedPost::getPostType, PostTypeConstants.TIMELINE)
                         .orderByDesc(FeedPost::getCreatedAt)
                         .last("LIMIT " + (page * size) + "," + size)
         );
-        return posts.stream().map(p -> toResponse(p, currentUserId)).collect(Collectors.toList());
+        Map<Long, User> authorMap = batchLoadAuthors(posts);
+        return posts.stream().map(p -> toResponse(p, currentUserId, authorMap)).collect(Collectors.toList());
     }
 
     /**
@@ -165,11 +168,20 @@ public class FeedService {
         List<FeedPost> posts = feedPostMapper.selectList(
                 new LambdaQueryWrapper<FeedPost>()
                         .eq(FeedPost::getUserId, userId)
-                        .eq(FeedPost::getPostType, "DISCOVERY")
+                        .eq(FeedPost::getPostType, PostTypeConstants.DISCOVERY)
                         .orderByDesc(FeedPost::getCreatedAt)
                         .last("LIMIT " + (page * size) + "," + size)
         );
-        return posts.stream().map(p -> toResponse(p, currentUserId)).collect(Collectors.toList());
+        Map<Long, User> authorMap = batchLoadAuthors(posts);
+        return posts.stream().map(p -> toResponse(p, currentUserId, authorMap)).collect(Collectors.toList());
+    }
+
+    private Map<Long, User> batchLoadAuthors(List<FeedPost> posts) {
+        if (posts == null || posts.isEmpty()) return Map.of();
+        List<Long> userIds = posts.stream().map(FeedPost::getUserId).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        if (userIds.isEmpty()) return Map.of();
+        List<User> users = userMapper.selectBatchIds(userIds);
+        return users != null ? users.stream().filter(Objects::nonNull).collect(toMap(User::getId, u -> u, (a, b) -> a)) : Map.of();
     }
 
     @Transactional
@@ -248,7 +260,14 @@ public class FeedService {
     }
 
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId) {
-        User author = userMapper.selectById(post.getUserId());
+        return toResponse(post, currentUserId, null);
+    }
+
+    private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap) {
+        User author = authorMap != null ? authorMap.get(post.getUserId()) : null;
+        if (author == null) {
+            author = userMapper.selectById(post.getUserId());
+        }
         boolean liked = feedLikeMapper.selectCount(
                 new LambdaQueryWrapper<FeedLike>()
                         .eq(FeedLike::getPostId, post.getId())
@@ -270,7 +289,7 @@ public class FeedService {
                     .avatarUrl(u != null ? u.getAvatarUrl() : "")
                     .content(c.getContent())
                     .parentId(c.getParentId())
-                    .createdAt(c.getCreatedAt() != null ? c.getCreatedAt().format(FMT) : "")
+                    .createdAt(c.getCreatedAt() != null ? c.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                     .build();
         }).collect(Collectors.toList());
 
@@ -284,7 +303,7 @@ public class FeedService {
                 .likeCount(post.getLikeCount())
                 .commentCount(post.getCommentCount())
                 .liked(liked)
-                .createdAt(post.getCreatedAt() != null ? post.getCreatedAt().format(FMT) : "")
+                .createdAt(post.getCreatedAt() != null ? post.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                 .comments(commentItems)
                 .build();
     }

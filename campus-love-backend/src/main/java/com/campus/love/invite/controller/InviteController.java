@@ -36,7 +36,7 @@ public class InviteController {
     public Result<IPage<InviteResponse>> getInviteList(
             @Parameter(description = "邀约类型") @RequestParam(required = false) String type,
             @Parameter(description = "邀约状态") @RequestParam(required = false) String status,
-            @Parameter(description = "页码") @RequestParam(defaultValue = "0") Integer page,
+            @Parameter(description = "页码，从 1 开始") @RequestParam(defaultValue = "1") Integer page,
             @Parameter(description = "每页数量") @RequestParam(defaultValue = "20") Integer size) {
         IPage<InviteResponse> invites = inviteService.getInviteList(type, status, page, size);
         return Result.success(invites);

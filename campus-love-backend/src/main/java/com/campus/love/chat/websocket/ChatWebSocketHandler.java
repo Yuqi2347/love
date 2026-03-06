@@ -36,7 +36,11 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
             SESSIONS.put(userId, session);
             log.info("WebSocket连接建立: userId={}", userId);
         } else {
-            try { session.close(); } catch (IOException ignored) {}
+            try {
+                session.close();
+            } catch (IOException e) {
+                log.debug("关闭无效 WebSocket 连接时异常", e);
+            }
         }
     }
 

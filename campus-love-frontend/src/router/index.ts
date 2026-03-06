@@ -46,11 +46,6 @@ const router = createRouter({
           component: () => import('@/views/chat/ChatRoomView.vue'),
         },
         {
-          path: 'chat/group/:groupId',
-          name: 'GroupChatRoom',
-          component: () => import('@/views/chat/GroupChatRoomView.vue'),
-        },
-        {
           path: 'feed',
           name: 'Feed',
           component: () => import('@/views/feed/FeedView.vue'),

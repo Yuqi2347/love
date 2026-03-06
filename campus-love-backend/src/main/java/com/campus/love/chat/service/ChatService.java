@@ -2,12 +2,18 @@ package com.campus.love.chat.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.love.auth.security.CurrentUser;
+import com.campus.love.chat.dto.ChatGroupItemResponse;
 import com.campus.love.chat.dto.ChatMessageResponse;
 import com.campus.love.chat.dto.ConversationResponse;
+import com.campus.love.chat.entity.ChatGroup;
+import com.campus.love.chat.entity.ChatGroupMember;
 import com.campus.love.chat.entity.Message;
 import com.campus.love.chat.mapper.MessageMapper;
 import com.campus.love.chat.service.ChatGroupService;
+import com.campus.love.chat.constants.ChatConstants;
+import com.campus.love.common.constants.DateTimeConstants;
 import com.campus.love.common.constants.RedisKeyConstants;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
@@ -21,7 +27,6 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -40,6 +45,12 @@ public class ChatService {
     private int dailyChatLimit;
 
     public ChatMessageResponse sendMessage(Long senderId, Long receiverId, String content, Integer msgType) {
+        if (receiverId == null || content == null) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "接收人与消息内容不能为空");
+        }
+        if (senderId != null && senderId.equals(receiverId)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "不能给自己发消息");
+        }
         boolean mutual = followService.isMutual(senderId, receiverId);
 
         if (!mutual) {
@@ -73,26 +84,33 @@ public class ChatService {
                 .content(content)
                 .msgType(message.getMsgType())
                 .isRead(false)
-                .createdAt(LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))
+                .createdAt(LocalDateTime.now().format(DateTimeConstants.DATETIME_FMT))
                 .build();
     }
 
     public List<ChatMessageResponse> getChatHistory(Long otherUserId, int page, int size) {
         Long currentUserId = CurrentUser.getId();
-        List<Message> messages = messageMapper.selectList(
-                new LambdaQueryWrapper<Message>()
-                        .and(w -> w
-                                .and(q -> q.eq(Message::getSenderId, currentUserId).eq(Message::getReceiverId, otherUserId))
-                                .or(q -> q.eq(Message::getSenderId, otherUserId).eq(Message::getReceiverId, currentUserId))
-                        )
-                        .isNull(Message::getGroupId)
-                        .orderByDesc(Message::getCreatedAt)
-                        .last("LIMIT " + (page * size) + "," + size)
-        );
-
-        Map<Long, User> userCache = new HashMap<>();
+        int current = (page <= 0) ? 1 : page;
+        int pageSize = (size <= 0) ? 20 : Math.min(size, 100);
+        Page<Message> pageReq = new Page<>(current, pageSize);
+        LambdaQueryWrapper<Message> wrapper = new LambdaQueryWrapper<Message>()
+                .and(w -> w
+                        .and(q -> q.eq(Message::getSenderId, currentUserId).eq(Message::getReceiverId, otherUserId))
+                        .or(q -> q.eq(Message::getSenderId, otherUserId).eq(Message::getReceiverId, currentUserId))
+                )
+                .isNull(Message::getGroupId)
+                .orderByDesc(Message::getCreatedAt);
+        Page<Message> messagePage = messageMapper.selectPage(pageReq, wrapper);
+        List<Message> messages = messagePage.getRecords();
+        if (messages.isEmpty()) {
+            return List.of();
+        }
+        List<Long> senderIds = messages.stream().map(Message::getSenderId).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        Map<Long, User> userCache = userMapper.selectBatchIds(senderIds).stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
         return messages.stream().map(msg -> {
-            User sender = userCache.computeIfAbsent(msg.getSenderId(), userMapper::selectById);
+            User sender = userCache.get(msg.getSenderId());
             return ChatMessageResponse.builder()
                     .id(msg.getId())
                     .senderId(msg.getSenderId())
@@ -102,7 +120,7 @@ public class ChatService {
                     .content(msg.getContent())
                     .msgType(msg.getMsgType())
                     .isRead(msg.getIsRead())
-                    .createdAt(msg.getCreatedAt() != null ? msg.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "")
+                    .createdAt(msg.getCreatedAt() != null ? msg.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                     .build();
         }).collect(Collectors.toList());
     }
@@ -130,16 +148,21 @@ public class ChatService {
             }
         }
 
+        List<Long> otherUserIds = new java.util.ArrayList<>(latestByUser.keySet());
+        Map<Long, User> userMap = otherUserIds.isEmpty() ? Map.of()
+                : userMapper.selectBatchIds(otherUserIds).stream()
+                        .filter(Objects::nonNull)
+                        .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
         return latestByUser.entrySet().stream().map(entry -> {
             Long otherUserId = entry.getKey();
             Message lastMsg = entry.getValue();
-            User otherUser = userMapper.selectById(otherUserId);
+            User otherUser = userMap.get(otherUserId);
             return ConversationResponse.builder()
                     .userId(otherUserId)
                     .nickname(otherUser != null ? otherUser.getNickname() : "")
                     .avatarUrl(otherUser != null ? otherUser.getAvatarUrl() : "")
                     .lastMessage(lastMsg.getContent())
-                    .lastTime(lastMsg.getCreatedAt() != null ? lastMsg.getCreatedAt().format(DateTimeFormatter.ofPattern("MM-dd HH:mm")) : "")
+                    .lastTime(lastMsg.getCreatedAt() != null ? lastMsg.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                     .unreadCount(unreadCounts.getOrDefault(otherUserId, 0))
                     .build();
         }).collect(Collectors.toList());
@@ -163,8 +186,7 @@ public class ChatService {
         // 这里只负责持久化消息，具体的 WebSocket 广播由 WebSocketHandler 根据 groupId + 群成员列表完成
         Message message = new Message();
         message.setSenderId(senderId);
-        // 群聊消息不依赖 receiverId，可设为 0
-        message.setReceiverId(0L);
+        message.setReceiverId(ChatConstants.GROUP_RECEIVER_ID_NONE);
         message.setGroupId(groupId);
         message.setContent(content);
         message.setMsgType(msgType != null ? msgType : 1);
@@ -175,14 +197,110 @@ public class ChatService {
         return ChatMessageResponse.builder()
                 .id(message.getId())
                 .senderId(senderId)
-                .receiverId(0L)
+                .receiverId(ChatConstants.GROUP_RECEIVER_ID_NONE)
                 .groupId(groupId)
                 .senderNickname(sender != null ? sender.getNickname() : "")
                 .senderAvatar(sender != null ? sender.getAvatarUrl() : "")
                 .content(content)
                 .msgType(message.getMsgType())
                 .isRead(false)
-                .createdAt(message.getCreatedAt() != null ? message.getCreatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")) : "")
+                .createdAt(message.getCreatedAt() != null ? message.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                 .build();
+    }
+
+    /**
+     * 我加入的群聊列表（用于展示「群聊」入口及最近一条消息）
+     */
+    public List<ChatGroupItemResponse> getMyGroupList() {
+        Long currentUserId = CurrentUser.getId();
+        if (currentUserId == null) {
+            return List.of();
+        }
+        List<ChatGroup> groups = chatGroupService.getGroupsByUserId(currentUserId);
+        if (groups.isEmpty()) {
+            return List.of();
+        }
+        List<Long> groupIds = groups.stream().map(ChatGroup::getId).filter(Objects::nonNull).toList();
+        List<Message> recentMessages = messageMapper.selectList(
+                new LambdaQueryWrapper<Message>()
+                        .in(Message::getGroupId, groupIds)
+                        .orderByDesc(Message::getCreatedAt));
+        Map<Long, Message> lastByGroup = new LinkedHashMap<>();
+        for (Message m : recentMessages) {
+            if (m.getGroupId() != null) {
+                lastByGroup.putIfAbsent(m.getGroupId(), m);
+            }
+        }
+        return groups.stream().map(g -> {
+            Message last = lastByGroup.get(g.getId());
+            List<ChatGroupMember> members = chatGroupService.getMembers(g.getId());
+            int memberCount = members.size();
+            List<Long> userIds = members.stream()
+                    .map(ChatGroupMember::getUserId)
+                    .filter(Objects::nonNull)
+                    .distinct()
+                    .toList();
+            List<String> memberAvatarUrls = userIds.isEmpty() ? List.of()
+                    : userMapper.selectBatchIds(userIds).stream()
+                            .filter(Objects::nonNull)
+                            .map(User::getAvatarUrl)
+                            .filter(Objects::nonNull)
+                            .toList();
+            return ChatGroupItemResponse.builder()
+                    .groupId(g.getId())
+                    .inviteId(g.getInviteId())
+                    .name(g.getName() != null ? g.getName() : "邀约群聊")
+                    .memberCount(memberCount)
+                    .lastMessage(last != null ? last.getContent() : null)
+                    .lastTime(last != null && last.getCreatedAt() != null
+                            ? last.getCreatedAt().format(DateTimeConstants.TIME_FMT) : null)
+                    .memberAvatarUrls(memberAvatarUrls)
+                    .build();
+        }).toList();
+    }
+
+    /**
+     * 群聊历史消息（仅群成员可拉取）
+     */
+    public List<ChatMessageResponse> getGroupChatHistory(Long groupId, int page, int size) {
+        Long currentUserId = CurrentUser.getId();
+        if (currentUserId == null || groupId == null) {
+            return List.of();
+        }
+        List<ChatGroupMember> members = chatGroupService.getMembers(groupId);
+        boolean isMember = members.stream().anyMatch(m -> currentUserId.equals(m.getUserId()));
+        if (!isMember) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "仅群成员可查看群聊记录");
+        }
+        int current = (page <= 0) ? 1 : page;
+        int pageSize = (size <= 0) ? 20 : Math.min(size, 100);
+        Page<Message> pageReq = new Page<>(current, pageSize);
+        LambdaQueryWrapper<Message> wrapper = new LambdaQueryWrapper<Message>()
+                .eq(Message::getGroupId, groupId)
+                .orderByDesc(Message::getCreatedAt);
+        Page<Message> messagePage = messageMapper.selectPage(pageReq, wrapper);
+        List<Message> messages = messagePage.getRecords();
+        if (messages.isEmpty()) {
+            return List.of();
+        }
+        List<Long> senderIds = messages.stream().map(Message::getSenderId).filter(Objects::nonNull).distinct().toList();
+        Map<Long, User> userCache = userMapper.selectBatchIds(senderIds).stream()
+                .filter(Objects::nonNull)
+                .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
+        return messages.stream().map(msg -> {
+            User sender = userCache.get(msg.getSenderId());
+            return ChatMessageResponse.builder()
+                    .id(msg.getId())
+                    .senderId(msg.getSenderId())
+                    .receiverId(msg.getReceiverId())
+                    .groupId(msg.getGroupId())
+                    .senderNickname(sender != null ? sender.getNickname() : "")
+                    .senderAvatar(sender != null ? sender.getAvatarUrl() : "")
+                    .content(msg.getContent())
+                    .msgType(msg.getMsgType())
+                    .isRead(msg.getIsRead())
+                    .createdAt(msg.getCreatedAt() != null ? msg.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
+                    .build();
+        }).toList();
     }
 }

@@ -95,13 +95,24 @@ const messages = computed(() => {
 })
 
 onMounted(async () => {
+  chatStore.connectWebSocket()
   try {
     const [profileRes, historyRes] = await Promise.all([
       getUserProfile(otherUserId.value),
       getChatHistory(otherUserId.value, 0, 50),
     ])
     otherUser.value = profileRes.data.data
-    chatStore.currentMessages = historyRes.data.data?.reverse() || []
+    const loaded = historyRes.data.data?.reverse() || []
+    const myIdNum = myId.value
+    const otherId = otherUserId.value
+    const belong = (m: { senderId: number; receiverId: number }) =>
+      (m.senderId === myIdNum && m.receiverId === otherId) ||
+      (m.senderId === otherId && m.receiverId === myIdNum)
+    chatStore.setMessagesMergedWithHistory(
+      loaded,
+      m => belong(m),
+      chatStore.getPendingForUser(otherId)
+    )
     markAsRead(otherUserId.value)
     scrollToBottom()
   } catch { /* handled */ }
@@ -116,9 +127,26 @@ function scrollToBottom() {
 }
 
 function handleSend() {
-  if (!inputText.value.trim()) return
-  chatStore.sendMessage(otherUserId.value, inputText.value.trim())
+  const text = inputText.value.trim()
+  if (!text) return
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
+  chatStore.pushOptimisticMessage(
+    {
+      id: -Date.now(),
+      senderId: myId.value!,
+      receiverId: otherUserId.value,
+      senderNickname: userStore.user?.nickname ?? '',
+      senderAvatar: userStore.user?.avatarUrl ?? null,
+      content: text,
+      msgType: 1,
+      isRead: false,
+      createdAt: now,
+    },
+    { pendingOtherUserId: otherUserId.value }
+  )
+  chatStore.sendMessage(otherUserId.value, text)
   inputText.value = ''
+  nextTick(scrollToBottom)
 }
 
 function goToInvite(content: string) {

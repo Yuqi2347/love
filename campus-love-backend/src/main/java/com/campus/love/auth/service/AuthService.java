@@ -63,12 +63,19 @@ public class AuthService {
         String accessToken = jwtUtil.generateAccessToken(user.getId(), user.getEmail());
         String refreshToken = jwtUtil.generateRefreshToken(user.getId(), user.getEmail());
 
+        boolean isAdmin = Boolean.TRUE.equals(user.getIsAdmin());
+        if (!isAdmin && user.getId() != null) {
+            User refetch = userMapper.selectById(user.getId());
+            isAdmin = refetch != null && Boolean.TRUE.equals(refetch.getIsAdmin());
+        }
+
         return AuthResponse.builder()
                 .userId(user.getId())
                 .email(user.getEmail())
                 .nickname(user.getNickname())
                 .avatarUrl(user.getAvatarUrl())
                 .profileComplete(user.getProfileComplete())
+                .isAdmin(isAdmin)
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .build();

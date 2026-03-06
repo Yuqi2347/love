@@ -36,6 +36,9 @@ public class InviteResponse {
     private Integer ratingCount;
     private LocalDateTime createdAt;
 
+    /** 公开邀约的临时群聊 ID，有则前端可跳转群聊 */
+    private Long chatGroupId;
+
     // 发起人信息
     private CreatorInfo creator;
 

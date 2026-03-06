@@ -65,10 +65,24 @@ public class UserWeightService {
 
             return weights;
         } catch (Exception e) {
-            // 表不存在或其他数据库错误，返回临时默认权重
-            log.warn("Failed to query user weights, using in-memory default weights for user: {}", userId, e);
+            if (isTableOrConfigException(e)) {
+                log.warn("Table t_user_match_weights may not exist or config not ready, using in-memory default weights for user: {}", userId);
+            } else {
+                log.error("Failed to query user weights for user: {}", userId, e);
+            }
             return UserWeights.defaultWeights(userId);
         }
+    }
+
+    /** 是否为表不存在/配置未就绪类异常（可接受降级），否则视为数据异常需打 error */
+    private static boolean isTableOrConfigException(Throwable e) {
+        String msg = e.getMessage();
+        if (msg == null) {
+            return false;
+        }
+        String lower = msg.toLowerCase();
+        return lower.contains("doesn't exist") || lower.contains("unknown table")
+                || lower.contains("exist") && (lower.contains("table") || lower.contains("database"));
     }
 
     /**
@@ -87,8 +101,11 @@ public class UserWeightService {
 
             return weights.getWeightMap();
         } catch (Exception e) {
-            // 发生任何错误时，返回默认权重
-            log.warn("Failed to get effective weights for user: {}, using default weights", userId, e);
+            if (isTableOrConfigException(e)) {
+                log.warn("Weights table/config not ready for user: {}, using default weights", userId);
+            } else {
+                log.error("Failed to get effective weights for user: {}", userId, e);
+            }
             return new HashMap<>(GlobalWeights.DEFAULT_WEIGHTS);
         }
     }

@@ -34,3 +34,8 @@ export function getChatHistory(otherUserId: number, page = 0, size = 20) {
 export function markAsRead(otherUserId: number) {
   return request.put<ApiResult<void>>(`/chat/read/${otherUserId}`)
 }
+
+/** 邀约详情内嵌群聊历史（仅群成员可拉取） */
+export function getGroupChatHistory(groupId: number, page = 1, size = 20) {
+  return request.get<ApiResult<ChatMessage[]>>(`/chat/group/${groupId}/history`, { params: { page, size } })
+}

@@ -5,6 +5,7 @@ import com.campus.love.chat.entity.ChatGroup;
 import com.campus.love.chat.entity.ChatGroupMember;
 import com.campus.love.chat.mapper.ChatGroupMapper;
 import com.campus.love.chat.mapper.ChatGroupMemberMapper;
+import com.campus.love.chat.constants.ChatConstants;
 import com.campus.love.invite.entity.Invite;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -25,7 +26,11 @@ public class ChatGroupService {
     @Transactional
     public ChatGroup createGroupIfAbsent(Invite invite) {
         if (invite.getChatGroupId() != null) {
-            return chatGroupMapper.selectById(invite.getChatGroupId());
+            ChatGroup existingById = chatGroupMapper.selectById(invite.getChatGroupId());
+            if (existingById != null) {
+                return existingById;
+            }
+            // 邀约记录了 groupId 但群已被删或不存在，下面按 inviteId 查或新建
         }
         ChatGroup existing = chatGroupMapper.selectOne(
                 new LambdaQueryWrapper<ChatGroup>()
@@ -37,9 +42,9 @@ public class ChatGroupService {
 
         ChatGroup group = new ChatGroup();
         group.setInviteId(invite.getId());
-        group.setName(invite.getTitle());
+        group.setName(invite.getTitle() != null && !invite.getTitle().isEmpty() ? invite.getTitle() : "邀约群聊");
         group.setCreatedBy(invite.getCreatorId());
-        group.setStatus("ACTIVE");
+        group.setStatus(ChatConstants.STATUS_ACTIVE);
         chatGroupMapper.insert(group);
 
         // 创建者自动加入群
@@ -79,6 +84,30 @@ public class ChatGroupService {
                 new LambdaQueryWrapper<ChatGroupMember>()
                         .eq(ChatGroupMember::getGroupId, groupId)
         );
+    }
+
+    /**
+     * 查询用户加入的群聊列表
+     */
+    public List<ChatGroup> getGroupsByUserId(Long userId) {
+        if (userId == null) {
+            return List.of();
+        }
+        List<ChatGroupMember> members = chatGroupMemberMapper.selectList(
+                new LambdaQueryWrapper<ChatGroupMember>()
+                        .eq(ChatGroupMember::getUserId, userId));
+        if (members.isEmpty()) {
+            return List.of();
+        }
+        List<Long> groupIds = members.stream()
+                .map(ChatGroupMember::getGroupId)
+                .filter(java.util.Objects::nonNull)
+                .distinct()
+                .toList();
+        if (groupIds.isEmpty()) {
+            return List.of();
+        }
+        return chatGroupMapper.selectBatchIds(groupIds);
     }
 }
 

@@ -41,6 +41,8 @@ export interface Invite {
   ratingCount: number
   creator: CreatorInfo | null
   participants?: ParticipantInfo[]
+  /** 公开邀约的群聊 ID，用于详情页内嵌聊天 */
+  chatGroupId?: number | null
   createdAt: string
 }
 

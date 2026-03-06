@@ -102,11 +102,44 @@
         </div>
       </div>
 
-      <!-- Group chat entry for public invites -->
-      <div v-if="invite.inviteMode === 'PUBLIC' && invite.chatGroupId" class="group-chat-entry">
-        <button class="btn-outline" @click="$router.push(`/chat/group/${invite.chatGroupId}`)">
-          进入群聊
-        </button>
+      <!-- 邀约内嵌聊天：参与者/发起人可见，对话框形式，左他人右自己 -->
+      <div v-if="showChatPanel" class="invite-chat-section">
+        <h3 class="section-title">邀约聊天</h3>
+        <div class="invite-chat-box">
+          <div ref="chatListRef" class="invite-chat-list">
+            <div
+              v-for="msg in inviteChatMessages"
+              :key="msg.id"
+              :class="['invite-msg-row', { mine: msg.senderId === myId }]"
+            >
+              <img
+                v-if="msg.senderId !== myId"
+                :src="msg.senderAvatar || defaultAvatar"
+                class="msg-avatar"
+                width="32"
+                height="32"
+                alt=""
+              />
+              <div class="invite-msg-bubble">
+                <p v-if="isGroupChat && msg.senderId !== myId" class="msg-sender-name">{{ msg.senderNickname }}</p>
+                <p class="msg-text">{{ msg.content }}</p>
+                <span class="msg-time">{{ formatMsgTime(msg.createdAt) }}</span>
+              </div>
+            </div>
+          </div>
+          <div class="invite-chat-input-wrap">
+            <el-input
+              v-model="chatInputText"
+              placeholder="输入消息..."
+              size="default"
+              @keyup.enter="sendInviteChat"
+            >
+              <template #append>
+                <button class="send-btn" :disabled="!chatInputText.trim()" @click="sendInviteChat">发送</button>
+              </template>
+            </el-input>
+          </div>
+        </div>
       </div>
 
       <!-- Actions -->
@@ -179,10 +212,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { useInviteStore } from '@/store/inviteStore'
+import { useChatStore } from '@/store/chatStore'
 import {
   getInviteDetail,
   joinInvite,
@@ -192,6 +226,8 @@ import {
   type Invite,
   type InviteRatingCreateRequest,
 } from '@/api/inviteApi'
+import { getChatHistory, getGroupChatHistory } from '@/api/chatApi'
+import type { ChatMessage } from '@/api/chatApi'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import {
@@ -207,12 +243,20 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const inviteStore = useInviteStore()
+const chatStore = useChatStore()
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f0f2f5" width="40" height="40" rx="20"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="18">👤</text></svg>'
 
 const invite = ref<Invite | null>(null)
 const loading = ref(true)
 const showRatingDialog = ref(false)
+
+// 内嵌聊天
+const chatListRef = ref<HTMLElement>()
+const chatInputText = ref('')
+const loadedChatMessages = ref<ChatMessage[]>([])
+/** 本页已发送的消息（仅当前会话），不依赖 store 响应式，确保发完必显 */
+const invitePageSentMessages = ref<ChatMessage[]>([])
 
 const ratingForm = ref<InviteRatingCreateRequest>({
   inviteId: 0,
@@ -263,6 +307,64 @@ const showActions = computed(() => {
 // 是否是参与者（非发起人）
 const isParticipant = computed(() => {
   return hasJoined.value && !isCreator.value
+})
+
+// 是否展示邀约内嵌聊天（发起人或已加入的参与者）
+const showChatPanel = computed(() => {
+  if (!invite.value) return false
+  return isCreator.value || hasJoined.value
+})
+
+const myId = computed(() => userStore.user?.id ?? 0)
+
+// 公开邀约且已有群聊则为群聊，否则为单聊（与对方）
+const isGroupChat = computed(() => {
+  return invite.value?.inviteMode === 'PUBLIC' && (invite.value?.chatGroupId ?? 0) > 0
+})
+
+// 单聊时的对方用户 ID
+const chatOtherUserId = computed(() => {
+  if (!invite.value) return 0
+  return isCreator.value ? (invite.value.targetUserId ?? 0) : invite.value.creatorId
+})
+
+// 合并：接口历史 + store 新消息 + pending + 本页已发（invitePageSentMessages），同条只保留一条（服务端回显替换乐观）
+const inviteChatMessages = computed(() => {
+  const loaded = loadedChatMessages.value
+  const fromStore = chatStore.currentMessages
+  const otherId = chatOtherUserId.value
+  const groupId = invite.value?.chatGroupId ?? 0
+  const belong = (m: ChatMessage) =>
+    isGroupChat.value
+      ? m.groupId === groupId
+      : (m.senderId === otherId || m.receiverId === otherId) && !m.groupId
+  const dedupeKey = (m: ChatMessage) => `${m.senderId}:${m.content}`
+
+  const combined: ChatMessage[] = []
+  const byKey = new Map<string, ChatMessage>()
+
+  function add(msg: ChatMessage) {
+    const k = dedupeKey(msg)
+    const existing = byKey.get(k)
+    if (existing) {
+      if (typeof msg.id === 'number' && msg.id > 0) {
+        byKey.set(k, msg)
+        const i = combined.indexOf(existing)
+        if (i >= 0) combined[i] = msg
+      }
+      return
+    }
+    byKey.set(k, msg)
+    combined.push(msg)
+  }
+
+  for (const m of loaded) add(m)
+  for (const m of fromStore) if (belong(m)) add(m)
+  if (!isGroupChat.value && otherId) for (const p of chatStore.getPendingForUser(otherId)) add(p)
+  for (const m of invitePageSentMessages.value) add(m)
+
+  combined.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
+  return combined
 })
 
 // 获取类型颜色
@@ -394,12 +496,100 @@ async function loadInvite() {
   try {
     const res = await getInviteDetail(inviteId)
     invite.value = res.data.data
+    if (invite.value && (isCreator.value || hasJoined.value)) {
+      await loadInviteChat()
+    }
   } catch (error) {
     invite.value = null
   } finally {
     loading.value = false
   }
 }
+
+function mergeHistoryWithPending(loaded: ChatMessage[], pending: ChatMessage[]): ChatMessage[] {
+  const byKey = new Map<string, ChatMessage>()
+  const key = (m: ChatMessage) => `${m.senderId}:${m.content}`
+  for (const m of loaded) byKey.set(key(m), m)
+  for (const p of pending) {
+    const k = key(p)
+    const existing = byKey.get(k)
+    if (!existing) byKey.set(k, p)
+    else if (typeof p.id === 'number' && p.id > 0) byKey.set(k, p)
+  }
+  const out = [...byKey.values()]
+  out.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
+  return out
+}
+
+async function loadInviteChat() {
+  const inv = invite.value
+  if (!inv || !myId.value) return
+  chatStore.connectWebSocket()
+  try {
+    if (isGroupChat.value && inv.chatGroupId) {
+      const res = await getGroupChatHistory(inv.chatGroupId, 1, 50)
+      loadedChatMessages.value = (res.data.data ?? []).reverse()
+    } else if (chatOtherUserId.value) {
+      const res = await getChatHistory(chatOtherUserId.value, 1, 50)
+      const loaded = (res.data.data ?? []).reverse()
+      const pending = chatStore.getPendingForUser(chatOtherUserId.value)
+      loadedChatMessages.value = mergeHistoryWithPending(loaded, pending)
+    } else {
+      loadedChatMessages.value = []
+    }
+    nextTick(scrollChatToBottom)
+  } catch {
+    loadedChatMessages.value = []
+  }
+}
+
+function scrollChatToBottom() {
+  if (chatListRef.value) {
+    chatListRef.value.scrollTop = chatListRef.value.scrollHeight
+  }
+}
+
+function formatMsgTime(createdAt: string) {
+  if (!createdAt) return ''
+  const date = new Date(createdAt)
+  const now = new Date()
+  const sameDay = date.toDateString() === now.toDateString()
+  return sameDay
+    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+    : date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+}
+
+function sendInviteChat() {
+  const text = chatInputText.value.trim()
+  if (!text || !invite.value) return
+  const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
+  const optimistic: ChatMessage = {
+    id: -Date.now(),
+    senderId: myId.value,
+    receiverId: isGroupChat.value ? 0 : chatOtherUserId.value,
+    groupId: isGroupChat.value ? invite.value.chatGroupId ?? undefined : undefined,
+    senderNickname: userStore.user?.nickname ?? '',
+    senderAvatar: userStore.user?.avatarUrl ?? null,
+    content: text,
+    msgType: 1,
+    isRead: false,
+    createdAt: now,
+  }
+  invitePageSentMessages.value.push(optimistic)
+  chatStore.pushOptimisticMessage(
+    optimistic,
+    !isGroupChat.value && chatOtherUserId.value ? { pendingOtherUserId: chatOtherUserId.value } : undefined
+  )
+  if (isGroupChat.value && invite.value.chatGroupId) {
+    chatStore.sendGroupMessage(invite.value.chatGroupId, text)
+  } else if (chatOtherUserId.value) {
+    chatStore.sendMessage(chatOtherUserId.value, text)
+  }
+  chatInputText.value = ''
+  nextTick(scrollChatToBottom)
+}
+
+watch(inviteChatMessages, () => nextTick(scrollChatToBottom), { deep: true })
 
 onMounted(loadInvite)
 </script>
@@ -586,6 +776,92 @@ onMounted(loadInvite)
   padding: 20px;
   color: $text-muted;
   font-size: 14px;
+}
+
+.invite-chat-section {
+  background: $bg-primary;
+  border: 1px solid $border-light;
+  border-radius: $radius-lg;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.invite-chat-box {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.invite-chat-list {
+  min-height: 200px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 12px;
+  background: $bg-secondary;
+  border-radius: $radius-md;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.invite-msg-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  max-width: 85%;
+
+  &.mine {
+    align-self: flex-end;
+    flex-direction: row-reverse;
+
+    .invite-msg-bubble {
+      background: $primary;
+      color: white;
+      .msg-time { color: rgba(white, 0.75); }
+    }
+  }
+}
+
+.msg-avatar {
+  flex-shrink: 0;
+  width: 32px;
+  height: 32px;
+  border-radius: $radius-full;
+  object-fit: cover;
+}
+
+.invite-msg-bubble {
+  padding: 8px 12px;
+  border-radius: $radius-lg;
+  background: $bg-tertiary;
+  max-width: 100%;
+
+  .msg-sender-name {
+    font-size: 11px;
+    color: $text-muted;
+    margin-bottom: 2px;
+  }
+  .msg-text { font-size: 14px; line-height: 1.45; word-wrap: break-word; }
+  .msg-time { font-size: 11px; color: $text-muted; display: block; text-align: right; margin-top: 4px; }
+}
+
+.invite-chat-input-wrap {
+  :deep(.el-input__wrapper) { border-radius: $radius-md; }
+  :deep(.el-input-group__append) { padding: 0; background: none; border: none; box-shadow: none; }
+
+  .send-btn {
+    padding: 0 16px;
+    height: 32px;
+    background: $primary;
+    color: white;
+    border: none;
+    border-radius: 0 $radius-md $radius-md 0;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: opacity $transition-fast;
+    &:disabled { opacity: 0.5; cursor: not-allowed; }
+  }
 }
 
 .action-buttons {

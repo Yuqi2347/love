@@ -34,32 +34,40 @@ public class InviteScheduleService {
     private final InviteParticipantMapper inviteParticipantMapper;
     private final NotificationService notificationService;
 
-    /**
-     * 默认认为活动持续时长（小时），用于区分「进行中」与「已结束」
-     */
+    /** 默认认为活动持续时长（小时），用于区分「进行中」与「已结束」 */
     private static final int DEFAULT_EVENT_DURATION_HOURS = 4;
+    /** 定时任务间隔：5 分钟 */
+    private static final long SCHEDULER_FIXED_DELAY_MS = 5 * 60 * 1000L;
+    /** 提醒时间窗口（分钟）：1 天/1 小时提醒的匹配窗口宽度 */
+    private static final int REMIND_WINDOW_MINUTES = 10;
 
     /**
      * 每 5 分钟扫描一次，发送 1 天前 / 1 小时前的提醒。
      * 为避免频繁发送，依赖 NotificationService.existsNotification 做去重。
      */
-    @Scheduled(fixedDelay = 5 * 60 * 1000L)
-    @Transactional
+    @Scheduled(fixedDelay = SCHEDULER_FIXED_DELAY_MS)
     public void sendInviteReminders() {
         LocalDateTime now = LocalDateTime.now();
-
         try {
             handleOneDayReminders(now);
+        } catch (Exception e) {
+            log.error("邀约 1 天前提醒阶段执行异常", e);
+        }
+        try {
             handleOneHourReminders(now);
+        } catch (Exception e) {
+            log.error("邀约 1 小时前提醒阶段执行异常", e);
+        }
+        try {
             updateInviteStatuses(now);
         } catch (Exception e) {
-            log.error("发送邀约提醒任务执行异常", e);
+            log.error("邀约状态更新阶段执行异常", e);
         }
     }
 
     private void handleOneDayReminders(LocalDateTime now) {
         LocalDateTime start = now.plusDays(1);
-        LocalDateTime end = now.plusDays(1).plusMinutes(10);
+        LocalDateTime end = now.plusDays(1).plusMinutes(REMIND_WINDOW_MINUTES);
 
         List<Invite> invites = inviteMapper.selectList(
                 new LambdaQueryWrapper<Invite>()
@@ -78,7 +86,7 @@ public class InviteScheduleService {
 
     private void handleOneHourReminders(LocalDateTime now) {
         LocalDateTime start = now.plusHours(1);
-        LocalDateTime end = now.plusHours(1).plusMinutes(10);
+        LocalDateTime end = now.plusHours(1).plusMinutes(REMIND_WINDOW_MINUTES);
 
         List<Invite> invites = inviteMapper.selectList(
                 new LambdaQueryWrapper<Invite>()

@@ -25,6 +25,7 @@ public class User {
     private String grade;
     private Integer activityScore;
     private Integer userLevel;
+    @TableField("is_admin")
     private Boolean isAdmin;
     private String mbti;
     private String zodiac;
@@ -47,4 +48,19 @@ public class User {
 
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
+
+    /** 信用分默认值 100，用于邀约等模块 */
+    public static final int DEFAULT_CREDIT_SCORE = 100;
+
+    public int getCreditScoreOrDefault() {
+        return creditScore != null ? creditScore : DEFAULT_CREDIT_SCORE;
+    }
+
+    public int getParticipantCountOrDefault() {
+        return participateCount != null ? participateCount : 0;
+    }
+
+    public int getInviteCountOrDefault() {
+        return inviteCount != null ? inviteCount : 0;
+    }
 }

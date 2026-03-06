@@ -10,6 +10,7 @@ import com.campus.love.notification.dto.NotificationResponse;
 import com.campus.love.notification.entity.Notification;
 import com.campus.love.notification.mapper.NotificationMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -20,6 +21,7 @@ import java.util.stream.Collectors;
 /**
  * 站内通知服务
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class NotificationService {
@@ -73,7 +75,7 @@ public class NotificationService {
     public void createNotification(Long userId, Long senderId, Long inviteId,
                                    NotificationTypeEnum type, String title, String content) {
         if (userId == null || type == null) {
-            return;
+            throw new IllegalArgumentException("userId and type are required");
         }
         Notification notification = new Notification();
         notification.setUserId(userId);

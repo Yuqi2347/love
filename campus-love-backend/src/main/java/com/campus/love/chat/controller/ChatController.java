@@ -1,5 +1,6 @@
 package com.campus.love.chat.controller;
 
+import com.campus.love.chat.dto.ChatGroupItemResponse;
 import com.campus.love.chat.dto.ChatMessageResponse;
 import com.campus.love.chat.dto.ConversationResponse;
 import com.campus.love.chat.service.ChatService;
@@ -39,5 +40,20 @@ public class ChatController {
     public Result<Void> markAsRead(@PathVariable Long otherUserId) {
         chatService.markAsRead(otherUserId);
         return Result.success();
+    }
+
+    @Operation(summary = "我加入的群聊列表（邀约临时群等）")
+    @GetMapping("/groups")
+    public Result<List<ChatGroupItemResponse>> getMyGroups() {
+        return Result.success(chatService.getMyGroupList());
+    }
+
+    @Operation(summary = "群聊历史消息")
+    @GetMapping("/group/{groupId}/history")
+    public Result<List<ChatMessageResponse>> getGroupChatHistory(
+            @PathVariable Long groupId,
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return Result.success(chatService.getGroupChatHistory(groupId, page, size));
     }
 }

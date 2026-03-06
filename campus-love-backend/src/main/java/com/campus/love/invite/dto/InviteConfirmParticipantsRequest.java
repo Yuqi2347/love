@@ -2,6 +2,7 @@ package com.campus.love.invite.dto;
 
 import lombok.Data;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -10,5 +11,6 @@ import java.util.List;
 @Data
 public class InviteConfirmParticipantsRequest {
 
-    private List<Long> userIds;
+    /** 要确认的用户 ID 列表，空列表表示仅更新邀约状态为已确认 */
+    private List<Long> userIds = Collections.emptyList();
 }
