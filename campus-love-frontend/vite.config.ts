@@ -15,15 +15,12 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
+        ws: true, // 同时代理 /api 下的 WebSocket，例如 /api/ws/chat
       },
       '/uploads': {
         target: 'http://localhost:8080',
         changeOrigin: true,
         rewrite: (path) => path.replace(/^\/uploads/, '/api/uploads'),
-      },
-      '/ws': {
-        target: 'ws://localhost:8080',
-        ws: true,
       },
     },
   },

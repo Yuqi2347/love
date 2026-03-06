@@ -4,12 +4,15 @@ import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.result.Result;
 import com.campus.love.user.dto.UserProfileRequest;
 import com.campus.love.user.dto.UserProfileResponse;
+import com.campus.love.user.dto.UserSearchItemResponse;
 import com.campus.love.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "用户", description = "个人信息管理")
@@ -24,6 +27,14 @@ public class UserController {
     @GetMapping("/me")
     public Result<UserProfileResponse> getMyProfile() {
         return Result.success(userService.getProfile(CurrentUser.getId()));
+    }
+
+    @Operation(summary = "按昵称搜索用户")
+    @GetMapping("/search")
+    public Result<List<UserSearchItemResponse>> searchUsers(
+            @RequestParam String keyword,
+            @RequestParam(defaultValue = "10") int limit) {
+        return Result.success(userService.searchUsers(keyword, limit));
     }
 
     @Operation(summary = "获取指定用户信息")

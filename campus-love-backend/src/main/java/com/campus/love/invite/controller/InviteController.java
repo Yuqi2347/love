@@ -135,6 +135,14 @@ public class InviteController {
         return Result.success(list);
     }
 
+    @Operation(summary = "热门邀约看板：按类型统计邀约中数量")
+    @GetMapping("/board/type-counts")
+    public Result<List<InviteTypeCountResponse>> getHotInviteTypeCounts(
+            @Parameter(description = "返回条数（默认 10，最大 10）")
+            @RequestParam(name = "limit", required = false) Integer limit) {
+        return Result.success(inviteService.getHotInviteTypeCounts(limit));
+    }
+
     @Operation(summary = "获取我发起的邀约历史")
     @GetMapping("/history/created")
     public Result<List<InviteResponse>> getMyCreatedInvites(

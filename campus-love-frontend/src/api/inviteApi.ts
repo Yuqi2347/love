@@ -1,6 +1,5 @@
 import service from './request'
 import type { ApiResult } from './request'
-import { InviteStatus } from '@/constants/inviteConst'
 
 // ==================== 类型定义 ====================
 
@@ -44,6 +43,11 @@ export interface Invite {
   /** 公开邀约的群聊 ID，用于详情页内嵌聊天 */
   chatGroupId?: number | null
   createdAt: string
+}
+
+export interface InviteTypeCount {
+  inviteType: string
+  count: number
 }
 
 export interface InviteCreateRequest {
@@ -215,4 +219,11 @@ export function getMyJoinedInvites(range: HistoryRange = 'week') {
  */
 export function getRecommendInvites(limit = 10) {
   return service.get<ApiResult<Invite[]>>('/invite/recommend', { params: { limit } })
+}
+
+/**
+ * 热门邀约看板：按类型统计邀约中数量（所有用户可见）
+ */
+export function getHotInviteTypeCounts(limit = 10) {
+  return service.get<ApiResult<InviteTypeCount[]>>('/invite/board/type-counts', { params: { limit } })
 }

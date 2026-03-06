@@ -56,7 +56,7 @@
       </div>
     </div>
 
-    <div class="filters-row" v-if="activeTab === 'list'">
+    <div v-if="activeTab === 'list'" class="filters-row">
       <el-select
         v-model="filterType"
         placeholder="邀约类型"
@@ -308,7 +308,6 @@ import {
 
 const inviteStore = useInviteStore()
 const userStore = useUserStore()
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f0f2f5" width="40" height="40" rx="20"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="18">👤</text></svg>'
 
 const activeTab = ref<string>('list')
 const filterType = ref<string>()

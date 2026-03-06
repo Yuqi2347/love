@@ -22,7 +22,8 @@
         <mybatis-plus.version>3.5.5</mybatis-plus.version>
         <jjwt.version>0.12.5</jjwt.version>
         <springdoc.version>2.3.0</springdoc.version>
-        <lombok.version>1.18.34</lombok.version>
+        <!-- 升级 Lombok，修复 JDK 21 下 TypeTag :: UNKNOWN 问题 -->
+        <lombok.version>1.18.36</lombok.version>
     </properties>
 
     <dependencies>
@@ -107,21 +108,10 @@
     <build>
         <plugins>
             <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-                <configuration>
-                    <excludes>
-                        <exclude>
-                            <groupId>org.projectlombok</groupId>
-                            <artifactId>lombok</artifactId>
-                        </exclude>
-                    </excludes>
-                </configuration>
-            </plugin>
-            <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-compiler-plugin</artifactId>
-                <version>3.13.0</version>
+                <!-- 3.13.0 在 JDK 21 + Lombok 下会触发 TypeTag :: UNKNOWN 异常，这里降级到 3.11.0 -->
+                <version>3.11.0</version>
                 <configuration>
                     <source>21</source>
                     <target>21</target>
@@ -131,16 +121,15 @@
                             <artifactId>lombok</artifactId>
                             <version>${lombok.version}</version>
                         </path>
-                        <path>
-                            <groupId>com.baomidou</groupId>
-                            <artifactId>mybatis-plus-annotation</artifactId>
-                            <version>${mybatis-plus.version}</version>
-                        </path>
                     </annotationProcessorPaths>
                     <compilerArgs>
                         <arg>-parameters</arg>
                     </compilerArgs>
                 </configuration>
+            </plugin>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
             </plugin>
         </plugins>
     </build>

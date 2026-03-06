@@ -96,7 +96,6 @@ import { createInviteWait, type InviteWaitCreateRequest } from '@/api/inviteApi'
 import { ElMessage } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import {
-  InviteType,
   INVITE_TYPE_OPTIONS,
   WAIT_DURATION_OPTIONS,
 } from '@/constants/inviteConst'
@@ -151,7 +150,7 @@ async function handleSubmit() {
 
   try {
     ElMessage.info('创建中...')
-    const res = await createInviteWait(submitData)
+    await createInviteWait(submitData)
     ElMessage.success('等待邀约创建成功')
     router.push('/invite')
   } catch (error) {

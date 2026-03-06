@@ -1,6 +1,7 @@
 package com.campus.love.invite.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.love.auth.security.CurrentUser;
@@ -29,6 +30,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
@@ -36,6 +38,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toMap;
@@ -100,6 +103,15 @@ public class InviteCrudService {
         invite.setDeleted(false);
 
         inviteMapper.insert(invite);
+
+        // 公开/私密邀约创建时即建群，保证讨论区始终走群聊通道（避免 chat_group_id 为 null 导致消息未落库）
+        if (InviteModeEnum.PUBLIC.name().equals(invite.getInviteMode())
+                || InviteModeEnum.PRIVATE.name().equals(invite.getInviteMode())) {
+            ChatGroup group = chatGroupService.createGroupIfAbsent(invite);
+            invite.setChatGroupId(group.getId());
+            inviteMapper.updateById(invite);
+        }
+
         return invite;
     }
 
@@ -225,10 +237,65 @@ public class InviteCrudService {
         };
     }
 
+    /**
+     * 历史邀约可能 chat_group_id 为 null，首次进入讨论区时按需补建群。使用 REQUIRES_NEW 保证在独立写事务中执行，
+     * 避免在 InviteService 的 readOnly 事务中执行写操作导致 "Connection is read-only"。
+     */
+    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
+    public void ensureChatGroupForInvite(Long inviteId) {
+        Invite invite = getInviteOrThrow(inviteId);
+        if (!InviteModeEnum.PUBLIC.name().equals(invite.getInviteMode())
+                && !InviteModeEnum.PRIVATE.name().equals(invite.getInviteMode())) {
+            return;
+        }
+        if (invite.getChatGroupId() != null) {
+            return;
+        }
+        ChatGroup group = chatGroupService.createGroupIfAbsent(invite);
+        invite.setChatGroupId(group.getId());
+        inviteMapper.updateById(invite);
+        List<InviteParticipant> participants = participantMapper.selectList(
+                new LambdaQueryWrapper<InviteParticipant>().eq(InviteParticipant::getInviteId, inviteId));
+        for (InviteParticipant p : participants) {
+            if (p.getUserId() != null) {
+                chatGroupService.addMemberIfAbsent(group.getId(), p.getUserId());
+            }
+        }
+    }
+
     @Transactional(readOnly = true)
     public InviteResponse getInviteDetail(Long inviteId) {
         Invite invite = getInviteOrThrow(inviteId);
         return buildInviteDetailResponse(invite);
+    }
+
+    /**
+     * 热门邀约看板：按邀约类型聚合当前「进行中/招募中」邀约数量（所有用户可见）。
+     */
+    @Transactional(readOnly = true)
+    public List<InviteTypeCountResponse> getHotInviteTypeCounts(Integer limit) {
+        int size = Optional.ofNullable(limit).orElse(10);
+        size = Math.min(Math.max(size, 1), 10);
+
+        // “邀约中”定义：未删除，且状态为 RECRUITING / FULL / CONFIRMED / IN_PROGRESS
+        QueryWrapper<Invite> wrapper = new QueryWrapper<>();
+        wrapper.select("invite_type AS inviteType", "COUNT(*) AS cnt")
+                .eq("deleted", 0)
+                .in("status",
+                        InviteStatusEnum.RECRUITING.name(),
+                        InviteStatusEnum.FULL.name(),
+                        InviteStatusEnum.CONFIRMED.name(),
+                        InviteStatusEnum.IN_PROGRESS.name())
+                .groupBy("invite_type")
+                .orderByDesc("cnt")
+                .last("LIMIT " + size);
+
+        return inviteMapper.selectMaps(wrapper).stream()
+                .map(m -> new InviteTypeCountResponse(
+                        (String) m.get("inviteType"),
+                        m.get("cnt") == null ? 0L : ((Number) m.get("cnt")).longValue()
+                ))
+                .collect(Collectors.toList());
     }
 
     @Transactional
@@ -282,7 +349,9 @@ public class InviteCrudService {
             eventPublisher.publishEvent(InviteEvent.newParticipant(invite, invite.getCreatorId(), currentUserId));
         }
 
-        if (InviteModeEnum.PUBLIC.name().equals(invite.getInviteMode())) {
+        // 公开邀约和私密邀约都为参与者创建群聊，用于邀约讨论（避免一对一聊天的互关/频率限制导致消息未落库）
+        if (InviteModeEnum.PUBLIC.name().equals(invite.getInviteMode())
+                || InviteModeEnum.PRIVATE.name().equals(invite.getInviteMode())) {
             ChatGroup group = chatGroupService.createGroupIfAbsent(invite);
             invite.setChatGroupId(group.getId());
             inviteMapper.updateById(invite);

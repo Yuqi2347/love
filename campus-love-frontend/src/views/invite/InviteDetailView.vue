@@ -6,7 +6,7 @@
     </div>
 
     <div v-else-if="invite" class="detail-content">
-      <!-- Header -->
+      <!-- 顶部返回与操作 -->
       <div class="detail-header">
         <button class="btn-text" @click="$router.back()">
           <el-icon><ArrowLeft /></el-icon>
@@ -18,8 +18,10 @@
         </div>
       </div>
 
-      <!-- Invite Card -->
-      <div class="invite-card">
+      <!-- 主内容卡片（信息 + 参与者 + 讨论 + 操作） -->
+      <div class="invite-main-card">
+        <!-- 顶部信息区 -->
+        <div class="invite-card">
         <div class="invite-status-badge" :style="{ color: INVITE_STATUS_COLORS[invite.status as InviteStatus] }">
           {{ INVITE_STATUS_LABELS[invite.status as InviteStatus] }}
         </div>
@@ -70,7 +72,7 @@
           </span>
         </div>
 
-        <div class="rating-display" v-if="invite.ratingCount > 0">
+        <div v-if="invite.ratingCount > 0" class="rating-display">
           <div class="rating-item">
             <span class="rating-label">社交体验</span>
             <span class="rating-stars">⭐ {{ invite.socialRating?.toFixed(1) || '-' }}</span>
@@ -81,96 +83,143 @@
           </div>
           <span class="rating-count">({{ invite.ratingCount }}人评价)</span>
         </div>
-      </div>
-
-      <!-- Participants -->
-      <div v-if="invite.inviteMode === 'PUBLIC'" class="participants-section">
-        <h3 class="section-title">参与者 ({{ invite.participantCount }})</h3>
-        <div v-if="invite.participants && invite.participants.length" class="participants-list">
-          <div
-            v-for="p in invite.participants"
-            :key="p.userId"
-            class="participant-item"
-          >
-            <img :src="p.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
-            <span class="participant-name">{{ p.nickname }}</span>
-            <span class="join-time">{{ formatJoinTime(p.joinAt) }}</span>
+        </div>
+        <!-- 参与者区（同一主卡片内） -->
+        <div v-if="invite.inviteMode === 'PUBLIC'" class="participants-section">
+          <div class="participants-header">
+            <h3 class="section-title">参与者 ({{ invite.participantCount }})</h3>
           </div>
-        </div>
-        <div v-else class="empty-participants">
-          暂无参与者，快来加入吧！
-        </div>
-      </div>
+          <div v-if="invite.participants && invite.participants.length" class="participants-list">
+            <!-- 发起人单独展示在列表最上方 -->
+            <div class="participant-item">
+              <img :src="invite.creator?.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
+              <span class="participant-name">
+                {{ invite.creator?.nickname || '发起人' }}
+                <span class="participant-tag">发起人</span>
+                <span v-if="invite.creatorId === myId" class="participant-tag">我</span>
+              </span>
+              <span class="join-time">{{ formatDateTime(invite.inviteTime) }}</span>
+            </div>
 
-      <!-- 邀约内嵌聊天：参与者/发起人可见，对话框形式，左他人右自己 -->
-      <div v-if="showChatPanel" class="invite-chat-section">
-        <h3 class="section-title">邀约聊天</h3>
-        <div class="invite-chat-box">
-          <div ref="chatListRef" class="invite-chat-list">
             <div
-              v-for="msg in inviteChatMessages"
-              :key="msg.id"
-              :class="['invite-msg-row', { mine: msg.senderId === myId }]"
+              v-for="p in invite.participants.filter(p => p.userId !== invite.creatorId)"
+              :key="p.userId"
+              class="participant-item"
             >
-              <img
-                v-if="msg.senderId !== myId"
-                :src="msg.senderAvatar || defaultAvatar"
-                class="msg-avatar"
-                width="32"
-                height="32"
-                alt=""
-              />
-              <div class="invite-msg-bubble">
-                <p v-if="isGroupChat && msg.senderId !== myId" class="msg-sender-name">{{ msg.senderNickname }}</p>
-                <p class="msg-text">{{ msg.content }}</p>
-                <span class="msg-time">{{ formatMsgTime(msg.createdAt) }}</span>
-              </div>
+              <img :src="p.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
+              <span class="participant-name">
+                {{ p.nickname }}
+                <span v-if="p.userId === myId" class="participant-tag">我</span>
+              </span>
+              <span class="join-time">{{ formatJoinTime(p.joinAt) }}</span>
             </div>
           </div>
-          <div class="invite-chat-input-wrap">
-            <el-input
-              v-model="chatInputText"
-              placeholder="输入消息..."
-              size="default"
-              @keyup.enter="sendInviteChat"
-            >
-              <template #append>
-                <button class="send-btn" :disabled="!chatInputText.trim()" @click="sendInviteChat">发送</button>
-              </template>
-            </el-input>
+          <div v-else class="empty-participants">
+            暂无参与者，快来加入吧！
           </div>
         </div>
-      </div>
 
-      <!-- Actions -->
-      <div v-if="showActions" class="action-buttons">
-        <!-- 已结束且我参与过：展示评价按钮 -->
-        <button
-          v-if="invite.status === 'ENDED' && hasJoined"
-          class="btn-primary"
-          @click="showRatingDialog = true"
-        >
-          评价本次邀约
-        </button>
+        <!-- 邀约讨论区（类似 X 的评论区） -->
+        <div v-if="showChatPanel" class="invite-chat-section">
+          <div class="invite-chat-header">
+            <h3 class="section-title">邀约讨论</h3>
+            <span class="chat-meta">仅发起人和参与者可见</span>
+          </div>
+          <div class="invite-chat-box">
+            <div v-if="pinnedMessages.length" class="pinned-bar">
+              <span class="pinned-label">置顶</span>
+              <div class="pinned-list">
+                <button
+                  v-for="pm in pinnedMessages"
+                  :key="pm.id"
+                  class="pinned-chip"
+                  type="button"
+                  @click="scrollToMessage(pm.id)"
+                >
+                  <span class="pinned-text text-ellipsis">{{ pm.content }}</span>
+                  <span class="pinned-time">{{ formatMsgTime(pm.createdAt) }}</span>
+                </button>
+              </div>
+            </div>
+            <div ref="chatListRef" class="invite-chat-list">
+              <div
+                v-for="msg in inviteChatMessages"
+                :id="`invite-msg-${msg.id}`"
+                :key="msg.id"
+                class="comment-item"
+              >
+                <img
+                  :src="msg.senderAvatar || defaultAvatar"
+                  class="comment-avatar"
+                  width="36"
+                  height="36"
+                  alt=""
+                />
+                <div class="comment-main">
+                  <div class="comment-header">
+                    <span class="comment-name">
+                      {{ msg.senderNickname || '用户' }}
+                      <span v-if="msg.senderId === myId" class="comment-tag">我</span>
+                    </span>
+                    <span class="comment-time">{{ formatMsgTime(msg.createdAt) }}</span>
+                    <button class="comment-pin" type="button" @click="togglePin(msg)">
+                      {{ pinnedMessageIds.includes(msg.id) ? '取消置顶' : '置顶' }}
+                    </button>
+                  </div>
+                  <p class="comment-text">{{ msg.content }}</p>
+                </div>
+              </div>
+              <div v-if="!inviteChatMessages.length" class="comments-empty">
+                暂无讨论，发一条评论开启话题吧～
+              </div>
+            </div>
+            <div class="invite-chat-input-wrap">
+              <el-input
+                v-model="chatInputText"
+                placeholder="发表你的想法…"
+                size="default"
+                @keyup.enter="sendInviteChat"
+              >
+                <template #append>
+                  <button class="send-btn" :disabled="!chatInputText.trim()" @click="sendInviteChat">
+                    发送
+                  </button>
+                </template>
+              </el-input>
+            </div>
+          </div>
+        </div>
 
-        <!-- 进行中的报名/退出操作 -->
-        <template v-else>
+        <!-- 底部操作条，仍在主卡片内部 -->
+        <div v-if="showActions" class="action-buttons">
+          <!-- 已结束且我参与过：展示评价按钮 -->
           <button
-            v-if="canJoin"
+            v-if="invite.status === 'ENDED' && hasJoined"
             class="btn-primary"
-            :disabled="invite.status !== 'RECRUITING'"
-            @click="handleJoin"
+            @click="showRatingDialog = true"
           >
-            {{ invite.status === 'RECRUITING' ? '加入邀约' : '已满员' }}
+            评价本次邀约
           </button>
-          <button
-            v-if="hasJoined"
-            class="btn-outline danger"
-            @click="handleLeave"
-          >
-            退出邀约
-          </button>
-        </template>
+
+          <!-- 进行中的报名/退出操作 -->
+          <template v-else>
+            <button
+              v-if="canJoin"
+              class="btn-primary"
+              :disabled="invite.status !== 'RECRUITING'"
+              @click="handleJoin"
+            >
+              {{ invite.status === 'RECRUITING' ? '加入邀约' : '已满员' }}
+            </button>
+            <button
+              v-if="hasJoined"
+              class="btn-outline danger"
+              @click="handleLeave"
+            >
+              退出邀约
+            </button>
+          </template>
+        </div>
       </div>
 
       <!-- Rating Dialog -->
@@ -217,6 +266,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { useInviteStore } from '@/store/inviteStore'
 import { useChatStore } from '@/store/chatStore'
+import { storeToRefs } from 'pinia'
+import { formatLocalDateTime } from '@/utils/dateTime'
 import {
   getInviteDetail,
   joinInvite,
@@ -244,6 +295,7 @@ const router = useRouter()
 const userStore = useUserStore()
 const inviteStore = useInviteStore()
 const chatStore = useChatStore()
+const { currentMessages: chatCurrentMessages } = storeToRefs(chatStore)
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f0f2f5" width="40" height="40" rx="20"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="18">👤</text></svg>'
 
@@ -257,6 +309,9 @@ const chatInputText = ref('')
 const loadedChatMessages = ref<ChatMessage[]>([])
 /** 本页已发送的消息（仅当前会话），不依赖 store 响应式，确保发完必显 */
 const invitePageSentMessages = ref<ChatMessage[]>([])
+/** 置顶消息 id 列表（按邀约维度存入 localStorage） */
+const pinnedMessageIds = ref<number[]>([])
+const lastProcessedWsIndex = ref(0)
 
 const ratingForm = ref<InviteRatingCreateRequest>({
   inviteId: 0,
@@ -317,9 +372,9 @@ const showChatPanel = computed(() => {
 
 const myId = computed(() => userStore.user?.id ?? 0)
 
-// 公开邀约且已有群聊则为群聊，否则为单聊（与对方）
+// 只要有 chatGroupId 就使用群聊通道（公开/私密均可）
 const isGroupChat = computed(() => {
-  return invite.value?.inviteMode === 'PUBLIC' && (invite.value?.chatGroupId ?? 0) > 0
+  return (invite.value?.chatGroupId ?? 0) > 0
 })
 
 // 单聊时的对方用户 ID
@@ -328,43 +383,26 @@ const chatOtherUserId = computed(() => {
   return isCreator.value ? (invite.value.targetUserId ?? 0) : invite.value.creatorId
 })
 
-// 合并：接口历史 + store 新消息 + pending + 本页已发（invitePageSentMessages），同条只保留一条（服务端回显替换乐观）
+// 合并：接口历史 + 本页已发（invitePageSentMessages），仅按 id 去重（允许相同内容多次出现）
 const inviteChatMessages = computed(() => {
   const loaded = loadedChatMessages.value
-  const fromStore = chatStore.currentMessages
-  const otherId = chatOtherUserId.value
-  const groupId = invite.value?.chatGroupId ?? 0
-  const belong = (m: ChatMessage) =>
-    isGroupChat.value
-      ? m.groupId === groupId
-      : (m.senderId === otherId || m.receiverId === otherId) && !m.groupId
-  const dedupeKey = (m: ChatMessage) => `${m.senderId}:${m.content}`
+  const local = invitePageSentMessages.value
+  const combined: ChatMessage[] = [...loaded]
+  const existingIds = new Set(loaded.map(m => m.id))
 
-  const combined: ChatMessage[] = []
-  const byKey = new Map<string, ChatMessage>()
-
-  function add(msg: ChatMessage) {
-    const k = dedupeKey(msg)
-    const existing = byKey.get(k)
-    if (existing) {
-      if (typeof msg.id === 'number' && msg.id > 0) {
-        byKey.set(k, msg)
-        const i = combined.indexOf(existing)
-        if (i >= 0) combined[i] = msg
-      }
-      return
-    }
-    byKey.set(k, msg)
+  for (const msg of local) {
+    if (typeof msg.id === 'number' && msg.id > 0 && existingIds.has(msg.id)) continue
     combined.push(msg)
   }
 
-  for (const m of loaded) add(m)
-  for (const m of fromStore) if (belong(m)) add(m)
-  if (!isGroupChat.value && otherId) for (const p of chatStore.getPendingForUser(otherId)) add(p)
-  for (const m of invitePageSentMessages.value) add(m)
-
   combined.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
   return combined
+})
+
+// 已置顶的消息列表（按当前 inviteChatMessages 过滤）
+const pinnedMessages = computed(() => {
+  const ids = new Set(pinnedMessageIds.value)
+  return inviteChatMessages.value.filter(m => ids.has(m.id))
 })
 
 // 获取类型颜色
@@ -496,6 +534,13 @@ async function loadInvite() {
   try {
     const res = await getInviteDetail(inviteId)
     invite.value = res.data.data
+    // 加载本邀约的置顶消息 id（仅本地存储）
+    try {
+      const rawPins = localStorage.getItem(`invite_pins_${inviteId}`)
+      pinnedMessageIds.value = rawPins ? JSON.parse(rawPins) : []
+    } catch {
+      pinnedMessageIds.value = []
+    }
     if (invite.value && (isCreator.value || hasJoined.value)) {
       await loadInviteChat()
     }
@@ -507,16 +552,13 @@ async function loadInvite() {
 }
 
 function mergeHistoryWithPending(loaded: ChatMessage[], pending: ChatMessage[]): ChatMessage[] {
-  const byKey = new Map<string, ChatMessage>()
-  const key = (m: ChatMessage) => `${m.senderId}:${m.content}`
-  for (const m of loaded) byKey.set(key(m), m)
+  // 仅按 id 去重：同一条消息（相同 id）保留一条；允许内容完全相同的多条消息并存
+  const byId = new Map<number | string, ChatMessage>()
+  for (const m of loaded) byId.set(m.id, m)
   for (const p of pending) {
-    const k = key(p)
-    const existing = byKey.get(k)
-    if (!existing) byKey.set(k, p)
-    else if (typeof p.id === 'number' && p.id > 0) byKey.set(k, p)
+    if (!byId.has(p.id)) byId.set(p.id, p)
   }
-  const out = [...byKey.values()]
+  const out = [...byId.values()]
   out.sort((a, b) => (a.createdAt || '').localeCompare(b.createdAt || ''))
   return out
 }
@@ -537,6 +579,7 @@ async function loadInviteChat() {
     } else {
       loadedChatMessages.value = []
     }
+    lastProcessedWsIndex.value = chatCurrentMessages.value?.length ?? 0
     nextTick(scrollChatToBottom)
   } catch {
     loadedChatMessages.value = []
@@ -551,18 +594,25 @@ function scrollChatToBottom() {
 
 function formatMsgTime(createdAt: string) {
   if (!createdAt) return ''
-  const date = new Date(createdAt)
-  const now = new Date()
-  const sameDay = date.toDateString() === now.toDateString()
-  return sameDay
-    ? date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
-    : date.toLocaleString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit' })
+  // 直接从字符串截取时间部分，避免浏览器对时区的不同解析导致偏移
+  // 期望格式：yyyy-MM-dd HH:mm:ss
+  const parts = createdAt.split(' ')
+  if (parts.length < 2) return createdAt
+  const timePart = parts[1] || ''
+  const [h, m] = timePart.split(':')
+  if (!h || !m) return createdAt
+  return `${h}:${m}`
 }
 
 function sendInviteChat() {
   const text = chatInputText.value.trim()
   if (!text || !invite.value) return
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
+  // 若 WebSocket 未连接，直接提示用户，避免“前端显示过、刷新就消失”这种假发送
+  if (!chatStore.connected) {
+    ElMessage.warning('聊天服务连接中，请稍后再试')
+    return
+  }
+  const now = formatLocalDateTime()
   const optimistic: ChatMessage = {
     id: -Date.now(),
     senderId: myId.value,
@@ -587,6 +637,65 @@ function sendInviteChat() {
   }
   chatInputText.value = ''
   nextTick(scrollChatToBottom)
+}
+
+// WebSocket 回显：把本页乐观消息替换掉，避免必须"退出再进"才看到正确时间/顺序
+watch(
+  chatCurrentMessages,
+  (all) => {
+    if (!invite.value || !Array.isArray(all)) return
+    const inv = invite.value
+    for (let i = lastProcessedWsIndex.value; i < all.length; i++) {
+      const msg = all[i]
+      if (!msg) continue
+      if (typeof msg.id === 'number' && msg.id < 0) continue
+
+      const belongs = isGroupChat.value
+        ? (inv.chatGroupId != null && msg.groupId === inv.chatGroupId)
+        : (chatOtherUserId.value
+          ? (
+            (msg.senderId === myId.value && msg.receiverId === chatOtherUserId.value) ||
+            (msg.senderId === chatOtherUserId.value && msg.receiverId === myId.value)
+          )
+          : false)
+      if (!belongs) continue
+
+      invitePageSentMessages.value = invitePageSentMessages.value.filter(m =>
+        !(typeof m.id === 'number' && m.id < 0 && m.senderId === msg.senderId && m.content === msg.content)
+      )
+
+      if (!loadedChatMessages.value.some(m => m.id === msg.id)) {
+        const next = [...loadedChatMessages.value, msg].sort(
+          (a, b) => (a.createdAt || '').localeCompare(b.createdAt || '')
+        )
+        loadedChatMessages.value = next
+      }
+    }
+    lastProcessedWsIndex.value = all.length
+  },
+  { deep: true }
+)
+
+function togglePin(msg: ChatMessage) {
+  if (!invite.value) return
+  if (typeof msg.id !== 'number' || msg.id <= 0) {
+    ElMessage.info('请等待消息发送成功后再置顶')
+    return
+  }
+  const idx = pinnedMessageIds.value.indexOf(msg.id)
+  if (idx >= 0) {
+    pinnedMessageIds.value.splice(idx, 1)
+  } else {
+    pinnedMessageIds.value.unshift(msg.id)
+  }
+  localStorage.setItem(`invite_pins_${invite.value.id}`, JSON.stringify(pinnedMessageIds.value))
+}
+
+function scrollToMessage(msgId: number) {
+  const el = document.getElementById(`invite-msg-${msgId}`)
+  if (el) {
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' })
+  }
 }
 
 watch(inviteChatMessages, () => nextTick(scrollChatToBottom), { deep: true })
@@ -628,12 +737,17 @@ onMounted(loadInvite)
   margin-bottom: 16px;
 }
 
-.invite-card {
+.invite-main-card {
   background: $bg-primary;
   border: 1px solid $border-light;
   border-radius: $radius-lg;
-  padding: 20px;
-  margin-bottom: 20px;
+  padding: 20px 20px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.invite-card {
   position: relative;
 }
 
@@ -732,11 +846,15 @@ onMounted(loadInvite)
 .rating-count { margin-left: auto; font-size: 12px; color: $text-muted; }
 
 .participants-section {
-  background: $bg-primary;
-  border: 1px solid $border-light;
-  border-radius: $radius-lg;
-  padding: 16px;
-  margin-bottom: 20px;
+  padding-top: 4px;
+  border-top: 1px solid $border-light;
+}
+
+.participants-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
 }
 
 .section-title {
@@ -766,6 +884,16 @@ onMounted(loadInvite)
   color: $text-primary;
 }
 
+.participant-tag {
+  margin-left: 4px;
+  padding: 0 6px;
+  font-size: 11px;
+  border-radius: $radius-full;
+  background: rgba($primary, 0.06);
+  color: $primary;
+  font-weight: 500;
+}
+
 .join-time {
   font-size: 12px;
   color: $text-muted;
@@ -779,88 +907,208 @@ onMounted(loadInvite)
 }
 
 .invite-chat-section {
-  background: $bg-primary;
-  border: 1px solid $border-light;
-  border-radius: $radius-lg;
-  padding: 16px;
-  margin-bottom: 20px;
+  padding-top: 4px;
+  border-top: 1px solid $border-light;
+}
+
+.invite-chat-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 8px;
+
+  .chat-meta {
+    font-size: 12px;
+    color: $text-muted;
+  }
 }
 
 .invite-chat-box {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.invite-chat-list {
-  min-height: 200px;
-  max-height: 320px;
-  overflow-y: auto;
-  padding: 12px;
-  background: $bg-secondary;
-  border-radius: $radius-md;
-  display: flex;
-  flex-direction: column;
   gap: 10px;
 }
 
-.invite-msg-row {
+.invite-chat-list {
+  min-height: 180px;
+  max-height: 320px;
+  overflow-y: auto;
+  padding: 4px 0;
+  border-top: 1px solid $border-light;
+}
+
+.pinned-bar {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   gap: 8px;
-  max-width: 85%;
+  padding: 6px 0 4px;
+}
 
-  &.mine {
-    align-self: flex-end;
-    flex-direction: row-reverse;
+.pinned-label {
+  font-size: 12px;
+  color: $text-muted;
+}
 
-    .invite-msg-bubble {
-      background: $primary;
-      color: white;
-      .msg-time { color: rgba(white, 0.75); }
-    }
+.pinned-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  flex: 1;
+}
+
+.pinned-chip {
+  max-width: 100%;
+  border: 1px solid $border-light;
+  background: $bg-secondary;
+  border-radius: 999px;
+  padding: 2px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: background $transition-fast, border-color $transition-fast;
+
+  &:hover {
+    background: $bg-tertiary;
+    border-color: rgba($primary, 0.4);
   }
 }
 
-.msg-avatar {
+.pinned-text {
+  max-width: 140px;
+}
+
+.pinned-time {
+  font-size: 11px;
+  color: $text-muted;
+}
+
+.comment-item {
+  display: flex;
+  align-items: flex-start;
+  padding: 10px 0;
+  gap: 10px;
+  border-bottom: 1px solid rgba($border-light, 0.7);
+
+  &:last-of-type {
+    border-bottom: none;
+  }
+}
+
+.comment-avatar {
   flex-shrink: 0;
-  width: 32px;
-  height: 32px;
+  width: 36px;
+  height: 36px;
   border-radius: $radius-full;
   object-fit: cover;
 }
 
-.invite-msg-bubble {
-  padding: 8px 12px;
-  border-radius: $radius-lg;
-  background: $bg-tertiary;
-  max-width: 100%;
+.comment-main {
+  flex: 1;
+  min-width: 0;
+}
 
-  .msg-sender-name {
+.comment-header {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+
+.comment-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-primary;
+
+  .comment-tag {
+    margin-left: 4px;
+    padding: 0 6px;
     font-size: 11px;
-    color: $text-muted;
-    margin-bottom: 2px;
+    border-radius: $radius-full;
+    background: rgba($primary, 0.06);
+    color: $primary;
+    font-weight: 500;
   }
-  .msg-text { font-size: 14px; line-height: 1.45; word-wrap: break-word; }
-  .msg-time { font-size: 11px; color: $text-muted; display: block; text-align: right; margin-top: 4px; }
+}
+
+.comment-time {
+  margin-left: auto;
+  font-size: 12px;
+  color: $text-muted;
+}
+
+.comment-pin {
+  margin-left: 8px;
+  padding: 0 6px;
+  font-size: 11px;
+  border-radius: $radius-full;
+  border: none;
+  background: transparent;
+  color: $text-muted;
+  cursor: pointer;
+  transition: color $transition-fast, background $transition-fast;
+
+  &:hover {
+    color: $primary;
+    background: rgba($primary, 0.06);
+  }
+}
+
+.comment-text {
+  font-size: 14px;
+  line-height: 1.6;
+  color: $text-primary;
+  word-wrap: break-word;
+  white-space: pre-wrap;
+}
+
+.comments-empty {
+  padding: 20px 0;
+  text-align: center;
+  font-size: 13px;
+  color: $text-muted;
 }
 
 .invite-chat-input-wrap {
-  :deep(.el-input__wrapper) { border-radius: $radius-md; }
-  :deep(.el-input-group__append) { padding: 0; background: none; border: none; box-shadow: none; }
+  padding-top: 6px;
+  border-top: 1px solid $border-light;
+
+  :deep(.el-input__wrapper) {
+    border-radius: 999px;
+    padding-left: 14px;
+    background-color: $bg-primary;
+  }
+
+  :deep(.el-input-group__append) {
+    padding: 0;
+    background: none;
+    border: none;
+    box-shadow: none;
+  }
 
   .send-btn {
-    padding: 0 16px;
+    padding: 0 18px;
     height: 32px;
     background: $primary;
     color: white;
     border: none;
-    border-radius: 0 $radius-md $radius-md 0;
-    font-size: 14px;
+    border-radius: 999px;
+    font-size: 13px;
     font-weight: 500;
     cursor: pointer;
-    transition: opacity $transition-fast;
-    &:disabled { opacity: 0.5; cursor: not-allowed; }
+    transition: opacity $transition-fast, transform $transition-fast;
+
+    &:hover:not(:disabled) {
+      opacity: 0.9;
+      transform: translateY(-0.5px);
+    }
+
+    &:disabled {
+      opacity: 0.4;
+      cursor: not-allowed;
+    }
   }
 }
 

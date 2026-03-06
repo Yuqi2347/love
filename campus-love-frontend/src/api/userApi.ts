@@ -47,6 +47,18 @@ export function getUserProfile(userId: number) {
   return request.get<ApiResult<UserProfile>>(`/user/${userId}`)
 }
 
+export interface UserSearchItem {
+  id: number
+  nickname: string
+  avatarUrl: string | null
+}
+
+export function searchUsers(keyword: string, limit = 10) {
+  return request.get<ApiResult<UserSearchItem[]>>('/user/search', {
+    params: { keyword: keyword.trim(), limit },
+  })
+}
+
 export function updateProfile(data: UpdateProfileParams) {
   return request.put<ApiResult<UserProfile>>('/user/profile', data)
 }

@@ -72,6 +72,7 @@ import { getChatHistory, markAsRead } from '@/api/chatApi'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
+import { formatLocalDateTime } from '@/utils/dateTime'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect fill="%23f0f2f5" width="36" height="36" rx="18"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="16">👤</text></svg>'
 
@@ -129,7 +130,7 @@ function scrollToBottom() {
 function handleSend() {
   const text = inputText.value.trim()
   if (!text) return
-  const now = new Date().toISOString().slice(0, 19).replace('T', ' ')
+  const now = formatLocalDateTime()
   chatStore.pushOptimisticMessage(
     {
       id: -Date.now(),

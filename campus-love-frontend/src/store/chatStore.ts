@@ -21,7 +21,8 @@ export const useChatStore = defineStore('chat', () => {
     if (!token) return
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
-    const wsUrl = `${protocol}//${window.location.host}/ws/chat?token=${token}`
+    // 后端开启了 context-path=/api，WebSocket 实际路径为 /api/ws/chat
+    const wsUrl = `${protocol}//${window.location.host}/api/ws/chat?token=${token}`
     ws.value = new WebSocket(wsUrl)
 
     ws.value.onopen = () => { connected.value = true }

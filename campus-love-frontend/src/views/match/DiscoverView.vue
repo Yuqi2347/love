@@ -186,6 +186,7 @@ import {
   deletePost,
   addComment,
   type FeedPost,
+  type FeedComment,
   type UserLevelInfo,
 } from '@/api/feedApi'
 import { useUserStore } from '@/store/userStore'
@@ -346,7 +347,7 @@ async function submitComment(postId: number) {
       if (!post.comments) {
         post.comments = []
       }
-      post.comments.push({
+      const optimistic: FeedComment = {
         id: Date.now(),
         userId: userStore.user!.id,
         nickname: userStore.user!.nickname,
@@ -354,7 +355,8 @@ async function submitComment(postId: number) {
         content,
         parentId: null,
         createdAt: new Date().toISOString(),
-      } as any)
+      }
+      post.comments.push(optimistic)
     }
     commentText.value = ''
     commentingPostId.value = null

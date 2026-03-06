@@ -27,6 +27,8 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -71,6 +73,8 @@ public class ChatService {
         message.setContent(content);
         message.setMsgType(msgType != null ? msgType : 1);
         message.setIsRead(false);
+        // 确保数据库与 WebSocket 回执中都有一致的创建时间（使用北京时间）
+        message.setCreatedAt(ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalDateTime());
         messageMapper.insert(message);
 
         User sender = userMapper.selectById(senderId);
@@ -84,7 +88,7 @@ public class ChatService {
                 .content(content)
                 .msgType(message.getMsgType())
                 .isRead(false)
-                .createdAt(LocalDateTime.now().format(DateTimeConstants.DATETIME_FMT))
+                .createdAt(message.getCreatedAt() != null ? message.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                 .build();
     }
 
@@ -191,6 +195,8 @@ public class ChatService {
         message.setContent(content);
         message.setMsgType(msgType != null ? msgType : 1);
         message.setIsRead(false);
+        // 确保群聊消息也有创建时间，供讨论区显示（使用北京时间）
+        message.setCreatedAt(ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalDateTime());
         messageMapper.insert(message);
 
         User sender = userMapper.selectById(senderId);

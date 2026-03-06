@@ -40,8 +40,39 @@ v-for="item in navItems" :key="item.path" :to="item.path"
 
     <!-- Right Panel -->
     <aside class="right-panel">
-      <div class="search-box">
-        <el-input placeholder="搜索用户..." prefix-icon="Search" size="large" round />
+      <div ref="searchBoxRef" class="search-box">
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索用户昵称..."
+          prefix-icon="Search"
+          size="large"
+          round
+          clearable
+          :loading="searchLoading"
+          @focus="searchKeyword && doSearch()"
+          @clear="clearSearch"
+        />
+        <div v-if="showSearchDropdown" class="search-dropdown">
+          <div v-if="searchLoading" class="search-loading">搜索中...</div>
+          <div v-else-if="searchKeyword.trim().length < 2" class="search-hint">输入至少 2 个字符搜索</div>
+          <div v-else-if="!searchResults.length" class="search-empty">未找到用户</div>
+          <div
+            v-for="u in searchResults"
+            v-else
+            :key="u.id"
+            class="search-item"
+            @click="goToProfile(u.id)"
+          >
+            <img :src="u.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
+            <span class="search-item-name text-ellipsis">{{ u.nickname }}</span>
+            <button
+              :class="['btn-sm', searchFollowedIds.includes(u.id) ? 'btn-followed' : 'btn-outline']"
+              @click.stop="handleSearchFollow(u.id)"
+            >
+              {{ searchFollowedIds.includes(u.id) ? '已关注' : '关注' }}
+            </button>
+          </div>
+        </div>
       </div>
 
       <div class="panel-card">
@@ -62,10 +93,31 @@ v-for="m in topMatches" :key="m.userId" class="recommend-item"
       </div>
 
       <div class="panel-card">
-        <h3 class="panel-title">热门标签</h3>
-        <div class="tag-cloud">
-          <span v-for="tag in hotTags" :key="tag" class="hot-tag">{{ tag }}</span>
+        <div class="panel-title-row">
+          <h3 class="panel-title">热门邀约看板</h3>
+          <button class="btn-text" @click="$router.push('/invite')">查看全部</button>
         </div>
+        <div v-if="boardLoading" class="board-loading">加载中...</div>
+        <div v-else-if="inviteBoard.length" class="board-list">
+          <div
+            v-for="item in inviteBoard"
+            :key="item.inviteType"
+            class="board-item"
+            @click="$router.push(`/invite?type=${item.inviteType}`)"
+          >
+            <div class="board-item-left">
+              <span class="board-dot" :style="{ background: getTypeColor(item.inviteType) }" />
+              <span class="board-type">{{ typeLabel(item.inviteType) }}</span>
+            </div>
+            <div class="board-item-right">
+              <span class="board-count">{{ item.count }}</span>
+            </div>
+            <div class="board-bar">
+              <div class="board-bar-fill" :style="{ width: `${item.percent}%`, background: getTypeColor(item.inviteType) }" />
+            </div>
+          </div>
+        </div>
+        <div v-else class="empty-hint">暂无进行中的邀约</div>
       </div>
     </aside>
 
@@ -80,16 +132,20 @@ v-for="m in topMatches" :key="m.userId" class="recommend-item"
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRoute } from 'vue-router'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { getRecommendations, type MatchResult } from '@/api/matchApi'
-import { followUser } from '@/api/followApi'
+import { followUser, unfollowUser, getFollowingList } from '@/api/followApi'
 import { createPost } from '@/api/feedApi'
+import { searchUsers, type UserSearchItem } from '@/api/userApi'
 import { ElMessage } from 'element-plus'
-import { INTEREST_TAGS } from '@/constants/matchConst'
+// 右侧面板不再展示“热门标签”，改为热门邀约看板
+import { getHotInviteTypeCounts, type InviteTypeCount } from '@/api/inviteApi'
+import { InviteType, INVITE_TYPE_LABELS } from '@/constants/inviteConst'
 
 const route = useRoute()
+const router = useRouter()
 const userStore = useUserStore()
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f0f2f5" width="40" height="40" rx="20"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="18">👤</text></svg>'
@@ -106,15 +162,100 @@ const navItems = computed(() => [
 const isActive = (path: string) => route.path.startsWith(path)
 
 const topMatches = ref<MatchResult[]>([])
-const hotTags = ref(INTEREST_TAGS.slice(0, 12))
 const showPostDialog = ref(false)
 const postContent = ref('')
 
-onMounted(async () => {
+// 邀约看板（按类型统计）
+const inviteBoard = ref<Array<InviteTypeCount & { percent: number }>>([])
+const boardLoading = ref(false)
+
+// 搜索
+const searchBoxRef = ref<HTMLElement>()
+const searchKeyword = ref('')
+const searchResults = ref<UserSearchItem[]>([])
+const searchFollowedIds = ref<number[]>([])
+const searchLoading = ref(false)
+const showSearchDropdown = ref(false)
+let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
+
+watch(searchKeyword, (val) => {
+  if (searchDebounceTimer) clearTimeout(searchDebounceTimer)
+  if (!val?.trim()) {
+    showSearchDropdown.value = false
+    searchResults.value = []
+    searchFollowedIds.value = []
+    return
+  }
+  showSearchDropdown.value = true
+  if (val.trim().length < 2) return
+  searchDebounceTimer = setTimeout(doSearch, 300)
+})
+
+async function doSearch() {
+  const kw = searchKeyword.value?.trim()
+  if (!kw || kw.length < 2) {
+    searchResults.value = []
+    searchFollowedIds.value = []
+    return
+  }
+  searchLoading.value = true
   try {
-    const res = await getRecommendations(0, 5)
-    topMatches.value = res.data.data || []
-  } catch { /* profile may be incomplete */ }
+    const [searchRes, followRes] = await Promise.all([
+      searchUsers(kw, 10),
+      getFollowingList(),
+    ])
+    searchResults.value = searchRes.data.data || []
+    searchFollowedIds.value = (followRes.data.data || []).map(f => f.userId)
+  } catch {
+    searchResults.value = []
+    searchFollowedIds.value = []
+  } finally {
+    searchLoading.value = false
+  }
+}
+
+function clearSearch() {
+  searchResults.value = []
+  searchFollowedIds.value = []
+  showSearchDropdown.value = false
+}
+
+function goToProfile(userId: number) {
+  searchKeyword.value = ''
+  clearSearch()
+  router.push(`/profile/${userId}`)
+}
+
+async function handleSearchFollow(userId: number) {
+  const isFollowing = searchFollowedIds.value.includes(userId)
+  try {
+    if (isFollowing) {
+      await unfollowUser(userId)
+      searchFollowedIds.value = searchFollowedIds.value.filter(id => id !== userId)
+      ElMessage.success('已取消关注')
+    } else {
+      await followUser(userId)
+      searchFollowedIds.value = [...searchFollowedIds.value, userId]
+      ElMessage.success('关注成功')
+    }
+  } catch { /* handled by interceptor */ }
+}
+
+function onDocumentClick(e: MouseEvent) {
+  if (searchBoxRef.value && !searchBoxRef.value.contains(e.target as Node)) {
+    showSearchDropdown.value = false
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+  getRecommendations(0, 5)
+    .then(res => { topMatches.value = res.data.data || [] })
+    .catch(() => { /* profile may be incomplete */ })
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick)
 })
 
 async function handleFollow(userId: number) {
@@ -133,6 +274,40 @@ async function handleCreatePost() {
     postContent.value = ''
   } catch { /* handled */ }
 }
+
+function typeLabel(t: string) {
+  return INVITE_TYPE_LABELS[t as InviteType] || t
+}
+
+function getTypeColor(type: string): string {
+  const colors: Record<string, string> = {
+    DINNER: '#ff6b9d',
+    SPORT: '#52c41a',
+    STUDY: '#1890ff',
+    DRAMA: '#722ed1',
+    OTHER: '#8c8c8c',
+  }
+  return colors[type] || '#8c8c8c'
+}
+
+async function loadInviteBoard() {
+  boardLoading.value = true
+  try {
+    const res = await getHotInviteTypeCounts(10)
+    const list = res.data.data || []
+    const max = Math.max(...list.map(i => i.count), 0)
+    inviteBoard.value = list.map(i => ({
+      ...i,
+      percent: max <= 0 ? 0 : Math.max(6, Math.round((i.count / max) * 100)),
+    }))
+  } catch {
+    inviteBoard.value = []
+  } finally {
+    boardLoading.value = false
+  }
+}
+
+onMounted(loadInviteBoard)
 </script>
 
 <style lang="scss" scoped>
@@ -260,11 +435,49 @@ async function handleCreatePost() {
 
 .search-box {
   margin-bottom: 20px;
+  position: relative;
 
   :deep(.el-input__wrapper) {
     border-radius: $radius-full;
     background: $bg-primary;
   }
+}
+
+.search-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-top: 8px;
+  background: $bg-primary;
+  border-radius: $radius-lg;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12);
+  max-height: 320px;
+  overflow-y: auto;
+  z-index: 100;
+}
+
+.search-loading,
+.search-hint,
+.search-empty {
+  padding: 16px;
+  text-align: center;
+  color: $text-muted;
+  font-size: 14px;
+}
+
+.search-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 16px;
+  cursor: pointer;
+  transition: background $transition-fast;
+
+  &:hover { background: $bg-tertiary; }
+
+  .avatar { border-radius: 50%; flex-shrink: 0; }
+  .search-item-name { flex: 1; min-width: 0; font-size: 14px; font-weight: 500; }
 }
 
 .panel-card {
@@ -279,6 +492,108 @@ async function handleCreatePost() {
   font-weight: 700;
   margin-bottom: 16px;
   color: $text-primary;
+}
+
+.panel-title-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.btn-text {
+  background: transparent;
+  border: none;
+  color: $text-muted;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 8px;
+  border-radius: $radius-md;
+  transition: all $transition-fast;
+
+  &:hover {
+    background: $bg-tertiary;
+    color: $text-secondary;
+  }
+}
+
+.board-loading {
+  padding: 20px;
+  text-align: center;
+  color: $text-muted;
+  font-size: 14px;
+}
+
+.board-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.board-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 12px 10px;
+  border-radius: $radius-lg;
+  cursor: pointer;
+  transition: background $transition-fast;
+
+  &:hover { background: $bg-tertiary; }
+}
+
+.board-item-left {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.board-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.board-type {
+  font-size: 14px;
+  font-weight: 700;
+  color: $text-primary;
+  white-space: nowrap;
+}
+
+.board-item-right {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+.board-count {
+  font-size: 16px;
+  font-weight: 800;
+  color: $text-primary;
+}
+
+.board-bar {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 8px;
+  height: 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+}
+
+.board-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  opacity: 0.9;
 }
 
 .recommend-list {
@@ -302,6 +617,23 @@ async function handleCreatePost() {
 }
 
 .btn-sm { padding: 4px 12px; font-size: 12px; }
+
+.btn-followed {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: $bg-tertiary;
+  color: $text-muted;
+  border: none;
+  border-radius: $radius-full;
+  cursor: pointer;
+  transition: all $transition-base;
+
+  &:hover {
+    background: rgba($danger, 0.1);
+    color: $danger;
+  }
+}
 
 .empty-hint {
   text-align: center;

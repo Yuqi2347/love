@@ -7,6 +7,7 @@ import com.campus.love.common.utils.BaziUtil;
 import com.campus.love.common.utils.ZodiacUtil;
 import com.campus.love.user.dto.UserProfileRequest;
 import com.campus.love.user.dto.UserProfileResponse;
+import com.campus.love.user.dto.UserSearchItemResponse;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -14,11 +15,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+
 import java.io.File;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -32,6 +37,29 @@ public class UserService {
     /**
      * 获取用户资料（本人或他人）。返回为公开资料，不含 password/email 等敏感字段；若需区分本人与他人展示，在 toProfileResponse 或 Controller 层处理。
      */
+    /**
+     * 按昵称搜索用户（用于全局搜索框），排除当前用户，最多返回 limit 条。
+     */
+    public List<UserSearchItemResponse> searchUsers(String keyword, int limit) {
+        Long currentUserId = CurrentUser.getId();
+        if (keyword == null || keyword.trim().isEmpty()) {
+            return List.of();
+        }
+        String k = keyword.trim();
+        if (k.length() < 2) {
+            return List.of();
+        }
+        int size = Math.min(Math.max(limit, 1), 20);
+        LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<User>()
+                .like(User::getNickname, k)
+                .ne(currentUserId != null, User::getId, currentUserId)
+                .select(User::getId, User::getNickname, User::getAvatarUrl)
+                .last("LIMIT " + size);
+        return userMapper.selectList(wrapper).stream()
+                .map(u -> new UserSearchItemResponse(u.getId(), u.getNickname(), u.getAvatarUrl()))
+                .collect(Collectors.toList());
+    }
+
     public UserProfileResponse getProfile(Long userId) {
         User user = userMapper.selectById(userId);
         if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);

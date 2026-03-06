@@ -77,6 +77,11 @@ public class InviteService {
     }
 
     @Transactional(readOnly = true)
+    public List<InviteTypeCountResponse> getHotInviteTypeCounts(Integer limit) {
+        return crudService.getHotInviteTypeCounts(limit);
+    }
+
+    @Transactional(readOnly = true)
     public List<InviteResponse> getMyCreatedInvites(String range) {
         return crudService.getMyCreatedInvites(range);
     }
@@ -88,6 +93,7 @@ public class InviteService {
 
     @Transactional(readOnly = true)
     public InviteResponse getInviteDetail(Long inviteId) {
+        crudService.ensureChatGroupForInvite(inviteId);
         return crudService.getInviteDetail(inviteId);
     }
 
