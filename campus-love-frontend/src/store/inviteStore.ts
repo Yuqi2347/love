@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import {
   getInviteList,
+  getMyInvitesList,
   getMyInviteWaits,
   getInviteStats,
   type Invite,
@@ -18,6 +19,9 @@ export const useInviteStore = defineStore('invite', () => {
   const loading = ref(false)
   const currentType = ref<string | undefined>(undefined)
   const currentStatus = ref<string | undefined>(undefined)
+  const currentTimeRange = ref<string | undefined>(undefined)
+  /** 我的邀约列表（我发起的 + 我参与的，含已退出） */
+  const myListInvites = ref<Invite[]>([])
 
   // 计算属性
   const recruitingInvites = computed(() =>
@@ -28,12 +32,13 @@ export const useInviteStore = defineStore('invite', () => {
   )
 
   // 获取邀约列表
-  async function fetchInvites(type?: string, status?: string) {
+  async function fetchInvites(type?: string, status?: string, timeRange?: string) {
     loading.value = true
     currentType.value = type
     currentStatus.value = status
+    currentTimeRange.value = timeRange
     try {
-      const res = await getInviteList(type, status, 0, 50)
+      const res = await getInviteList(type, status, timeRange, 0, 50)
       invites.value = res.data.data?.records || []
     } catch (error) {
       console.error('获取邀约列表失败:', error)
@@ -48,6 +53,7 @@ export const useInviteStore = defineStore('invite', () => {
       const res = await getInviteList(
         currentType.value,
         currentStatus.value,
+        currentTimeRange.value,
         page,
         20
       )
@@ -62,7 +68,22 @@ export const useInviteStore = defineStore('invite', () => {
 
   // 刷新邀约列表
   function refreshInvites() {
-    return fetchInvites(currentType.value, currentStatus.value)
+    return fetchInvites(currentType.value, currentStatus.value, currentTimeRange.value)
+  }
+
+  // 获取「我的邀约」列表（我发起的 + 我参与的，含已退出）
+  async function fetchMyInvitesList(timeRange?: string) {
+    loading.value = true
+    currentTimeRange.value = timeRange
+    try {
+      const res = await getMyInvitesList(timeRange || 'week')
+      myListInvites.value = res.data.data || []
+    } catch (error) {
+      console.error('获取我的邀约列表失败:', error)
+      myListInvites.value = []
+    } finally {
+      loading.value = false
+    }
   }
 
   // 获取等待邀约
@@ -154,6 +175,8 @@ export const useInviteStore = defineStore('invite', () => {
     loading,
     currentType,
     currentStatus,
+    currentTimeRange,
+    myListInvites,
 
     // 计算属性
     recruitingInvites,
@@ -163,6 +186,7 @@ export const useInviteStore = defineStore('invite', () => {
     fetchInvites,
     loadMoreInvites,
     refreshInvites,
+    fetchMyInvitesList,
     fetchInviteWaits,
     fetchStats,
     updateInviteStatus,

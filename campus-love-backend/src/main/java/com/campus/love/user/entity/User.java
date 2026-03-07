@@ -49,6 +49,13 @@ public class User {
     @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updatedAt;
 
+    /** 上次查看粉丝列表时间（用于新粉丝红点消除） */
+    private LocalDateTime lastFollowerViewedAt;
+    /** 上次查看朋友圈点赞/评论活动时间 */
+    private LocalDateTime lastFeedActivityViewedAt;
+    /** 上次查看邀约活动时间（我的邀约有人加入/发言、等待邀约匹配成功） */
+    private LocalDateTime lastInviteActivityViewedAt;
+
     /** 信用分默认值 100，用于邀约等模块 */
     public static final int DEFAULT_CREDIT_SCORE = 100;
 

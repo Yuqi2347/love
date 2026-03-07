@@ -63,4 +63,17 @@ public class FollowController {
     public Result<List<FollowResponse>> getUserFollowers(@PathVariable Long userId) {
         return Result.success(followService.getFollowerList(userId));
     }
+
+    @Operation(summary = "新粉丝数量（自上次查看粉丝列表以来）")
+    @GetMapping("/new-followers-count")
+    public Result<Integer> getNewFollowersCount() {
+        return Result.success(followService.getNewFollowerCount(CurrentUser.getId()));
+    }
+
+    @Operation(summary = "标记粉丝列表已查看，消除新粉丝红点")
+    @PutMapping("/mark-followers-viewed")
+    public Result<Void> markFollowersViewed() {
+        followService.markFollowersViewed(CurrentUser.getId());
+        return Result.success();
+    }
 }

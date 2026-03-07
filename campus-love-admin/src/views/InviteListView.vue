@@ -39,6 +39,11 @@
         <el-table-column prop="createdAt" label="创建时间" width="170">
           <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
+        <el-table-column label="操作" width="80" fixed="right">
+          <template #default="{ row }">
+            <el-button type="danger" link size="small" @click="handleDelete(row)">删除</el-button>
+          </template>
+        </el-table-column>
       </el-table>
       <el-pagination
         v-model:current-page="page"
@@ -56,7 +61,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { getAdminInvites, type AdminInviteItem } from '@/api/adminApi'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getAdminInvites, deleteAdminInvite, type AdminInviteItem } from '@/api/adminApi'
 
 const loading = ref(false)
 const status = ref('')
@@ -93,6 +99,21 @@ async function load() {
 function formatTime(s: string) {
   if (!s) return '-'
   return new Date(s).toLocaleString('zh-CN')
+}
+
+async function handleDelete(row: AdminInviteItem) {
+  try {
+    await ElMessageBox.confirm('确定删除该邀约吗？删除后不可恢复。', '确认', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await deleteAdminInvite(row.id)
+    ElMessage.success('已删除')
+    load()
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('删除失败')
+  }
 }
 
 onMounted(load)

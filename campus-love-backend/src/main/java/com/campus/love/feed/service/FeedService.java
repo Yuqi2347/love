@@ -25,6 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import com.campus.love.common.constants.DateTimeConstants;
 
+import java.time.LocalDateTime;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -240,6 +241,16 @@ public class FeedService {
         feedPostMapper.updateById(post);
     }
 
+    /**
+     * 获取单条帖子详情（含完整评论列表，按时间正序爬楼）
+     */
+    public FeedPostResponse getPostDetail(Long postId) {
+        Long currentUserId = CurrentUser.getId();
+        FeedPost post = feedPostMapper.selectById(postId);
+        if (post == null) throw new BusinessException(ResultCode.FEED_NOT_FOUND);
+        return toResponse(post, currentUserId, null, 200);
+    }
+
     public void deletePost(Long postId) {
         Long userId = CurrentUser.getId();
         FeedPost post = feedPostMapper.selectById(postId);
@@ -259,11 +270,40 @@ public class FeedService {
         feedPostMapper.deleteById(postId);
     }
 
+    /** 我发布的帖子收到的新点赞+新评论数量（自上次查看朋友圈活动以来），用于导航红点；从未查看过则返回 0 */
+    public int getNewFeedActivityCount(Long userId) {
+        User user = userMapper.selectById(userId);
+        LocalDateTime since = user != null ? user.getLastFeedActivityViewedAt() : null;
+        if (since == null) return 0;
+        List<Long> myPostIds = feedPostMapper.selectList(
+                        new LambdaQueryWrapper<FeedPost>().eq(FeedPost::getUserId, userId))
+                .stream().map(FeedPost::getId).collect(Collectors.toList());
+        if (myPostIds.isEmpty()) return 0;
+        LambdaQueryWrapper<FeedLike> likeW = new LambdaQueryWrapper<FeedLike>().in(FeedLike::getPostId, myPostIds).gt(FeedLike::getCreatedAt, since);
+        LambdaQueryWrapper<FeedComment> commentW = new LambdaQueryWrapper<FeedComment>().in(FeedComment::getPostId, myPostIds).gt(FeedComment::getCreatedAt, since);
+        long likeCount = feedLikeMapper.selectCount(likeW);
+        long commentCount = feedCommentMapper.selectCount(commentW);
+        return (int) (likeCount + commentCount);
+    }
+
+    /** 标记朋友圈活动已查看，消除红点 */
+    @Transactional
+    public void markFeedActivityViewed(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null) return;
+        user.setLastFeedActivityViewedAt(LocalDateTime.now());
+        userMapper.updateById(user);
+    }
+
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId) {
-        return toResponse(post, currentUserId, null);
+        return toResponse(post, currentUserId, null, 10);
     }
 
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap) {
+        return toResponse(post, currentUserId, authorMap, 10);
+    }
+
+    private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap, int commentLimit) {
         User author = authorMap != null ? authorMap.get(post.getUserId()) : null;
         if (author == null) {
             author = userMapper.selectById(post.getUserId());
@@ -277,7 +317,7 @@ public class FeedService {
                 new LambdaQueryWrapper<FeedComment>()
                         .eq(FeedComment::getPostId, post.getId())
                         .orderByAsc(FeedComment::getCreatedAt)
-                        .last("LIMIT 10"));
+                        .last("LIMIT " + commentLimit));
 
         Map<Long, User> userCache = new HashMap<>();
         List<FeedPostResponse.CommentItem> commentItems = comments.stream().map(c -> {

@@ -22,6 +22,10 @@
           <el-icon><Calendar /></el-icon>
           <span>邀约管理</span>
         </el-menu-item>
+        <el-menu-item index="/feeds">
+          <el-icon><Document /></el-icon>
+          <span>帖子管理</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -43,7 +47,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
-import { DataAnalysis, User, Calendar } from '@element-plus/icons-vue'
+import { DataAnalysis, User, Calendar, Document } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -54,6 +58,7 @@ const currentTitle = computed(() => {
     '/dashboard': '仪表盘',
     '/users': '用户管理',
     '/invites': '邀约管理',
+    '/feeds': '帖子管理',
   }
   return map[route.path] || '管理后台'
 })

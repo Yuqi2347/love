@@ -102,7 +102,7 @@
             </div>
 
             <div
-              v-for="p in invite.participants.filter(p => p.userId !== invite.creatorId)"
+              v-for="p in invite.participants.filter(p => p.userId !== invite!.creatorId)"
               :key="p.userId"
               class="participant-item"
             >
@@ -116,6 +116,34 @@
           </div>
           <div v-else class="empty-participants">
             暂无参与者，快来加入吧！
+          </div>
+        </div>
+
+        <!-- 发起人：待处理的再次加入申请 -->
+        <div v-if="isCreator && rejoinRequests.length" class="rejoin-requests-section">
+          <div class="participants-header">
+            <h3 class="section-title">待处理的再次加入申请</h3>
+          </div>
+          <div class="rejoin-list">
+            <div
+              v-for="r in rejoinRequests"
+              :key="r.userId"
+              class="rejoin-item"
+            >
+              <img :src="r.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" alt="" />
+              <div class="rejoin-info">
+                <span class="rejoin-name">{{ r.nickname || '用户' }}</span>
+                <span class="rejoin-time">{{ formatRequestTime(r.requestedAt) }}</span>
+              </div>
+              <div class="rejoin-actions">
+                <button type="button" class="btn-text primary" @click="handleApproveRejoin(r.userId)">
+                  同意
+                </button>
+                <button type="button" class="btn-text" @click="handleRejectRejoin(r.userId)">
+                  拒绝
+                </button>
+              </div>
+            </div>
           </div>
         </div>
 
@@ -162,11 +190,22 @@
                       <span v-if="msg.senderId === myId" class="comment-tag">我</span>
                     </span>
                     <span class="comment-time">{{ formatMsgTime(msg.createdAt) }}</span>
-                    <button class="comment-pin" type="button" @click="togglePin(msg)">
+                    <button v-if="isCreator" class="comment-pin" type="button" @click="togglePin(msg)">
                       {{ pinnedMessageIds.includes(msg.id) ? '取消置顶' : '置顶' }}
                     </button>
                   </div>
-                  <p class="comment-text">{{ msg.content }}</p>
+                  <template v-if="msg.msgType === 3">
+                    <el-image
+                      :src="inviteImageUrl(msg.content)"
+                      :preview-src-list="[inviteImageUrl(msg.content)]"
+                      fit="cover"
+                      class="invite-chat-image"
+                      preview-teleported
+                    />
+                  </template>
+                  <template v-else>
+                    <p class="comment-text">{{ msg.content }}</p>
+                  </template>
                 </div>
               </div>
               <div v-if="!inviteChatMessages.length" class="comments-empty">
@@ -174,18 +213,32 @@
               </div>
             </div>
             <div class="invite-chat-input-wrap">
-              <el-input
-                v-model="chatInputText"
-                placeholder="发表你的想法…"
-                size="default"
-                @keyup.enter="sendInviteChat"
-              >
-                <template #append>
-                  <button class="send-btn" :disabled="!chatInputText.trim()" @click="sendInviteChat">
-                    发送
-                  </button>
-                </template>
-              </el-input>
+              <input
+                ref="inviteImageInputRef"
+                type="file"
+                accept="image/png,image/jpeg,image/gif,image/webp"
+                class="hidden-file-input"
+                @change="handleInviteImageSelect"
+              />
+              <div class="invite-input-row">
+                <button type="button" class="icon-btn" title="发送图片" @click="triggerInviteImageInput">
+                  <el-icon :size="18"><Picture /></el-icon>
+                </button>
+                <EmojiPicker @insert="insertInviteEmoji" />
+                <el-input
+                  ref="chatInputRef"
+                  v-model="chatInputText"
+                  placeholder="发表你的想法…"
+                  size="default"
+                  @keyup.enter="sendInviteChat"
+                >
+                  <template #append>
+                    <button class="send-btn" :disabled="!chatInputText.trim()" @click="sendInviteChat">
+                      发送
+                    </button>
+                  </template>
+                </el-input>
+              </div>
             </div>
           </div>
         </div>
@@ -204,7 +257,14 @@
           <!-- 进行中的报名/退出操作 -->
           <template v-else>
             <button
-              v-if="canJoin"
+              v-if="canRequestRejoin"
+              class="btn-primary"
+              @click="handleRequestRejoin"
+            >
+              申请再次加入
+            </button>
+            <button
+              v-else-if="canJoin"
               class="btn-primary"
               :disabled="invite.status !== 'RECRUITING'"
               @click="handleJoin"
@@ -274,13 +334,19 @@ import {
   leaveInvite,
   cancelInvite,
   createRating,
+  requestRejoin,
+  getRejoinRequests,
+  approveRejoin,
+  rejectRejoin,
   type Invite,
   type InviteRatingCreateRequest,
+  type InviteRejoinRequestItem,
 } from '@/api/inviteApi'
-import { getChatHistory, getGroupChatHistory } from '@/api/chatApi'
+import { getChatHistory, getGroupChatHistory, uploadChatImage } from '@/api/chatApi'
 import type { ChatMessage } from '@/api/chatApi'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
+import EmojiPicker from '@/components/EmojiPicker.vue'
 import {
   InviteType,
   InviteStatus,
@@ -306,12 +372,16 @@ const showRatingDialog = ref(false)
 // 内嵌聊天
 const chatListRef = ref<HTMLElement>()
 const chatInputText = ref('')
+const chatInputRef = ref<{ $el: HTMLElement } | null>(null)
+const inviteImageInputRef = ref<HTMLInputElement | null>(null)
 const loadedChatMessages = ref<ChatMessage[]>([])
 /** 本页已发送的消息（仅当前会话），不依赖 store 响应式，确保发完必显 */
 const invitePageSentMessages = ref<ChatMessage[]>([])
 /** 置顶消息 id 列表（按邀约维度存入 localStorage） */
 const pinnedMessageIds = ref<number[]>([])
 const lastProcessedWsIndex = ref(0)
+/** 发起人可见：待处理的再次加入申请列表 */
+const rejoinRequests = ref<InviteRejoinRequestItem[]>([])
 
 const ratingForm = ref<InviteRatingCreateRequest>({
   inviteId: 0,
@@ -331,15 +401,25 @@ const hasJoined = computed(() => {
   return invite.value?.participants?.some(p => p.userId === userStore.user?.id)
 })
 
-// 是否可以加入
+// 是否已退出（曾参与过且已退出）
+const hasLeft = computed(() => invite.value?.myRole === 'LEFT')
+
+// 是否可以加入（未加入且未退出的用户）
 const canJoin = computed(() => {
   if (!invite.value) return false
   if (isCreator.value) return false
   if (hasJoined.value) return false
+  if (hasLeft.value) return false
   if (invite.value.inviteMode === 'PRIVATE') {
     return invite.value.targetUserId === userStore.user?.id
   }
   return true
+})
+
+// 已退出用户是否可申请再次加入
+const canRequestRejoin = computed(() => {
+  if (!invite.value || !hasLeft.value) return false
+  return invite.value.status === 'RECRUITING' || invite.value.status === 'FULL'
 })
 
 // 是否可以取消
@@ -356,7 +436,7 @@ const showActions = computed(() => {
     // 显示评价按钮
     return true
   }
-  return canJoin.value || hasJoined.value
+  return canJoin.value || hasJoined.value || canRequestRejoin.value
 })
 
 // 是否是参与者（非发起人）
@@ -447,6 +527,17 @@ function formatJoinTime(timeStr: string): string {
   return `${Math.floor(diff / 86400)}天前加入`
 }
 
+// 格式化申请时间
+function formatRequestTime(timeStr: string): string {
+  const date = new Date(timeStr)
+  return date.toLocaleString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+}
+
 // 加入邀约
 async function handleJoin() {
   if (!invite.value) return
@@ -458,12 +549,63 @@ async function handleJoin() {
     })
     await joinInvite(invite.value.id)
     ElMessage.success('加入成功')
-    // 重新加载详情
     await loadInvite()
-    // 更新store中的参与人数
     inviteStore.incrementParticipantCount(invite.value.id)
   } catch {
     // 用户取消或错误
+  }
+}
+
+// 申请再次加入（已退出用户）
+async function handleRequestRejoin() {
+  if (!invite.value) return
+  try {
+    await requestRejoin(invite.value.id)
+    ElMessage.success('已提交申请，等待发起人同意')
+    await loadInvite()
+  } catch {
+    // 错误由拦截器处理
+  }
+}
+
+// 发起人：加载待处理的再次加入申请
+async function loadRejoinRequests() {
+  if (!invite.value?.id || !isCreator.value) return
+  try {
+    const res = await getRejoinRequests(invite.value.id)
+    rejoinRequests.value = res.data.data ?? []
+  } catch {
+    rejoinRequests.value = []
+  }
+}
+
+// 发起人：同意再次加入
+async function handleApproveRejoin(userId: number) {
+  if (!invite.value) return
+  try {
+    await ElMessageBox.confirm('确定同意该用户再次加入邀约吗？', '确认', {
+      confirmButtonText: '同意',
+      cancelButtonText: '取消',
+    })
+    await approveRejoin(invite.value.id, userId)
+    ElMessage.success('已同意，对方已重新加入邀约')
+    await loadInvite()
+    await loadRejoinRequests()
+    inviteStore.incrementParticipantCount(invite.value.id)
+  } catch {
+    // 用户取消或错误
+  }
+}
+
+// 发起人：拒绝再次加入
+async function handleRejectRejoin(userId: number) {
+  if (!invite.value) return
+  try {
+    await rejectRejoin(invite.value.id, userId)
+    ElMessage.success('已拒绝')
+    await loadRejoinRequests()
+  } catch {
+    // 错误由拦截器处理
   }
 }
 
@@ -544,6 +686,9 @@ async function loadInvite() {
     if (invite.value && (isCreator.value || hasJoined.value)) {
       await loadInviteChat()
     }
+    if (invite.value && invite.value.creatorId === userStore.user?.id) {
+      await loadRejoinRequests()
+    }
   } catch (error) {
     invite.value = null
   } finally {
@@ -602,6 +747,76 @@ function formatMsgTime(createdAt: string) {
   const [h, m] = timePart.split(':')
   if (!h || !m) return createdAt
   return `${h}:${m}`
+}
+
+function inviteImageUrl(url: string) {
+  if (!url) return ''
+  if (url.startsWith('http')) return url
+  return url.startsWith('/') ? url : '/' + url
+}
+
+function triggerInviteImageInput() {
+  inviteImageInputRef.value?.click()
+}
+
+function insertInviteEmoji(emoji: string) {
+  const el = chatInputRef.value?.$el?.querySelector('input, textarea') as HTMLInputElement | null
+  if (el) {
+    const start = el.selectionStart ?? chatInputText.value.length
+    const end = el.selectionEnd ?? chatInputText.value.length
+    const before = chatInputText.value.slice(0, start)
+    const after = chatInputText.value.slice(end)
+    chatInputText.value = before + emoji + after
+    nextTick(() => {
+      el.focus()
+      const pos = before.length + emoji.length
+      el.setSelectionRange(pos, pos)
+    })
+  } else {
+    chatInputText.value += emoji
+  }
+}
+
+async function handleInviteImageSelect(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file || !invite.value) return
+  input.value = ''
+  if (!chatStore.connected) {
+    ElMessage.warning('聊天服务连接中，请稍后再试')
+    return
+  }
+  try {
+    const res = await uploadChatImage(file)
+    const imageUrlVal = res.data.data
+    if (!imageUrlVal) throw new Error('上传失败')
+    const now = formatLocalDateTime()
+    const optimistic: ChatMessage = {
+      id: -Date.now(),
+      senderId: myId.value,
+      receiverId: isGroupChat.value ? 0 : chatOtherUserId.value,
+      groupId: isGroupChat.value ? invite.value.chatGroupId ?? undefined : undefined,
+      senderNickname: userStore.user?.nickname ?? '',
+      senderAvatar: userStore.user?.avatarUrl ?? null,
+      content: imageUrlVal,
+      msgType: 3,
+      isRead: false,
+      createdAt: now,
+    }
+    invitePageSentMessages.value.push(optimistic)
+    chatStore.pushOptimisticMessage(
+      optimistic,
+      !isGroupChat.value && chatOtherUserId.value ? { pendingOtherUserId: chatOtherUserId.value } : undefined
+    )
+    if (isGroupChat.value && invite.value.chatGroupId) {
+      chatStore.sendGroupMessage(invite.value.chatGroupId, imageUrlVal, 3)
+    } else if (chatOtherUserId.value) {
+      chatStore.sendMessage(chatOtherUserId.value, imageUrlVal, 3)
+    }
+    nextTick(scrollChatToBottom)
+  } catch {
+    ElMessage.error('图片上传失败')
+  }
 }
 
 function sendInviteChat() {
@@ -677,7 +892,7 @@ watch(
 )
 
 function togglePin(msg: ChatMessage) {
-  if (!invite.value) return
+  if (!invite.value || !isCreator.value) return
   if (typeof msg.id !== 'number' || msg.id <= 0) {
     ElMessage.info('请等待消息发送成功后再置顶')
     return
@@ -906,6 +1121,50 @@ onMounted(loadInvite)
   font-size: 14px;
 }
 
+.rejoin-requests-section {
+  padding-top: 12px;
+  border-top: 1px solid $border-light;
+}
+
+.rejoin-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.rejoin-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba($primary, 0.04);
+  border-radius: $radius-md;
+}
+
+.rejoin-info {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.rejoin-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.rejoin-time {
+  font-size: 12px;
+  color: $text-muted;
+}
+
+.rejoin-actions {
+  display: flex;
+  gap: 8px;
+  .btn-text.primary { color: $primary; font-weight: 600; }
+}
+
 .invite-chat-section {
   padding-top: 4px;
   border-top: 1px solid $border-light;
@@ -1071,9 +1330,42 @@ onMounted(loadInvite)
   color: $text-muted;
 }
 
+.hidden-file-input { display: none; }
+
+.invite-chat-image {
+  max-width: 180px;
+  max-height: 180px;
+  border-radius: $radius-md;
+  cursor: pointer;
+  display: block;
+  margin-top: 4px;
+}
+
 .invite-chat-input-wrap {
   padding-top: 6px;
   border-top: 1px solid $border-light;
+
+  .invite-input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .icon-btn {
+    width: 36px;
+    height: 36px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: $radius-full;
+    background: transparent;
+    color: $text-secondary;
+    transition: background $transition-fast, color $transition-fast;
+    flex-shrink: 0;
+    &:hover { background: $bg-tertiary; color: $primary; }
+  }
+
+  .invite-input-row :deep(.el-input) { flex: 1; min-width: 0; }
 
   :deep(.el-input__wrapper) {
     border-radius: 999px;

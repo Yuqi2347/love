@@ -9,6 +9,7 @@ export interface AdminUserItem {
   status: number | null
   isAdmin: boolean
   creditScore: number | null
+  activityScore: number | null
   userLevel: number | null
   inviteCount: number | null
   participateCount: number | null
@@ -26,6 +27,17 @@ export interface AdminInviteItem {
   inviteTime: string
   participantCount: number
   maxParticipants: number | null
+  createdAt: string
+}
+
+export interface AdminFeedItem {
+  id: number
+  userId: number
+  nickname: string
+  content: string
+  postType: string
+  likeCount: number
+  commentCount: number
   createdAt: string
 }
 
@@ -47,6 +59,26 @@ export function getAdminUsers(params: { page?: number; size?: number; keyword?: 
 
 export function getAdminInvites(params: { page?: number; size?: number; status?: string }) {
   return request.get<ApiResult<PageResult<AdminInviteItem>>>('/admin/invites', { params })
+}
+
+export function deleteAdminInvite(id: number) {
+  return request.delete<ApiResult<void>>(`/admin/invite/${id}`)
+}
+
+export function getAdminFeeds(params: { page?: number; size?: number; userId?: number }) {
+  return request.get<ApiResult<PageResult<AdminFeedItem>>>('/admin/feed/list', { params })
+}
+
+export function deleteAdminFeed(id: number) {
+  return request.delete<ApiResult<void>>(`/admin/feed/${id}`)
+}
+
+export function updateUserCredit(id: number, creditScore: number) {
+  return request.put<ApiResult<void>>(`/admin/user/${id}/credit`, { creditScore })
+}
+
+export function updateUserStats(id: number, data: { creditScore?: number; activityScore?: number; userLevel?: number }) {
+  return request.put<ApiResult<void>>(`/admin/user/${id}/stats`, data)
 }
 
 export function getDashboardStats() {

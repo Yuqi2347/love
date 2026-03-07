@@ -15,8 +15,40 @@
         <el-table-column prop="email" label="邮箱" min-width="160" />
         <el-table-column prop="nickname" label="昵称" width="120" />
         <el-table-column prop="school" label="学校" width="120" />
-        <el-table-column prop="creditScore" label="信用分" width="90" />
-        <el-table-column prop="userLevel" label="等级" width="70" />
+        <el-table-column label="信用分" width="110">
+          <template #default="{ row }">
+            <el-input-number
+              v-model="row.creditScore"
+              :min="0"
+              :max="1000"
+              size="small"
+              controls-position="right"
+              style="width: 90px"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="活跃度" width="100">
+          <template #default="{ row }">
+            <el-input-number
+              v-model="row.activityScore"
+              :min="0"
+              size="small"
+              controls-position="right"
+              style="width: 80px"
+            />
+          </template>
+        </el-table-column>
+        <el-table-column label="等级" width="100">
+          <template #default="{ row }">
+            <el-input-number
+              v-model="row.userLevel"
+              :min="0"
+              size="small"
+              controls-position="right"
+              style="width: 80px"
+            />
+          </template>
+        </el-table-column>
         <el-table-column prop="inviteCount" label="发起" width="70" />
         <el-table-column prop="participateCount" label="参与" width="70" />
         <el-table-column label="管理员" width="80">
@@ -27,6 +59,11 @@
         </el-table-column>
         <el-table-column prop="createdAt" label="注册时间" width="170">
           <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
+        </el-table-column>
+        <el-table-column label="操作" width="80" fixed="right">
+          <template #default="{ row }">
+            <el-button type="primary" link size="small" @click="saveStats(row)">保存</el-button>
+          </template>
         </el-table-column>
       </el-table>
       <el-pagination
@@ -45,7 +82,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { getAdminUsers, type AdminUserItem } from '@/api/adminApi'
+import { ElMessage } from 'element-plus'
+import { getAdminUsers, updateUserStats, type AdminUserItem } from '@/api/adminApi'
 
 const loading = ref(false)
 const keyword = ref('')
@@ -69,6 +107,19 @@ async function load() {
 function formatTime(s: string) {
   if (!s) return '-'
   return new Date(s).toLocaleString('zh-CN')
+}
+
+async function saveStats(row: AdminUserItem) {
+  try {
+    const data: { creditScore?: number; activityScore?: number; userLevel?: number } = {}
+    if (row.creditScore != null) data.creditScore = row.creditScore
+    if (row.activityScore != null) data.activityScore = row.activityScore
+    if (row.userLevel != null) data.userLevel = row.userLevel
+    await updateUserStats(row.id, data)
+    ElMessage.success('已保存')
+  } catch {
+    ElMessage.error('保存失败')
+  }
 }
 
 onMounted(load)

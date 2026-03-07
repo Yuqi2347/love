@@ -1,5 +1,6 @@
 package com.campus.love.feed.controller;
 
+import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.result.Result;
 import com.campus.love.feed.dto.FeedCommentRequest;
 import com.campus.love.feed.dto.FeedPostRequest;
@@ -98,6 +99,12 @@ public class FeedController {
         return Result.success();
     }
 
+    @Operation(summary = "获取帖子详情", description = "单条帖子及完整评论列表（爬楼式）")
+    @GetMapping("/{postId}")
+    public Result<FeedPostResponse> getPostDetail(@PathVariable Long postId) {
+        return Result.success(feedService.getPostDetail(postId));
+    }
+
     @Operation(summary = "获取发现模块帖子列表", description = "按时间排序，展示管理员和高级用户发布的帖子")
     @GetMapping("/discovery")
     public Result<List<FeedPostResponse>> getDiscoveryPosts(
@@ -110,5 +117,18 @@ public class FeedController {
     @GetMapping("/level-info")
     public Result<ActivityService.UserLevelInfo> getLevelInfo() {
         return Result.success(activityService.getUserLevelInfo(null));
+    }
+
+    @Operation(summary = "我发布的帖子收到的新点赞/评论数量（用于导航红点）")
+    @GetMapping("/activity/new-count")
+    public Result<Integer> getNewFeedActivityCount() {
+        return Result.success(feedService.getNewFeedActivityCount(CurrentUser.getId()));
+    }
+
+    @Operation(summary = "标记朋友圈活动已查看，消除红点")
+    @PutMapping("/activity/mark-viewed")
+    public Result<Void> markFeedActivityViewed() {
+        feedService.markFeedActivityViewed(CurrentUser.getId());
+        return Result.success();
     }
 }

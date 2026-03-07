@@ -64,16 +64,19 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useUserStore } from '@/store/userStore'
+import { useBadgeStore } from '@/store/badgeStore'
 import { getTimeline, likePost, unlikePost, addComment, deletePost, type FeedPost } from '@/api/feedApi'
 import { ElMessage, ElMessageBox } from 'element-plus'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect fill="%23f0f2f5" width="44" height="44" rx="22"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="20">👤</text></svg>'
 const userStore = useUserStore()
+const badgeStore = useBadgeStore()
 const posts = ref<FeedPost[]>([])
 const commentingPostId = ref<number | null>(null)
 const commentText = ref('')
 
 onMounted(async () => {
+  badgeStore.markFeedActivityViewed()
   try {
     const res = await getTimeline(0, 20)
     posts.value = res.data.data || []

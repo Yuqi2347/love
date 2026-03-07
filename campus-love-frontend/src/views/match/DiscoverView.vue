@@ -61,8 +61,8 @@
         </div>
 
         <!-- 社交动态：白色卡片 -->
-        <div v-else class="feed-card card">
-          <div class="feed-header">
+        <div v-else class="feed-card card" @click="goPostDetail(item.post.id)">
+          <div class="feed-header" @click.stop>
             <img
               :src="item.post.avatarUrl || defaultAvatar"
               class="feed-avatar"
@@ -74,7 +74,7 @@
             </div>
           </div>
           <div class="feed-content">{{ item.post.content }}</div>
-          <div v-if="item.post.images" class="feed-images">
+          <div v-if="item.post.images" class="feed-images" @click.stop>
             <img
               v-for="(img, idx) in item.post.images.split(',').slice(0, 3)"
               :key="idx"
@@ -82,7 +82,7 @@
               class="feed-image"
             />
           </div>
-          <div class="feed-actions">
+          <div class="feed-actions" @click.stop>
             <button
               :class="['action-btn', { active: item.post.liked }]"
               @click="handleLike(item.post.id, item.post.liked)"
@@ -104,7 +104,7 @@
           </div>
 
           <!-- 评论叠楼列表 -->
-          <div v-if="item.post.comments && item.post.comments.length" class="comment-list">
+          <div v-if="item.post.comments && item.post.comments.length" class="comment-list" @click.stop>
             <div
               v-for="c in item.post.comments"
               :key="c.id"
@@ -125,7 +125,7 @@
             </div>
           </div>
 
-          <div v-if="commentingPostId === item.post.id" class="comment-input">
+          <div v-if="commentingPostId === item.post.id" class="comment-input" @click.stop>
             <el-input
               v-model="commentText"
               placeholder="写评论..."
@@ -177,6 +177,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import {
   getDiscoveryPosts,
   likePost,
@@ -204,6 +205,7 @@ import {
   formatInviteTime,
 } from '@/constants/inviteConst'
 
+const router = useRouter()
 const userStore = useUserStore()
 const inviteStore = useInviteStore()
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
@@ -221,6 +223,10 @@ const canPost = computed(() => {
   const level = levelInfo.value?.level || 0
   return isAdmin || level >= 3
 })
+
+function goPostDetail(postId: number) {
+  router.push(`/feed/${postId}`)
+}
 
 // 判断是否可以删除帖子（管理员或帖子作者）
 function canDeletePost(post: FeedPost): boolean {
@@ -290,10 +296,8 @@ async function loadPosts() {
 
 async function loadInvites() {
   try {
-    // 若全局 store 已有邀约数据，则直接复用，避免重复请求
-    if (!inviteStore.invites.length) {
-      await inviteStore.fetchInvites()
-    }
+    // 发现页每次进入都拉取邀约列表，保证卡片可见；用 month 扩大时间范围
+    await inviteStore.fetchInvites(undefined, undefined, 'month')
   } catch {
     // ignore
   }
@@ -579,6 +583,7 @@ async function handleDeletePost(postId: number) {
 
 .feed-card {
   padding: 16px;
+  cursor: pointer;
 }
 
 .feed-header {

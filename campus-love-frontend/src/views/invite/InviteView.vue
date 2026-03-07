@@ -18,44 +18,6 @@
       </button>
     </div>
 
-    <div v-if="activeTab === 'list' && recommendList.length" class="recommend-section">
-      <div class="recommend-title-row">
-        <h2 class="recommend-title">你可能会感兴趣的邀约</h2>
-      </div>
-      <div class="recommend-list">
-        <div
-          v-for="item in recommendList"
-          :key="item.id"
-          class="recommend-card"
-          @click="$router.push(`/invite/${item.id}`)"
-        >
-          <div class="recommend-header">
-            <span class="invite-type-badge" :style="{ background: getTypeColor(item.inviteType) }">
-              {{ INVITE_TYPE_LABELS[item.inviteType as InviteType] }}
-            </span>
-            <span v-if="item.isUrgent" class="urgent-tag">急需</span>
-          </div>
-          <div class="recommend-title-text">
-            {{ item.title }}
-          </div>
-          <div class="recommend-meta">
-            <span>
-              <el-icon><Clock /></el-icon>
-              {{ formatInviteTime(item.inviteTime) }}
-            </span>
-            <span v-if="item.location">
-              <el-icon><Location /></el-icon>
-              {{ item.location }}
-            </span>
-            <span>
-              <el-icon><UserFilled /></el-icon>
-              {{ item.participantCount }}/{{ item.maxParticipants || '不限' }}人
-            </span>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <div v-if="activeTab === 'list'" class="filters-row">
       <el-select
         v-model="filterType"
@@ -84,13 +46,23 @@
           :value="opt.value"
         />
       </el-select>
+
+      <el-select
+        v-model="filterTimeRange"
+        placeholder="邀约时间"
+        @change="handleFilterChange"
+      >
+        <el-option label="近一周内" value="week" />
+        <el-option label="近一月内" value="month" />
+        <el-option label="近一年内" value="year" />
+      </el-select>
     </div>
 
     <div v-if="activeTab === 'list'" class="invite-list">
-      <div v-if="inviteStore.loading && !inviteStore.invites.length" class="loading-hint">
+      <div v-if="inviteStore.loading && !inviteStore.myListInvites.length" class="loading-hint">
         加载中...
       </div>
-      <div v-else-if="inviteStore.invites.length" class="invite-items">
+      <div v-else-if="inviteStore.myListInvites.length" class="invite-items">
         <div
           v-for="invite in filteredInvites"
           :key="invite.id"
@@ -101,8 +73,8 @@
             <div class="invite-type-badge" :style="{ background: getTypeColor(invite.inviteType) }">
               {{ INVITE_TYPE_LABELS[invite.inviteType as InviteType] }}
             </div>
-            <div class="invite-status-badge" :style="{ color: INVITE_STATUS_COLORS[invite.status as InviteStatus] }">
-              {{ INVITE_STATUS_LABELS[invite.status as InviteStatus] }}
+            <div class="invite-status-badge" :style="{ color: getDisplayStatusColor(invite) }">
+              {{ getDisplayStatusLabel(invite) }}
             </div>
           </div>
 
@@ -138,7 +110,7 @@
       </div>
       <div v-else class="empty-hint">
         <div class="empty-icon">📅</div>
-        <p>暂无邀约，快发起一个吧！</p>
+        <p>暂无邀约，快发起一个或去发现里加入吧</p>
       </div>
     </div>
 
@@ -283,11 +255,10 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useInviteStore } from '@/store/inviteStore'
-import { useUserStore } from '@/store/userStore'
+import { useBadgeStore } from '@/store/badgeStore'
 import {
   cancelInviteWait,
   getMyInviteWaits,
-  getRecommendInvites,
   getMyCreatedInvites,
   getMyJoinedInvites,
   type InviteWait,
@@ -307,13 +278,13 @@ import {
 } from '@/constants/inviteConst'
 
 const inviteStore = useInviteStore()
-const userStore = useUserStore()
+const badgeStore = useBadgeStore()
 
 const activeTab = ref<string>('list')
 const filterType = ref<string>()
 const filterStatus = ref<string>()
+const filterTimeRange = ref<string>('week')
 const waitList = ref<InviteWait[]>([])
-const recommendList = ref<Invite[]>([])
 const createdHistory = ref<Invite[]>([])
 const joinedHistory = ref<Invite[]>([])
 const historyRange = ref<HistoryRange>('week')
@@ -325,30 +296,42 @@ const tabs = [
   { label: '我的统计', value: 'history' },
 ]
 
-const statusOptions = Object.entries(INVITE_STATUS_LABELS).map(([value, label]) => ({
-  value,
-  label,
-}))
+const statusOptions = [
+  ...Object.entries(INVITE_STATUS_LABELS).map(([value, label]) => ({ value, label })),
+  { value: 'LEFT', label: '已退出' },
+]
 
-// 过滤后的邀约列表
+// 过滤后的邀约列表（我的邀约 = 我发起的 + 我参与的，按邀约时间倒序）
 const filteredInvites = computed(() => {
-  let list = inviteStore.invites
-
-  // 只展示当前用户发起的邀约
-  const currentUserId = userStore.user?.id
-  if (currentUserId) {
-    list = list.filter(i => i.creatorId === currentUserId)
-  }
+  let list = inviteStore.myListInvites
 
   if (filterType.value) {
     list = list.filter(i => i.inviteType === filterType.value)
   }
   if (filterStatus.value) {
-    list = list.filter(i => i.status === filterStatus.value)
+    list = list.filter(i => {
+      if (i.myRole === 'LEFT') return filterStatus.value === 'LEFT'
+      return i.status === filterStatus.value
+    })
   }
 
-  return list
+  return list.slice().sort((a, b) => {
+    const tA = a.inviteTime ? new Date(a.inviteTime).getTime() : 0
+    const tB = b.inviteTime ? new Date(b.inviteTime).getTime() : 0
+    return tB - tA
+  })
 })
+
+// 列表展示用状态文案（已退出优先）
+function getDisplayStatusLabel(invite: Invite) {
+  if (invite.myRole === 'LEFT') return '已退出'
+  return INVITE_STATUS_LABELS[invite.status as InviteStatus] ?? invite.status
+}
+
+function getDisplayStatusColor(invite: Invite) {
+  if (invite.myRole === 'LEFT') return '#8c8c8c'
+  return INVITE_STATUS_COLORS[invite.status as InviteStatus] ?? '#8c8c8c'
+}
 
 // 统计信息
 const stats = computed(() => inviteStore.stats)
@@ -380,16 +363,6 @@ function changeRange(range: HistoryRange) {
   if (historyRange.value === range) return
   historyRange.value = range
   loadHistory()
-}
-
-// 推荐邀约
-async function loadRecommendInvites() {
-  try {
-    const res = await getRecommendInvites(6)
-    recommendList.value = res.data.data || []
-  } catch (error) {
-    console.error('加载推荐邀约失败:', error)
-  }
 }
 
 // 获取邀约类型颜色
@@ -448,9 +421,9 @@ function formatWaitPeriod(periodConfig: string | null): string {
   }
 }
 
-// 筛选变化
+// 筛选变化（我的邀约列表用 my-list 接口，带时间范围）
 function handleFilterChange() {
-  inviteStore.fetchInvites(filterType.value, filterStatus.value)
+  inviteStore.fetchMyInvitesList(filterTimeRange.value)
 }
 
 // 取消等待邀约
@@ -478,12 +451,12 @@ async function loadWaitList() {
   }
 }
 
-// 初始化
+// 初始化（我的邀约用 my-list，进入页即标记活动已查看）
 onMounted(() => {
-  inviteStore.fetchInvites()
+  badgeStore.markInviteActivityViewed()
+  inviteStore.fetchMyInvitesList(filterTimeRange.value)
   inviteStore.fetchStats()
   loadWaitList()
-  loadRecommendInvites()
   loadHistory()
 })
 </script>
@@ -548,72 +521,6 @@ onMounted(() => {
 
 .invite-list, .wait-list, .history-list {
   min-height: 400px;
-}
-
-.recommend-section {
-  margin-bottom: 16px;
-  padding: 16px;
-  border-radius: $radius-lg;
-  background: linear-gradient(135deg, rgba($primary, 0.05), rgba($primary, 0.02));
-  border: 1px solid rgba($primary, 0.15);
-}
-
-.recommend-title-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-.recommend-title {
-  font-size: 16px;
-  font-weight: 700;
-  color: $text-primary;
-}
-
-.recommend-list {
-  display: flex;
-  gap: 12px;
-  overflow-x: auto;
-  padding-bottom: 4px;
-}
-
-.recommend-card {
-  min-width: 220px;
-  max-width: 260px;
-  background: white;
-  border-radius: $radius-lg;
-  border: 1px solid $border-light;
-  padding: 12px;
-  cursor: pointer;
-  transition: all $transition-fast;
-
-  &:hover {
-    border-color: $primary;
-    box-shadow: $shadow-md;
-  }
-}
-
-.recommend-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.recommend-title-text {
-  font-size: 14px;
-  font-weight: 600;
-  color: $text-primary;
-  margin-bottom: 4px;
-}
-
-.recommend-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
-  color: $text-secondary;
 }
 
 .loading-hint {

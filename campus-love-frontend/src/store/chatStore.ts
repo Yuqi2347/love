@@ -31,6 +31,10 @@ export const useChatStore = defineStore('chat', () => {
       const msg: ChatMessage = JSON.parse(event.data)
       removeOptimisticIfReplaced(msg)
       removePendingReplaced(msg)
+      // 避免重复添加：若已存在同 id 消息则不再 push（防止 WebSocket 重复推送或竞态）
+      if (typeof msg.id === 'number' && msg.id > 0) {
+        if (currentMessages.value.some(m => m.id === msg.id)) return
+      }
       currentMessages.value.push(msg)
       updateConversation(msg)
     }

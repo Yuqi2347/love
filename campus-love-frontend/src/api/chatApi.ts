@@ -39,3 +39,12 @@ export function markAsRead(otherUserId: number) {
 export function getGroupChatHistory(groupId: number, page = 1, size = 20) {
   return request.get<ApiResult<ChatMessage[]>>(`/chat/group/${groupId}/history`, { params: { page, size } })
 }
+
+/** 上传聊天图片，返回图片 URL（msgType=3） */
+export function uploadChatImage(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return request.post<ApiResult<string>>('/chat/upload', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}

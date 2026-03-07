@@ -9,6 +9,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
@@ -24,6 +25,12 @@ public class ChatController {
     @GetMapping("/conversations")
     public Result<List<ConversationResponse>> getConversations() {
         return Result.success(chatService.getConversations());
+    }
+
+    @Operation(summary = "私聊未读消息总数（用于导航红点）")
+    @GetMapping("/unread-total")
+    public Result<Integer> getUnreadTotal() {
+        return Result.success(chatService.getTotalUnreadCount());
     }
 
     @Operation(summary = "获取聊天记录")
@@ -46,6 +53,18 @@ public class ChatController {
     @GetMapping("/groups")
     public Result<List<ChatGroupItemResponse>> getMyGroups() {
         return Result.success(chatService.getMyGroupList());
+    }
+
+    @Operation(summary = "上传聊天图片")
+    @PostMapping("/upload")
+    public Result<String> uploadChatImage(@RequestParam("file") MultipartFile file) {
+        try {
+            return Result.success(chatService.uploadChatImage(file));
+        } catch (Exception e) {
+            throw new com.campus.love.common.exception.BusinessException(
+                    com.campus.love.common.result.ResultCode.BAD_REQUEST,
+                    e.getMessage() != null ? e.getMessage() : "图片上传失败");
+        }
     }
 
     @Operation(summary = "群聊历史消息")

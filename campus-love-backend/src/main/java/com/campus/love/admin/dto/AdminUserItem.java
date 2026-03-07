@@ -19,6 +19,7 @@ public class AdminUserItem {
     private Integer status;
     private Boolean isAdmin;
     private Integer creditScore;
+    private Integer activityScore;
     private Integer userLevel;
     private Integer inviteCount;
     private Integer participateCount;

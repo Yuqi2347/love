@@ -1,6 +1,7 @@
 package com.campus.love.invite.controller;
 
 import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.result.Result;
 import com.campus.love.invite.dto.*;
 import com.campus.love.invite.service.InviteService;
@@ -36,9 +37,10 @@ public class InviteController {
     public Result<IPage<InviteResponse>> getInviteList(
             @Parameter(description = "邀约类型") @RequestParam(required = false) String type,
             @Parameter(description = "邀约状态") @RequestParam(required = false) String status,
+            @Parameter(description = "邀约时间范围：week/month/year") @RequestParam(required = false) String timeRange,
             @Parameter(description = "页码，从 1 开始") @RequestParam(defaultValue = "1") Integer page,
             @Parameter(description = "每页数量") @RequestParam(defaultValue = "20") Integer size) {
-        IPage<InviteResponse> invites = inviteService.getInviteList(type, status, page, size);
+        IPage<InviteResponse> invites = inviteService.getInviteList(type, status, timeRange, page, size);
         return Result.success(invites);
     }
 
@@ -60,6 +62,33 @@ public class InviteController {
     @DeleteMapping("/{id}/leave")
     public Result<Void> leaveInvite(@PathVariable Long id) {
         inviteService.leaveInvite(id);
+        return Result.success();
+    }
+
+    @Operation(summary = "申请再次加入邀约（已退出用户）")
+    @PostMapping("/{id}/rejoin-request")
+    public Result<Void> requestRejoin(@PathVariable Long id) {
+        inviteService.requestRejoin(id);
+        return Result.success();
+    }
+
+    @Operation(summary = "发起人：获取待处理的再次加入申请列表")
+    @GetMapping("/{id}/rejoin-requests")
+    public Result<List<InviteRejoinRequestItem>> getRejoinRequests(@PathVariable Long id) {
+        return Result.success(inviteService.getRejoinRequests(id));
+    }
+
+    @Operation(summary = "发起人：同意某人再次加入")
+    @PostMapping("/{id}/rejoin-approve/{userId}")
+    public Result<Void> approveRejoin(@PathVariable Long id, @PathVariable Long userId) {
+        inviteService.approveRejoin(id, userId);
+        return Result.success();
+    }
+
+    @Operation(summary = "发起人：拒绝某人再次加入")
+    @PostMapping("/{id}/rejoin-reject/{userId}")
+    public Result<Void> rejectRejoin(@PathVariable Long id, @PathVariable Long userId) {
+        inviteService.rejectRejoin(id, userId);
         return Result.success();
     }
 
@@ -159,5 +188,26 @@ public class InviteController {
             @RequestParam(name = "range", required = false) String range) {
         List<InviteResponse> list = inviteService.getMyJoinedInvites(range);
         return Result.success(list);
+    }
+
+    @Operation(summary = "我的邀约列表（我发起的 + 我参与的，含已退出，按邀约时间倒序）")
+    @GetMapping("/my-list")
+    public Result<List<InviteResponse>> getMyInvitesList(
+            @Parameter(description = "时间范围：week / month / all，默认 week")
+            @RequestParam(name = "range", required = false) String range) {
+        return Result.success(inviteService.getMyInvitesList(range));
+    }
+
+    @Operation(summary = "邀约新活动数量（我的邀约有人加入/发言、等待匹配成功，用于导航红点）")
+    @GetMapping("/activity/new-count")
+    public Result<Integer> getNewInviteActivityCount() {
+        return Result.success(inviteService.getNewInviteActivityCount(CurrentUser.getId()));
+    }
+
+    @Operation(summary = "标记邀约活动已查看，消除红点")
+    @PutMapping("/activity/mark-viewed")
+    public Result<Void> markInviteActivityViewed() {
+        inviteService.markInviteActivityViewed(CurrentUser.getId());
+        return Result.success();
     }
 }

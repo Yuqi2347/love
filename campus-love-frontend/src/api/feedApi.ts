@@ -69,6 +69,10 @@ export function getDiscoveryPosts(page = 0, size = 10) {
   return request.get<ApiResult<FeedPost[]>>('/feed/discovery', { params: { page, size } })
 }
 
+export function getPostDetail(postId: number) {
+  return request.get<ApiResult<FeedPost>>(`/feed/${postId}`)
+}
+
 export interface UserLevelInfo {
   score: number
   level: number

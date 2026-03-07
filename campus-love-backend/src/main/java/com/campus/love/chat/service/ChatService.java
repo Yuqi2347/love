@@ -24,12 +24,16 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
+import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.util.*;
+import java.util.UUID;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -45,6 +49,40 @@ public class ChatService {
 
     @Value("${app.follow.daily-chat-limit}")
     private int dailyChatLimit;
+
+    @Value("${app.upload.path}")
+    private String uploadPath;
+
+    /**
+     * 上传聊天图片，返回可访问的 URL（供 msgType=3 图片消息使用，msgType=2 保留给邀约链接）
+     */
+    public String uploadChatImage(MultipartFile file) throws IOException {
+        if (file == null || file.isEmpty()) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "请选择图片");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "仅支持图片格式");
+        }
+        String ext = getChatImageExtension(file.getOriginalFilename());
+        String filename = "chat_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8) + ext;
+
+        File dir = new File(uploadPath);
+        if (!dir.exists()) dir.mkdirs();
+
+        File dest = new File(dir, filename);
+        file.transferTo(dest);
+        return "/uploads/" + filename;
+    }
+
+    private String getChatImageExtension(String filename) {
+        if (filename == null) return ".jpg";
+        String lower = filename.toLowerCase();
+        if (lower.endsWith(".png")) return ".png";
+        if (lower.endsWith(".gif")) return ".gif";
+        if (lower.endsWith(".webp")) return ".webp";
+        return ".jpg";
+    }
 
     public ChatMessageResponse sendMessage(Long senderId, Long receiverId, String content, Integer msgType) {
         if (receiverId == null || content == null) {
@@ -170,6 +208,17 @@ public class ChatService {
                     .unreadCount(unreadCounts.getOrDefault(otherUserId, 0))
                     .build();
         }).collect(Collectors.toList());
+    }
+
+    /** 当前用户私聊未读消息总数（用于导航红点） */
+    public int getTotalUnreadCount() {
+        Long currentUserId = CurrentUser.getId();
+        Long count = messageMapper.selectCount(
+                new LambdaQueryWrapper<Message>()
+                        .isNull(Message::getGroupId)
+                        .eq(Message::getReceiverId, currentUserId)
+                        .eq(Message::getIsRead, false));
+        return count != null ? count.intValue() : 0;
     }
 
     public void markAsRead(Long otherUserId) {

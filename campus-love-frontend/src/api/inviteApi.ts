@@ -42,6 +42,10 @@ export interface Invite {
   participants?: ParticipantInfo[]
   /** 公开邀约的群聊 ID，用于详情页内嵌聊天 */
   chatGroupId?: number | null
+  /** 当前用户角色：CREATOR 发起 / PARTICIPANT 参与中 / LEFT 已退出 */
+  myRole?: string
+  /** 当前用户退出时间（myRole=LEFT 时有值） */
+  myLeftAt?: string
   createdAt: string
 }
 
@@ -105,6 +109,14 @@ export interface InviteStats {
   receivedOrgRating: number | null
 }
 
+/** 待处理的再次加入申请（发起人视角） */
+export interface InviteRejoinRequestItem {
+  userId: number
+  nickname: string | null
+  avatarUrl: string | null
+  requestedAt: string
+}
+
 export type HistoryRange = 'week' | 'month' | 'all'
 
 // ==================== API 方法 ====================
@@ -119,8 +131,8 @@ export function createInvite(data: InviteCreateRequest) {
 /**
  * 获取邀约列表
  */
-export function getInviteList(type?: string, status?: string, page = 0, size = 20) {
-  return service.get<ApiResult<{ records: Invite[]; total: number; current: number; size: number }>>('/invite/list', { params: { type, status, page, size } })
+export function getInviteList(type?: string, status?: string, timeRange?: string, page = 0, size = 20) {
+  return service.get<ApiResult<{ records: Invite[]; total: number; current: number; size: number }>>('/invite/list', { params: { type, status, timeRange, page, size } })
 }
 
 /**
@@ -142,6 +154,34 @@ export function joinInvite(id: number) {
  */
 export function leaveInvite(id: number) {
   return service.delete<ApiResult<void>>(`/invite/${id}/leave`)
+}
+
+/**
+ * 申请再次加入邀约（已退出用户）
+ */
+export function requestRejoin(id: number) {
+  return service.post<ApiResult<void>>(`/invite/${id}/rejoin-request`)
+}
+
+/**
+ * 发起人：获取待处理的再次加入申请列表
+ */
+export function getRejoinRequests(id: number) {
+  return service.get<ApiResult<InviteRejoinRequestItem[]>>(`/invite/${id}/rejoin-requests`)
+}
+
+/**
+ * 发起人：同意某人再次加入
+ */
+export function approveRejoin(inviteId: number, userId: number) {
+  return service.post<ApiResult<void>>(`/invite/${inviteId}/rejoin-approve/${userId}`)
+}
+
+/**
+ * 发起人：拒绝某人再次加入
+ */
+export function rejectRejoin(inviteId: number, userId: number) {
+  return service.post<ApiResult<void>>(`/invite/${inviteId}/rejoin-reject/${userId}`)
 }
 
 /**
@@ -212,6 +252,14 @@ export function getMyCreatedInvites(range: HistoryRange = 'week') {
  */
 export function getMyJoinedInvites(range: HistoryRange = 'week') {
   return service.get<ApiResult<Invite[]>>('/invite/history/joined', { params: { range } })
+}
+
+/**
+ * 我的邀约列表（我发起的 + 我参与的，含已退出，按邀约时间倒序）
+ */
+export function getMyInvitesList(range: string = 'week') {
+  const rangeParam = range === 'year' ? 'all' : range
+  return service.get<ApiResult<Invite[]>>('/invite/my-list', { params: { range: rangeParam } })
 }
 
 /**

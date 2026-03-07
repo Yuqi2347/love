@@ -39,7 +39,14 @@ service.interceptors.response.use(
     return response
   },
   (error) => {
+    const status = error.response?.status
     const msg = error.response?.data?.message || error.message || '网络错误'
+    if (status === 401 || status === 403) {
+      localStorage.removeItem('admin_token')
+      ElMessage.error(status === 401 ? '登录已过期，请重新使用管理员账号登录' : '无权限访问，请使用管理员账号登录')
+      window.location.href = '/login'
+      return Promise.reject(error)
+    }
     ElMessage.error(msg)
     return Promise.reject(error)
   },

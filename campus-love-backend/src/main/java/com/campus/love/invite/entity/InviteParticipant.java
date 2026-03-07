@@ -23,4 +23,7 @@ public class InviteParticipant {
     private BigDecimal socialRating;
 
     private LocalDateTime joinAt;
+
+    /** 退出时间，非空表示已退出该邀约 */
+    private LocalDateTime leftAt;
 }

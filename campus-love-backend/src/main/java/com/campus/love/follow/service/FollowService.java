@@ -14,6 +14,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -126,6 +127,27 @@ public class FollowService {
                 .stream()
                 .map(Follow::getFollowingId)
                 .collect(Collectors.toList());
+    }
+
+    /** 新粉丝数量（关注我且 created_at > 上次查看粉丝时间），用于导航/个人页红点；从未查看过则返回 0 */
+    public int getNewFollowerCount(Long userId) {
+        User user = userMapper.selectById(userId);
+        LocalDateTime since = user != null ? user.getLastFollowerViewedAt() : null;
+        if (since == null) return 0;
+        Long count = followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>()
+                        .eq(Follow::getFollowingId, userId)
+                        .gt(Follow::getCreatedAt, since));
+        return count != null ? count.intValue() : 0;
+    }
+
+    /** 标记粉丝列表已查看，消除新粉丝红点 */
+    @Transactional
+    public void markFollowersViewed(Long userId) {
+        User user = userMapper.selectById(userId);
+        if (user == null) return;
+        user.setLastFollowerViewedAt(LocalDateTime.now());
+        userMapper.updateById(user);
     }
 
     private FollowResponse buildFollowResponse(Long userId, Boolean isMutual) {

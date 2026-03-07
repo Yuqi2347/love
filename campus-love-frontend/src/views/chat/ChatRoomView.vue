@@ -42,6 +42,17 @@
             </el-button>
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
+          <!-- 图片消息 -->
+          <template v-else-if="msg.msgType === 3">
+            <el-image
+              :src="imageUrl(msg.content)"
+              :preview-src-list="[imageUrl(msg.content)]"
+              fit="cover"
+              class="chat-image"
+              preview-teleported
+            />
+            <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
+          </template>
           <!-- 普通文本消息 -->
           <template v-else>
             <p class="msg-content">{{ msg.content }}</p>
@@ -52,13 +63,26 @@
     </div>
 
     <div class="chat-input-area">
-      <el-input v-model="inputText" placeholder="输入消息..." size="large" @keyup.enter="handleSend">
-        <template #append>
-          <button class="send-btn" :disabled="!inputText.trim()" @click="handleSend">
-            <el-icon :size="20"><Promotion /></el-icon>
-          </button>
-        </template>
-      </el-input>
+      <input
+        ref="imageInputRef"
+        type="file"
+        accept="image/png,image/jpeg,image/gif,image/webp"
+        class="hidden-file-input"
+        @change="handleImageSelect"
+      />
+      <div class="input-row">
+        <button type="button" class="icon-btn" title="发送图片" @click="triggerImageInput">
+          <el-icon :size="20"><Picture /></el-icon>
+        </button>
+        <EmojiPicker @insert="insertEmoji" />
+        <el-input ref="inputRef" v-model="inputText" placeholder="输入消息..." size="large" @keyup.enter="handleSend">
+          <template #append>
+            <button class="send-btn" :disabled="!inputText.trim()" @click="handleSend">
+              <el-icon :size="20"><Promotion /></el-icon>
+            </button>
+          </template>
+        </el-input>
+      </div>
     </div>
   </div>
 </template>
@@ -68,11 +92,13 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChatStore } from '@/store/chatStore'
 import { useUserStore } from '@/store/userStore'
-import { getChatHistory, markAsRead } from '@/api/chatApi'
+import { useBadgeStore } from '@/store/badgeStore'
+import { getChatHistory, markAsRead, uploadChatImage } from '@/api/chatApi'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { formatLocalDateTime } from '@/utils/dateTime'
+import EmojiPicker from '@/components/EmojiPicker.vue'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect fill="%23f0f2f5" width="36" height="36" rx="18"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="16">👤</text></svg>'
 
@@ -80,6 +106,7 @@ const route = useRoute()
 const router = useRouter()
 const chatStore = useChatStore()
 const userStore = useUserStore()
+const badgeStore = useBadgeStore()
 const { currentMessages } = storeToRefs(chatStore)
 
 const otherUserId = computed(() => Number(route.params.userId))
@@ -87,12 +114,22 @@ const myId = computed(() => userStore.user?.id)
 const otherUser = ref<UserProfile | null>(null)
 const inputText = ref('')
 const messageListRef = ref<HTMLElement>()
+const imageInputRef = ref<HTMLInputElement | null>(null)
+const inputRef = ref<{ $el: HTMLElement } | null>(null)
 
 const messages = computed(() => {
-  return currentMessages.value.filter(m =>
+  const filtered = currentMessages.value.filter(m =>
     (m.senderId === myId.value && m.receiverId === otherUserId.value) ||
     (m.senderId === otherUserId.value && m.receiverId === myId.value)
   )
+  // 按 id 去重，保留首次出现（兜底防止乐观消息与回显未正确替换时的重复）
+  const seen = new Set<number | string>()
+  return filtered.filter(m => {
+    const key = typeof m.id === 'number' ? m.id : String(m.id)
+    if (seen.has(key)) return false
+    seen.add(key)
+    return true
+  })
 })
 
 onMounted(async () => {
@@ -114,7 +151,8 @@ onMounted(async () => {
       m => belong(m),
       chatStore.getPendingForUser(otherId)
     )
-    markAsRead(otherUserId.value)
+    await markAsRead(otherUserId.value)
+    badgeStore.fetchBadges()
     scrollToBottom()
   } catch { /* handled */ }
 })
@@ -157,6 +195,65 @@ function goToInvite(content: string) {
     router.push(`/invite/${inviteId}`)
   } else {
     ElMessage.warning('未找到邀约信息')
+  }
+}
+
+function imageUrl(url: string) {
+  if (!url) return ''
+  if (url.startsWith('http')) return url
+  return url.startsWith('/') ? url : '/' + url
+}
+
+function triggerImageInput() {
+  imageInputRef.value?.click()
+}
+
+function insertEmoji(emoji: string) {
+  const el = inputRef.value?.$el?.querySelector('input, textarea') as HTMLInputElement | null
+  if (el) {
+    const start = el.selectionStart ?? inputText.value.length
+    const end = el.selectionEnd ?? inputText.value.length
+    const before = inputText.value.slice(0, start)
+    const after = inputText.value.slice(end)
+    inputText.value = before + emoji + after
+    nextTick(() => {
+      el.focus()
+      const pos = before.length + emoji.length
+      el.setSelectionRange(pos, pos)
+    })
+  } else {
+    inputText.value += emoji
+  }
+}
+
+async function handleImageSelect(e: Event) {
+  const input = e.target as HTMLInputElement
+  const file = input.files?.[0]
+  if (!file) return
+  input.value = ''
+  try {
+    const res = await uploadChatImage(file)
+    const imageUrlVal = res.data.data
+    if (!imageUrlVal) throw new Error('上传失败')
+    const now = formatLocalDateTime()
+    chatStore.pushOptimisticMessage(
+      {
+        id: -Date.now(),
+        senderId: myId.value!,
+        receiverId: otherUserId.value,
+        senderNickname: userStore.user?.nickname ?? '',
+        senderAvatar: userStore.user?.avatarUrl ?? null,
+        content: imageUrlVal,
+        msgType: 3,
+        isRead: false,
+        createdAt: now,
+      },
+      { pendingOtherUserId: otherUserId.value }
+    )
+    chatStore.sendMessage(otherUserId.value, imageUrlVal, 3)
+    nextTick(scrollToBottom)
+  } catch {
+    ElMessage.error('图片上传失败')
   }
 }
 </script>
@@ -236,11 +333,44 @@ function goToInvite(content: string) {
   font-size: 12px;
 }
 
+.hidden-file-input { display: none; }
+
+.chat-image {
+  max-width: 200px;
+  max-height: 200px;
+  border-radius: $radius-md;
+  cursor: pointer;
+  display: block;
+}
+
 .chat-input-area {
   padding: 12px 20px;
   border-top: 1px solid $border-light;
   background: $bg-primary;
   flex-shrink: 0;
+
+  .input-row {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex: 1;
+    min-width: 0;
+  }
+  .input-row :deep(.el-input) { flex: 1; min-width: 0; }
+
+  .icon-btn {
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: $radius-full;
+    background: transparent;
+    color: $text-secondary;
+    transition: background $transition-fast, color $transition-fast;
+    flex-shrink: 0;
+    &:hover { background: $bg-tertiary; color: $primary; }
+  }
 
   :deep(.el-input__wrapper) { border-radius: $radius-full; }
   :deep(.el-input-group__append) { padding: 0; background: none; border: none; box-shadow: none; }

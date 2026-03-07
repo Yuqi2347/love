@@ -2,6 +2,7 @@ package com.campus.love.invite.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.love.auth.security.CurrentUser;
@@ -72,6 +73,17 @@ public class InviteCrudService {
         return invite;
     }
 
+    /** 查询某用户在某邀约的参与记录（含已退出的），不存在则返回 null */
+    public InviteParticipant findParticipant(Long inviteId, Long userId) {
+        if (inviteId == null || userId == null) {
+            return null;
+        }
+        return participantMapper.selectOne(
+                new LambdaQueryWrapper<InviteParticipant>()
+                        .eq(InviteParticipant::getInviteId, inviteId)
+                        .eq(InviteParticipant::getUserId, userId));
+    }
+
     /**
      * 仅构建并插入邀约记录，不包含信用校验、匹配、活动、私信。由门面在 createInvite 中编排后调用。
      */
@@ -116,7 +128,7 @@ public class InviteCrudService {
     }
 
     @Transactional(readOnly = true)
-    public IPage<InviteResponse> getInviteList(String type, String status, Integer page, Integer size) {
+    public IPage<InviteResponse> getInviteList(String type, String status, String timeRange, Integer page, Integer size) {
         int current = (page == null || page < 1) ? 1 : page;
         int pageSize = (size == null || size < 1) ? 20 : Math.min(size, 100);
 
@@ -128,7 +140,16 @@ public class InviteCrudService {
         if (status != null && !status.isEmpty()) {
             wrapper.eq(Invite::getStatus, status);
         }
-        wrapper.orderByDesc(Invite::getCreatedAt);
+        LocalDateTime now = LocalDateTime.now();
+        String range = (timeRange != null && !timeRange.isEmpty()) ? timeRange.toUpperCase() : "WEEK";
+        if ("WEEK".equals(range)) {
+            wrapper.ge(Invite::getInviteTime, now.minusDays(7));
+        } else if ("MONTH".equals(range)) {
+            wrapper.ge(Invite::getInviteTime, now.minusDays(30));
+        } else if ("YEAR".equals(range)) {
+            wrapper.ge(Invite::getInviteTime, now.minusDays(365));
+        }
+        wrapper.orderByDesc(Invite::getInviteTime).orderByDesc(Invite::getCreatedAt);
 
         Page<Invite> pageInfo = new Page<>(current, pageSize);
         IPage<Invite> invitePage = inviteMapper.selectPage(pageInfo, wrapper);
@@ -185,7 +206,7 @@ public class InviteCrudService {
         List<Invite> list = inviteMapper.selectList(wrapper);
         Map<Long, User> creatorMap = batchLoadCreators(list);
         return list.stream()
-                .map(inv -> buildInviteResponse(inv, creatorMap))
+                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "CREATOR", null))
                 .collect(Collectors.toList());
     }
 
@@ -203,10 +224,9 @@ public class InviteCrudService {
         if (myParticipants.isEmpty()) {
             return List.of();
         }
-        List<Long> inviteIds = myParticipants.stream()
-                .map(InviteParticipant::getInviteId)
-                .distinct()
-                .collect(Collectors.toList());
+        Map<Long, InviteParticipant> inviteIdToMyParticipant = myParticipants.stream()
+                .collect(Collectors.toMap(InviteParticipant::getInviteId, p -> p, (a, b) -> a));
+        List<Long> inviteIds = new java.util.ArrayList<>(inviteIdToMyParticipant.keySet());
 
         LambdaQueryWrapper<Invite> wrapper = new LambdaQueryWrapper<>();
         wrapper.in(Invite::getId, inviteIds)
@@ -219,8 +239,33 @@ public class InviteCrudService {
         List<Invite> list = inviteMapper.selectList(wrapper);
         Map<Long, User> creatorMap = batchLoadCreators(list);
         return list.stream()
-                .map(inv -> buildInviteResponse(inv, creatorMap))
+                .map(inv -> {
+                    InviteParticipant p = inviteIdToMyParticipant.get(inv.getId());
+                    String role = p != null && p.getLeftAt() != null ? "LEFT" : "PARTICIPANT";
+                    LocalDateTime leftAt = p != null ? p.getLeftAt() : null;
+                    return buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), role, leftAt);
+                })
                 .collect(Collectors.toList());
+    }
+
+    /** 我的邀约列表：我发起的 + 我参与的（含已退出），按邀约时间倒序 */
+    @Transactional(readOnly = true)
+    public List<InviteResponse> getMyInvitesList(String range) {
+        List<InviteResponse> created = getMyCreatedInvites(range);
+        List<InviteResponse> joined = getMyJoinedInvites(range);
+        java.util.Set<Long> createdIds = created.stream().map(InviteResponse::getId).collect(Collectors.toSet());
+        List<InviteResponse> joinedOnly = joined.stream().filter(r -> !createdIds.contains(r.getId())).collect(Collectors.toList());
+        List<InviteResponse> merged = new java.util.ArrayList<>(created);
+        merged.addAll(joinedOnly);
+        merged.sort((a, b) -> {
+            LocalDateTime ta = a.getInviteTime();
+            LocalDateTime tb = b.getInviteTime();
+            if (ta == null && tb == null) return 0;
+            if (ta == null) return 1;
+            if (tb == null) return -1;
+            return tb.compareTo(ta);
+        });
+        return merged;
     }
 
     public LocalDateTime getHistoryStartTime(String range) {
@@ -266,7 +311,27 @@ public class InviteCrudService {
     @Transactional(readOnly = true)
     public InviteResponse getInviteDetail(Long inviteId) {
         Invite invite = getInviteOrThrow(inviteId);
-        return buildInviteDetailResponse(invite);
+        InviteResponse response = buildInviteDetailResponse(invite);
+        Long currentUserId = CurrentUser.getId();
+        if (currentUserId != null) {
+            if (currentUserId.equals(invite.getCreatorId())) {
+                response.setMyRole("CREATOR");
+                response.setMyLeftAt(null);
+            } else {
+                InviteParticipant myParticipant = participantMapper.selectOne(
+                        new LambdaQueryWrapper<InviteParticipant>()
+                                .eq(InviteParticipant::getInviteId, inviteId)
+                                .eq(InviteParticipant::getUserId, currentUserId));
+                if (myParticipant != null && myParticipant.getLeftAt() != null) {
+                    response.setMyRole("LEFT");
+                    response.setMyLeftAt(myParticipant.getLeftAt());
+                } else if (myParticipant != null) {
+                    response.setMyRole("PARTICIPANT");
+                    response.setMyLeftAt(null);
+                }
+            }
+        }
+        return response;
     }
 
     /**
@@ -315,8 +380,11 @@ public class InviteCrudService {
                 new LambdaQueryWrapper<InviteParticipant>()
                         .eq(InviteParticipant::getInviteId, inviteId)
                         .eq(InviteParticipant::getUserId, currentUserId));
-        if (existing != null) {
+        if (existing != null && existing.getLeftAt() == null) {
             throw new BusinessException(ResultCode.ALREADY_JOINED);
+        }
+        if (existing != null && existing.getLeftAt() != null) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "您已退出该邀约，无法再次加入，如需参与请联系发起人");
         }
 
         if (invite.getMaxParticipants() != null && invite.getParticipantCount() >= invite.getMaxParticipants()) {
@@ -332,6 +400,7 @@ public class InviteCrudService {
         InviteParticipant participant = new InviteParticipant();
         participant.setInviteId(inviteId);
         participant.setUserId(currentUserId);
+        participant.setJoinAt(LocalDateTime.now());
         participantMapper.insert(participant);
 
         invite.setParticipantCount(invite.getParticipantCount() + 1);
@@ -389,7 +458,8 @@ public class InviteCrudService {
             }
         }
 
-        participantMapper.deleteById(participant.getId());
+        participant.setLeftAt(LocalDateTime.now());
+        participantMapper.updateById(participant);
 
         invite.setParticipantCount(invite.getParticipantCount() - 1);
         if (InviteStatusEnum.FULL.name().equals(invite.getStatus()) &&
@@ -403,6 +473,55 @@ public class InviteCrudService {
 
         if (!currentUserId.equals(invite.getCreatorId())) {
             eventPublisher.publishEvent(InviteEvent.participantLeave(invite, currentUserId, invite.getCreatorId()));
+        }
+    }
+
+    /**
+     * 发起人同意某人再次加入：恢复参与记录、人数+1、加回群聊。调用方需已校验当前用户为发起人。
+     */
+    @Transactional
+    public void approveRejoin(Long inviteId, Long applicantUserId) {
+        Invite invite = getInviteOrThrow(inviteId);
+        if (!InviteStatusEnum.RECRUITING.name().equals(invite.getStatus()) && !InviteStatusEnum.FULL.name().equals(invite.getStatus())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "当前邀约状态不允许再次加入");
+        }
+        InviteParticipant participant = participantMapper.selectOne(
+                new LambdaQueryWrapper<InviteParticipant>()
+                        .eq(InviteParticipant::getInviteId, inviteId)
+                        .eq(InviteParticipant::getUserId, applicantUserId));
+        if (participant == null || participant.getLeftAt() == null) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "该用户未退出或不存在参与记录");
+        }
+        if (invite.getMaxParticipants() != null && invite.getParticipantCount() >= invite.getMaxParticipants()) {
+            throw new BusinessException(ResultCode.INVITE_FULL, "邀约人数已满");
+        }
+
+        LocalDateTime now = LocalDateTime.now();
+        // 必须用 UpdateWrapper 显式 set left_at=null，否则 updateById 不会更新 null 字段
+        participantMapper.update(null,
+                new LambdaUpdateWrapper<InviteParticipant>()
+                        .eq(InviteParticipant::getId, participant.getId())
+                        .set(InviteParticipant::getLeftAt, null)
+                        .set(InviteParticipant::getJoinAt, now));
+
+        invite.setParticipantCount(invite.getParticipantCount() + 1);
+        if (invite.getMaxParticipants() != null && invite.getParticipantCount() >= invite.getMaxParticipants()) {
+            invite.setStatus(InviteStatusEnum.FULL.name());
+        }
+        inviteMapper.updateById(invite);
+
+        if (InviteModeEnum.PUBLIC.name().equals(invite.getInviteMode())
+                || InviteModeEnum.PRIVATE.name().equals(invite.getInviteMode())) {
+            ChatGroup group = chatGroupService.createGroupIfAbsent(invite);
+            invite.setChatGroupId(group.getId());
+            inviteMapper.updateById(invite);
+            chatGroupService.addMemberIfAbsent(group.getId(), invite.getCreatorId());
+            chatGroupService.addMemberIfAbsent(group.getId(), applicantUserId);
+        }
+
+        eventPublisher.publishEvent(InviteEvent.joinSuccess(invite, applicantUserId));
+        if (!applicantUserId.equals(invite.getCreatorId())) {
+            eventPublisher.publishEvent(InviteEvent.newParticipant(invite, invite.getCreatorId(), applicantUserId));
         }
     }
 
@@ -525,6 +644,10 @@ public class InviteCrudService {
     }
 
     private InviteResponse buildInviteResponseWithCreator(Invite invite, User creator) {
+        return buildInviteResponseWithCreator(invite, creator, null, null);
+    }
+
+    private InviteResponse buildInviteResponseWithCreator(Invite invite, User creator, String myRole, java.time.LocalDateTime myLeftAt) {
         return InviteResponse.builder()
                 .id(invite.getId())
                 .creatorId(invite.getCreatorId())
@@ -548,6 +671,8 @@ public class InviteCrudService {
                 .ratingCount(invite.getRatingCount())
                 .createdAt(invite.getCreatedAt())
                 .chatGroupId(invite.getChatGroupId())
+                .myRole(myRole)
+                .myLeftAt(myLeftAt)
                 .creator(creator != null ? InviteResponse.CreatorInfo.builder()
                         .id(creator.getId())
                         .nickname(creator.getNickname())
@@ -562,7 +687,8 @@ public class InviteCrudService {
 
         List<InviteParticipant> participants = participantMapper.selectList(
                 new LambdaQueryWrapper<InviteParticipant>()
-                        .eq(InviteParticipant::getInviteId, invite.getId()));
+                        .eq(InviteParticipant::getInviteId, invite.getId())
+                        .isNull(InviteParticipant::getLeftAt));
         if (participants.isEmpty()) {
             response.setParticipants(List.of());
             return response;

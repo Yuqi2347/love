@@ -39,6 +39,11 @@ public class InviteResponse {
     /** 公开邀约的临时群聊 ID，有则前端可跳转群聊 */
     private Long chatGroupId;
 
+    /** 当前用户在该邀约中的角色：CREATOR 发起 / PARTICIPANT 参与中 / LEFT 已退出 */
+    private String myRole;
+    /** 当前用户退出时间（仅当 myRole=LEFT 时有值） */
+    private LocalDateTime myLeftAt;
+
     // 发起人信息
     private CreatorInfo creator;
 

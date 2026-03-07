@@ -200,6 +200,54 @@ public class NotificationService {
                 NotificationTypeEnum.INVITE_REMIND_1H, title, content);
     }
 
+    /** 是否存在未读的「再次加入」申请（同一邀约、同一申请人） */
+    public boolean hasUnreadRejoinRequest(Long inviteId, Long applicantUserId) {
+        if (inviteId == null || applicantUserId == null) {
+            return false;
+        }
+        Long count = notificationMapper.selectCount(
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getInviteId, inviteId)
+                        .eq(Notification::getSenderId, applicantUserId)
+                        .eq(Notification::getType, NotificationTypeEnum.INVITE_REJOIN_REQUEST.name())
+                        .eq(Notification::getIsRead, false));
+        return count != null && count > 0;
+    }
+
+    /** 发起人：获取某邀约下所有未读的再次加入申请（接收人为 creatorId） */
+    public List<Notification> getUnreadRejoinRequestsForInvite(Long inviteId, Long creatorId) {
+        if (inviteId == null || creatorId == null) {
+            return List.of();
+        }
+        return notificationMapper.selectList(
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getInviteId, inviteId)
+                        .eq(Notification::getUserId, creatorId)
+                        .eq(Notification::getType, NotificationTypeEnum.INVITE_REJOIN_REQUEST.name())
+                        .eq(Notification::getIsRead, false)
+                        .orderByAsc(Notification::getCreatedAt));
+    }
+
+    /** 将某邀约、某申请人的再次加入申请通知全部标为已读 */
+    @Transactional
+    public void markRejoinRequestsAsRead(Long inviteId, Long applicantUserId) {
+        if (inviteId == null || applicantUserId == null) {
+            return;
+        }
+        List<Notification> list = notificationMapper.selectList(
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getInviteId, inviteId)
+                        .eq(Notification::getSenderId, applicantUserId)
+                        .eq(Notification::getType, NotificationTypeEnum.INVITE_REJOIN_REQUEST.name())
+                        .eq(Notification::getIsRead, false));
+        LocalDateTime now = LocalDateTime.now();
+        for (Notification n : list) {
+            n.setIsRead(true);
+            n.setReadAt(now);
+            notificationMapper.updateById(n);
+        }
+    }
+
     private NotificationResponse toResponse(Notification notification) {
         return NotificationResponse.builder()
                 .id(notification.getId())

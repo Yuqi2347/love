@@ -10,11 +10,15 @@
 
         <nav class="nav-menu">
           <router-link
-v-for="item in navItems" :key="item.path" :to="item.path"
-            class="nav-item" :class="{ active: isActive(item.path) }">
+            v-for="item in navItems"
+            :key="item.path"
+            :to="item.path"
+            class="nav-item"
+            :class="{ active: isActive(item.path) }"
+          >
             <el-icon :size="24"><component :is="item.icon" /></el-icon>
             <span class="nav-label">{{ item.label }}</span>
-            <span v-if="item.badge" class="nav-badge">{{ item.badge }}</span>
+            <span v-if="item.showDot" class="nav-dot" />
           </router-link>
         </nav>
 
@@ -79,14 +83,22 @@ v-for="item in navItems" :key="item.path" :to="item.path"
         <h3 class="panel-title">今日推荐</h3>
         <div v-if="topMatches.length" class="recommend-list">
           <div
-v-for="m in topMatches" :key="m.userId" class="recommend-item"
-            @click="$router.push(`/profile/${m.userId}`)">
+            v-for="m in topMatches"
+            :key="m.userId"
+            class="recommend-item"
+            @click="$router.push(`/profile/${m.userId}`)"
+          >
             <img :src="m.avatarUrl || defaultAvatar" class="avatar" width="40" height="40" />
             <div class="recommend-info">
               <div class="recommend-name text-ellipsis">{{ m.nickname }}</div>
               <div class="recommend-meta">匹配度 {{ m.matchScore }}%</div>
             </div>
-            <button class="btn-outline btn-sm" @click.stop="handleFollow(m.userId)">关注</button>
+            <button
+              :class="['btn-sm', recommendFollowedIds.includes(m.userId) ? 'btn-followed' : 'btn-outline']"
+              @click.stop="handleRecommendFollow(m.userId)"
+            >
+              {{ recommendFollowedIds.includes(m.userId) ? '已关注' : '关注' }}
+            </button>
           </div>
         </div>
         <div v-else class="empty-hint">完善资料后查看推荐</div>
@@ -135,6 +147,7 @@ v-for="m in topMatches" :key="m.userId" class="recommend-item"
 import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
+import { useBadgeStore } from '@/store/badgeStore'
 import { getRecommendations, type MatchResult } from '@/api/matchApi'
 import { followUser, unfollowUser, getFollowingList } from '@/api/followApi'
 import { createPost } from '@/api/feedApi'
@@ -147,21 +160,26 @@ import { InviteType, INVITE_TYPE_LABELS } from '@/constants/inviteConst'
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const badgeStore = useBadgeStore()
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f0f2f5" width="40" height="40" rx="20"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="18">👤</text></svg>'
 
-const navItems = computed(() => [
-  { path: '/discover', label: '发现', icon: 'Compass' },
-  { path: '/match', label: '匹配', icon: 'MagicStick' },
-  { path: '/invite', label: '邀约', icon: 'Calendar' },
-  { path: '/chat', label: '消息', icon: 'ChatDotRound', badge: 0 },
-  { path: '/feed', label: '朋友圈', icon: 'Notebook' },
-  { path: '/profile', label: '我的', icon: 'User' },
-])
+const navItems = computed(() => {
+  const b = badgeStore.badges
+  return [
+    { path: '/discover', label: '发现', icon: 'Compass', showDot: false },
+    { path: '/match', label: '匹配', icon: 'MagicStick', showDot: false },
+    { path: '/invite', label: '邀约', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
+    { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 },
+    { path: '/feed', label: '朋友圈', icon: 'Notebook', showDot: b.newFeedActivityCount > 0 },
+    { path: '/profile', label: '我的', icon: 'User', showDot: b.newFollowerCount > 0 },
+  ]
+})
 
 const isActive = (path: string) => route.path.startsWith(path)
 
 const topMatches = ref<MatchResult[]>([])
+const recommendFollowedIds = ref<number[]>([])
 const showPostDialog = ref(false)
 const postContent = ref('')
 
@@ -247,21 +265,51 @@ function onDocumentClick(e: MouseEvent) {
   }
 }
 
+let badgePollTimer: ReturnType<typeof setInterval> | null = null
+async function loadRecommendations() {
+  try {
+    const [recRes, followRes] = await Promise.all([
+      getRecommendations(0, 5),
+      getFollowingList(),
+    ])
+    topMatches.value = recRes.data.data || []
+    recommendFollowedIds.value = (followRes.data.data || []).map((f: { userId: number }) => f.userId)
+  } catch {
+    topMatches.value = []
+    recommendFollowedIds.value = []
+  }
+}
+
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
-  getRecommendations(0, 5)
-    .then(res => { topMatches.value = res.data.data || [] })
-    .catch(() => { /* profile may be incomplete */ })
+  if (userStore.user) badgeStore.fetchBadges()
+  badgePollTimer = setInterval(() => {
+    if (userStore.user) badgeStore.fetchBadges()
+  }, 30000)
+  loadRecommendations()
 })
+
+watch(() => route.path, () => {
+  if (userStore.user) badgeStore.fetchBadges()
+}, { immediate: false })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
+  if (badgePollTimer) clearInterval(badgePollTimer)
 })
 
-async function handleFollow(userId: number) {
+async function handleRecommendFollow(userId: number) {
+  const isFollowed = recommendFollowedIds.value.includes(userId)
   try {
-    await followUser(userId)
-    ElMessage.success('关注成功')
+    if (isFollowed) {
+      await unfollowUser(userId)
+      recommendFollowedIds.value = recommendFollowedIds.value.filter(id => id !== userId)
+      ElMessage.success('已取消关注')
+    } else {
+      await followUser(userId)
+      recommendFollowedIds.value = [...recommendFollowedIds.value, userId]
+      ElMessage.success('关注成功')
+    }
   } catch { /* handled by interceptor */ }
 }
 
@@ -378,15 +426,13 @@ onMounted(loadInviteBoard)
     color: $primary;
   }
 
-  .nav-badge {
+  .nav-dot {
     position: absolute;
     right: 16px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
     background: $danger;
-    color: white;
-    font-size: 11px;
-    font-weight: 700;
-    padding: 2px 7px;
-    border-radius: $radius-full;
   }
 }
 

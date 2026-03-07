@@ -30,6 +30,11 @@ const router = createRouter({
           name: 'Invites',
           component: () => import('@/views/InviteListView.vue'),
         },
+        {
+          path: 'feeds',
+          name: 'Feeds',
+          component: () => import('@/views/FeedListView.vue'),
+        },
       ],
     },
   ],

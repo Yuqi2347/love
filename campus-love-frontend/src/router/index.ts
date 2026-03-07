@@ -46,6 +46,11 @@ const router = createRouter({
           component: () => import('@/views/chat/ChatRoomView.vue'),
         },
         {
+          path: 'feed/:postId',
+          name: 'FeedDetail',
+          component: () => import('@/views/feed/FeedDetailView.vue'),
+        },
+        {
           path: 'feed',
           name: 'Feed',
           component: () => import('@/views/feed/FeedView.vue'),

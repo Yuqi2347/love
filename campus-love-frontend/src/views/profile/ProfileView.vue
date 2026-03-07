@@ -114,6 +114,7 @@
         </div>
         <div class="stat-item" @click="handleOpenFollowers">
           <span class="stat-num">{{ followerCount }}</span>
+          <span v-if="isMe && newFollowerCount > 0" class="stat-new">+{{ newFollowerCount }}</span>
           <span class="stat-label">粉丝</span>
         </div>
       </div>
@@ -183,9 +184,6 @@
         <div class="user-list-info">
           <div class="user-list-name">{{ user.nickname }}</div>
         </div>
-        <button class="user-list-action" title="聊天" @click.stop="goToChat(user.userId)">
-          <el-icon><ChatDotRound /></el-icon>
-        </button>
       </div>
     </div>
     <div v-else class="empty-hint">{{ isMe ? '暂无关注' : 'TA暂无关注' }}</div>
@@ -199,9 +197,6 @@
         <div class="user-list-info">
           <div class="user-list-name">{{ user.nickname }}</div>
         </div>
-        <button class="user-list-action" title="聊天" @click.stop="goToChat(user.userId)">
-          <el-icon><ChatDotRound /></el-icon>
-        </button>
       </div>
     </div>
     <div v-else class="empty-hint">{{ isMe ? '暂无粉丝' : 'TA暂无粉丝' }}</div>
@@ -212,6 +207,7 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
+import { useBadgeStore } from '@/store/badgeStore'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { getMatchDetail, type MatchResult } from '@/api/matchApi'
 import { getInviteStats, getUserInviteStats, type InviteStats } from '@/api/inviteApi'
@@ -229,6 +225,7 @@ const dimensionLabels = MATCH_DIMENSION_LABELS
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const badgeStore = useBadgeStore()
 
 const profileId = computed(() => route.params.userId ? Number(route.params.userId) : userStore.user?.id)
 const isMe = computed(() => profileId.value === userStore.user?.id)
@@ -248,6 +245,7 @@ const followerList = ref<FollowUser[]>([])
 const avatarInput = ref<HTMLInputElement | null>(null)
 
 const followLabel = computed(() => FOLLOW_STATUS_LABELS[followStatus.value as FollowStatus] || '关注')
+const newFollowerCount = computed(() => badgeStore.badges.newFollowerCount)
 
 // 判断是否可以删除帖子（管理员或帖子作者）
 function canDeletePost(post: FeedPost): boolean {
@@ -266,13 +264,14 @@ function handleOpenFollowing() {
   showFollowing.value = true
 }
 
-// 打开粉丝列表
+// 打开粉丝列表（本人查看时标记已读，消除新粉丝红点）
 function handleOpenFollowers() {
   const isAdmin = userStore.user?.isAdmin || false
   if (!isMe.value && !isAdmin) {
     ElMessage.warning('只有管理员可以查看他人的粉丝列表')
     return
   }
+  if (isMe.value) badgeStore.markFollowersViewed()
   showFollowers.value = true
 }
 
@@ -364,14 +363,6 @@ function goToUserProfile(userId: number) {
   showFollowing.value = false
   showFollowers.value = false
   router.push(`/profile/${userId}`)
-}
-
-// 跳转到聊天页面（暂时提示功能开发中）
-function goToChat(_userId: number) {
-  showFollowing.value = false
-  showFollowers.value = false
-  ElMessage.info('聊天功能开发中，敬请期待！')
-  // router.push(`/chat/${userId}`)  // 聊天功能实现后启用
 }
 
 // 监听弹窗打开，加载用户列表
@@ -807,6 +798,7 @@ async function handleAvatarChange(event: Event) {
 .stat-item {
   cursor: pointer;
   .stat-num { font-size: 18px; font-weight: 800; margin-right: 4px; }
+  .stat-new { font-size: 14px; font-weight: 700; color: var(--el-color-danger); margin-right: 2px; }
   .stat-label { font-size: 14px; color: $text-secondary; }
   &:hover .stat-num { color: $primary; }
 }
