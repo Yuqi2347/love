@@ -30,7 +30,7 @@ export const MATCH_DIMENSION_LABELS: Record<string, string> = {
   interestScore: '兴趣爱好',
   mbtiScore: 'MBTI性格',
   zodiacScore: '星座匹配',
-  baziScore: '八字合婚',
+  baziScore: '八字缘分',
   majorScore: '专业匹配',
   ageScore: '年龄匹配',
 }

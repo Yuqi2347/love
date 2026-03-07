@@ -50,6 +50,19 @@ public enum ResultCode {
     ALREADY_RATED(6009, "已评价过该邀约"),
     PARTICIPATE_LIMIT_EXCEEDED(6010, "同时参与的邀约已达上限"),
 
+    // AI 模块 7xxx
+    YUANFEN_NOT_MUTUAL(7001, "需要互相关注才能使用缘分解析"),
+    YUANFEN_COOLDOWN(7002, "缘分解析冷却中，请稍后再试"),
+    AI_SERVICE_UNAVAILABLE(7003, "AI 服务暂时不可用，请稍后重试"),
+
+    // 心动时刻模块 8xxx
+    MOMENT_ALREADY_ENROLLED(8001, "本周已报名，无需重复报名"),
+    MOMENT_BANNED(8002, "您已被禁止参加心动时刻活动"),
+    MOMENT_NOT_ENROLLED(8003, "本周未报名心动时刻"),
+    MOMENT_NO_RESULT(8004, "本周匹配结果尚未揭晓"),
+    MOMENT_PROFILE_INCOMPLETE(8005, "请先完成心动时刻问卷"),
+    MOMENT_ENROLLMENT_CLOSED(8006, "本周报名已截止，匹配已触发"),
+
     // 系统错误 9xxx
     INTERNAL_ERROR(9999, "系统内部错误");
 

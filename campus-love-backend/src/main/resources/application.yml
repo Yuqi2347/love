@@ -9,8 +9,8 @@ spring:
 
   datasource:
     url: jdbc:mysql://localhost:3306/campus_love?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: root
-    password: campus123
+    username: ${DB_USERNAME:root}
+    password: ${DB_PASSWORD:campus123}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   data:
@@ -21,8 +21,8 @@ spring:
 
   servlet:
     multipart:
-      max-file-size: 100MB
-      max-request-size: 110MB
+      max-file-size: 10MB
+      max-request-size: 15MB
 
   jackson:
     date-format: yyyy-MM-dd HH:mm:ss
@@ -43,7 +43,7 @@ mybatis-plus:
 
 app:
   jwt:
-    secret: campusLoveSecretKeyForJwtTokenGeneration2026MustBeLongEnough256Bits!!
+    secret: ${JWT_SECRET:campusLoveSecretKeyForJwtTokenGeneration2026MustBeLongEnough256Bits!!}
     access-token-expiration: 7200000    # 2 hours
     refresh-token-expiration: 604800000 # 7 days
   upload:
@@ -52,6 +52,14 @@ app:
   follow:
     daily-chat-limit: 5
     daily-invite-limit: 3
+
+# AI 配置（OpenAI 兼容接口：智谱 GLM / DeepSeek / OpenAI 等均可）
+ai:
+  api-key: ${AI_API_KEY:52876445a3f34e39a4c32de762eb8c94.LbYMRl3pM7EzO8Vq}
+  base-url: ${AI_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
+  model: ${AI_MODEL:glm-4-plus}
+  max-tokens: 1000
+  yuanfen-cooldown-hours: 0  # 缘分解析冷却时间（小时），0=无限制，生产环境建议设为1
 
 springdoc:
   api-docs:

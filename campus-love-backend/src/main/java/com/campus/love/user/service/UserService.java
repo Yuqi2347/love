@@ -63,7 +63,9 @@ public class UserService {
     public UserProfileResponse getProfile(Long userId) {
         User user = userMapper.selectById(userId);
         if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
-        return toProfileResponse(user);
+        Long currentUserId = CurrentUser.getId();
+        boolean isSelf = userId.equals(currentUserId);
+        return toProfileResponse(user, isSelf);
     }
 
     public UserProfileResponse updateProfile(UserProfileRequest request) {
@@ -99,11 +101,22 @@ public class UserService {
         user.setProfileComplete(complete);
 
         userMapper.updateById(user);
-        return toProfileResponse(user);
+        return toProfileResponse(user, true);
     }
 
     public String uploadAvatar(MultipartFile file) throws IOException {
         Long userId = CurrentUser.getId();
+
+        // 文件校验
+        if (file.isEmpty()) throw new IllegalArgumentException("请选择文件");
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.matches("image/(jpeg|png|gif|webp)")) {
+            throw new IllegalArgumentException("仅支持 JPG/PNG/GIF/WebP 格式");
+        }
+        if (file.getSize() > 5 * 1024 * 1024) {
+            throw new IllegalArgumentException("头像大小不能超过 5MB");
+        }
+
         String ext = getFileExtension(file.getOriginalFilename());
         String filename = "avatar_" + userId + "_" + UUID.randomUUID().toString().substring(0, 8) + ext;
 
@@ -111,7 +124,7 @@ public class UserService {
         if (!dir.exists()) dir.mkdirs();
 
         File dest = new File(dir, filename);
-        file.transferTo(dest);
+        file.transferTo(dest.getAbsoluteFile());
 
         String avatarUrl = "/uploads/" + filename;
         User user = userMapper.selectById(userId);
@@ -127,10 +140,10 @@ public class UserService {
         return dotIndex >= 0 ? filename.substring(dotIndex) : ".jpg";
     }
 
-    private UserProfileResponse toProfileResponse(User user) {
+    private UserProfileResponse toProfileResponse(User user, boolean isSelf) {
         return UserProfileResponse.builder()
                 .id(user.getId())
-                .email(user.getEmail())
+                .email(isSelf ? user.getEmail() : null)
                 .nickname(user.getNickname())
                 .gender(user.getGender())
                 .birthDate(user.getBirthDate() != null ? user.getBirthDate().toString() : null)
@@ -140,7 +153,7 @@ public class UserService {
                 .grade(user.getGrade())
                 .activityScore(user.getActivityScore() != null ? user.getActivityScore() : 0)
                 .userLevel(user.getUserLevel() != null ? user.getUserLevel() : 1)
-                .isAdmin(user.getIsAdmin() != null ? user.getIsAdmin() : false)
+                .isAdmin(isSelf ? (user.getIsAdmin() != null ? user.getIsAdmin() : false) : null)
                 .creditScore(user.getCreditScore() != null ? user.getCreditScore() : 100)
                 .inviteCount(user.getInviteCount() != null ? user.getInviteCount() : 0)
                 .participateCount(user.getParticipateCount() != null ? user.getParticipateCount() : 0)

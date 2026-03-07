@@ -35,6 +35,11 @@ const router = createRouter({
           name: 'Feeds',
           component: () => import('@/views/FeedListView.vue'),
         },
+        {
+          path: 'moment',
+          name: 'Moment',
+          component: () => import('@/views/MomentManageView.vue'),
+        },
       ],
     },
   ],

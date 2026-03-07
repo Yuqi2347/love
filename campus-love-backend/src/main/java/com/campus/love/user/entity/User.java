@@ -53,6 +53,14 @@ public class User {
     private LocalDateTime lastFollowerViewedAt;
     /** 上次查看朋友圈点赞/评论活动时间 */
     private LocalDateTime lastFeedActivityViewedAt;
+
+    /** 心动时刻：照片URL（可选） */
+    private String momentPhotoUrl;
+    /** 心动时刻：自评颜值分（1-10） */
+    private Integer momentSelfScore;
+    /** 心动时刻：是否被禁止参加 */
+    @TableField("moment_banned")
+    private Boolean momentBanned;
     /** 上次查看邀约活动时间（我的邀约有人加入/发言、等待邀约匹配成功） */
     private LocalDateTime lastInviteActivityViewedAt;
 

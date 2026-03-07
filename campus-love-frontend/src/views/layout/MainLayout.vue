@@ -232,6 +232,7 @@ const navItems = computed(() => {
   return [
     { path: '/discover', label: '发现', icon: 'Compass', showDot: false },
     { path: '/match', label: '匹配', icon: 'MagicStick', showDot: false },
+    { path: '/moment', label: '心动时刻', icon: 'Aim', showDot: false },
     { path: '/invite', label: '邀约', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
     { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 },
     { path: '/feed', label: '朋友圈', icon: 'Notebook', showDot: b.newFeedActivityCount > 0 },

@@ -84,3 +84,49 @@ export function updateUserStats(id: number, data: { creditScore?: number; activi
 export function getDashboardStats() {
   return request.get<ApiResult<DashboardStats>>('/admin/stats')
 }
+
+// ==================== 心动时刻管理 ====================
+
+export interface MomentStatusInfo {
+  currentWeek: string
+  status: string
+  participantCount: number
+  enrollmentOpen: boolean
+}
+
+export interface MomentEnrollmentItem {
+  id: number
+  userId: number
+  weekTag: string
+  pool: string
+  status: string
+  createdAt: string
+}
+
+export function getMomentStatus() {
+  return request.get<ApiResult<MomentStatusInfo>>('/moment/status')
+}
+
+export function triggerMomentMatching(weekTag?: string) {
+  return request.post<ApiResult<Record<string, unknown>>>('/moment/admin/trigger', null, {
+    params: weekTag ? { weekTag } : {},
+  })
+}
+
+export function closeMomentEnrollment(weekTag?: string) {
+  return request.post<ApiResult<Record<string, unknown>>>('/moment/admin/close', null, {
+    params: weekTag ? { weekTag } : {},
+  })
+}
+
+export function reopenMomentEnrollment(weekTag?: string) {
+  return request.post<ApiResult<Record<string, unknown>>>('/moment/admin/reopen', null, {
+    params: weekTag ? { weekTag } : {},
+  })
+}
+
+export function resetMomentWeek(weekTag?: string) {
+  return request.post<ApiResult<Record<string, unknown>>>('/moment/admin/reset', null, {
+    params: weekTag ? { weekTag } : {},
+  })
+}

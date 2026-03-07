@@ -61,6 +61,21 @@ const router = createRouter({
           component: () => import('@/views/invite/InviteView.vue'),
         },
         {
+          path: 'moment',
+          name: 'Moment',
+          component: () => import('@/views/moment/MomentView.vue'),
+        },
+        {
+          path: 'moment/enroll',
+          name: 'MomentEnroll',
+          component: () => import('@/views/moment/MomentEnrollView.vue'),
+        },
+        {
+          path: 'moment/result',
+          name: 'MomentResult',
+          component: () => import('@/views/moment/MomentResultView.vue'),
+        },
+        {
           path: 'invite/create',
           name: 'InviteCreate',
           component: () => import('@/views/invite/InviteCreateView.vue'),

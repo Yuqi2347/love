@@ -20,6 +20,9 @@
           <button v-if="followStatus === 'MUTUAL'" class="btn-primary" @click="handleInviteUser">
             <el-icon><Calendar /></el-icon> 约TA一下
           </button>
+          <button v-if="followStatus === 'MUTUAL'" class="btn-yuanfen" @click="openYuanFen" :disabled="yuanfenCooldown > 0">
+            {{ yuanfenCooldown > 0 ? yuanfenCooldownText : '缘分解析 ✨' }}
+          </button>
         </div>
         <div v-else class="profile-actions">
           <button class="btn-outline" @click="$router.push('/setup-profile')">
@@ -204,6 +207,17 @@
     </div>
     <div v-else class="empty-hint">{{ isMe ? '暂无粉丝' : 'TA暂无粉丝' }}</div>
   </el-dialog>
+
+  <!-- 缘分解析弹层 -->
+  <YuanFenAnalysisSheet
+    v-if="showYuanFen"
+    :model-value="showYuanFen"
+    :target-user-id="profileId"
+    :current-nickname="userStore.user?.nickname || '我'"
+    :target-nickname="profile?.nickname || 'TA'"
+    @close="showYuanFen = false"
+    @analyzed="onYuanFenAnalyzed"
+  />
 </template>
 
 <script setup lang="ts">
@@ -221,6 +235,8 @@ import { Camera, ChatDotRound, Calendar } from '@element-plus/icons-vue'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { FOLLOW_STATUS_LABELS, FollowStatus } from '@/constants/followConst'
 import { uploadAvatar } from '@/api/userApi'
+import { getYuanFenCooldown } from '@/api/aiApi'
+import YuanFenAnalysisSheet from './components/YuanFenAnalysisSheet.vue'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
 const dimensionLabels = MATCH_DIMENSION_LABELS
@@ -243,6 +259,38 @@ const followingCount = ref(0)
 const followerCount = ref(0)
 const showFollowing = ref(false)
 const showFollowers = ref(false)
+
+// 缘分解析
+const showYuanFen = ref(false)
+const yuanfenCooldown = ref(0)
+let cooldownTimer: ReturnType<typeof setInterval> | null = null
+
+const yuanfenCooldownText = computed(() => {
+  const m = Math.ceil(yuanfenCooldown.value / 60)
+  return `${m}分钟后可解析`
+})
+
+function openYuanFen() {
+  if (yuanfenCooldown.value > 0) return
+  showYuanFen.value = true
+}
+
+function onYuanFenAnalyzed(seconds: number) {
+  startCooldownTimer(seconds)
+}
+
+function startCooldownTimer(seconds: number) {
+  yuanfenCooldown.value = seconds
+  if (cooldownTimer) clearInterval(cooldownTimer)
+  if (seconds <= 0) return
+  cooldownTimer = setInterval(() => {
+    yuanfenCooldown.value--
+    if (yuanfenCooldown.value <= 0 && cooldownTimer) {
+      clearInterval(cooldownTimer)
+      cooldownTimer = null
+    }
+  }, 1000)
+}
 const followingList = ref<FollowUser[]>([])
 const followerList = ref<FollowUser[]>([])
 const avatarInput = ref<HTMLInputElement | null>(null)
@@ -302,6 +350,15 @@ async function loadProfile() {
       followStatus.value = statusRes.data.data || FollowStatus.NONE
       const matchRes = await getMatchDetail(profileId.value)
       matchResult.value = matchRes.data.data
+
+      // 互相关注时加载缘分解析冷却状态
+      if (followStatus.value === FollowStatus.MUTUAL) {
+        try {
+          const cdRes = await getYuanFenCooldown(profileId.value)
+          const remaining = cdRes.data.data?.remainingSeconds || 0
+          if (remaining > 0) startCooldownTimer(remaining)
+        } catch { /* ignore */ }
+      }
     }
 
     // 最后加载关注/粉丝数量（独立处理，不影响其他数据）
@@ -984,6 +1041,32 @@ async function handleAvatarChange(event: Event) {
     background: $primary;
     color: white;
     border-color: $primary;
+  }
+}
+
+.btn-yuanfen {
+  padding: 8px 16px;
+  border-radius: $radius-full;
+  background: linear-gradient(135deg, #a855f7, #6366f1);
+  color: white;
+  font-weight: 600;
+  font-size: 13px;
+  border: none;
+  cursor: pointer;
+  transition: all $transition-fast;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) {
+    opacity: 0.9;
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(#a855f7, 0.3);
+  }
+
+  &:disabled {
+    background: $bg-tertiary;
+    color: $text-muted;
+    cursor: not-allowed;
+    box-shadow: none;
   }
 }
 </style>
