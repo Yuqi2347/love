@@ -39,6 +39,8 @@ export interface Invite {
   orgRating: number | null
   ratingCount: number
   creator: CreatorInfo | null
+  /** 1v1 专属邀约的被邀人信息（仅 inviteMode=PRIVATE 时有值） */
+  targetUser?: CreatorInfo | null
   participants?: ParticipantInfo[]
   /** 公开邀约的群聊 ID，用于详情页内嵌聊天 */
   chatGroupId?: number | null
@@ -154,6 +156,13 @@ export function joinInvite(id: number) {
  */
 export function leaveInvite(id: number) {
   return service.delete<ApiResult<void>>(`/invite/${id}/leave`)
+}
+
+/**
+ * 拒绝邀约（仅一对一邀约的被邀方）
+ */
+export function declineInvite(id: number) {
+  return service.post<ApiResult<void>>(`/invite/${id}/decline`)
 }
 
 /**

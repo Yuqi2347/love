@@ -122,7 +122,8 @@ export const useChatStore = defineStore('chat', () => {
     if (idx >= 0) {
       const conv = conversations.value[idx]
       if (conv) {
-        conv.lastMessage = msg.content
+        const isInvite = msg.msgType === 4 || (msg.content && String(msg.content).includes('INVITE#'))
+        conv.lastMessage = isInvite ? '[邀约邀请]' : (msg.content ?? '')
         conv.lastTime = msg.createdAt
       }
     }

@@ -3,7 +3,7 @@
 -- 新环境首次初始化时只需执行本脚本一次：
 --   mysql -uroot -p campus_love < schema.sql
 -- 或在客户端：SOURCE /绝对路径/schema.sql;
--- 已有数据库升级请使用增量脚本 V2～V8。
+-- 已有数据库升级请使用增量脚本 V2～V10。
 -- =============================================
 
 CREATE DATABASE IF NOT EXISTS campus_love
@@ -208,6 +208,16 @@ CREATE TABLE IF NOT EXISTS t_invite_rating (
     INDEX idx_invite (invite_id),
     INDEX idx_rated_user (rated_user_id)
 ) COMMENT '邀约评价表';
+
+-- 邀约拒绝记录表（V10：一对一邀约被目标用户拒绝后不再出现在待处理列表）
+CREATE TABLE IF NOT EXISTS t_invite_decline (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    invite_id   BIGINT NOT NULL COMMENT '邀约ID',
+    user_id     BIGINT NOT NULL COMMENT '拒绝者（目标用户）',
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_invite_user (invite_id, user_id),
+    INDEX idx_user (user_id)
+) COMMENT '邀约拒绝记录';
 
 -- 聊天群表（V3）
 CREATE TABLE IF NOT EXISTS t_chat_group (

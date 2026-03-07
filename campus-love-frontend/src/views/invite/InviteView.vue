@@ -66,26 +66,48 @@
         <div
           v-for="invite in filteredInvites"
           :key="invite.id"
-          class="invite-card"
+          :class="['invite-card', { 'invite-card-1v1': invite.inviteMode === 'PRIVATE' }]"
           @click="$router.push(`/invite/${invite.id}`)"
         >
           <div class="invite-header">
-            <div class="invite-type-badge" :style="{ background: getTypeColor(invite.inviteType) }">
-              {{ INVITE_TYPE_LABELS[invite.inviteType as InviteType] }}
+            <div class="invite-header-badges">
+              <div class="invite-type-badge" :style="{ background: getTypeColor(invite.inviteType) }">
+                {{ INVITE_TYPE_LABELS[invite.inviteType as InviteType] }}
+              </div>
+              <span v-if="invite.inviteMode === 'PRIVATE'" class="invite-badge-1v1">专属</span>
             </div>
             <div class="invite-status-badge" :style="{ color: getDisplayStatusColor(invite) }">
               {{ getDisplayStatusLabel(invite) }}
             </div>
           </div>
 
+          <p v-if="invite.inviteMode === 'PRIVATE' && invite.myRole === 'TARGET_PENDING'" class="invite-1v1-from">
+            {{ invite.creator?.nickname || 'TA' }} 邀你
+          </p>
           <h3 class="invite-title">{{ invite.title }}</h3>
           <p v-if="invite.content" class="invite-content">{{ invite.content }}</p>
 
           <div class="invite-meta">
-            <span class="meta-item">
-              <el-icon><User /></el-icon>
-              {{ invite.creator?.nickname || '未知' }}
-            </span>
+            <!-- 1v1 显示双方头像与昵称 -->
+            <template v-if="invite.inviteMode === 'PRIVATE'">
+              <div class="invite-1v1-users">
+                <div class="invite-1v1-user">
+                  <img :src="invite.creator?.avatarUrl || defaultAvatar" class="invite-1v1-avatar" width="28" height="28" alt="" />
+                  <span class="invite-1v1-name">{{ invite.creator?.nickname || '未知' }}</span>
+                </div>
+                <span class="invite-1v1-vs">↔</span>
+                <div class="invite-1v1-user">
+                  <img :src="invite.targetUser?.avatarUrl || defaultAvatar" class="invite-1v1-avatar" width="28" height="28" alt="" />
+                  <span class="invite-1v1-name">{{ invite.targetUser?.nickname || 'TA' }}</span>
+                </div>
+              </div>
+            </template>
+            <template v-else>
+              <span class="meta-item">
+                <el-icon><User /></el-icon>
+                {{ invite.creator?.nickname || '未知' }}
+              </span>
+            </template>
             <span class="meta-item">
               <el-icon><Clock /></el-icon>
               {{ formatInviteTime(invite.inviteTime) }}
@@ -104,6 +126,11 @@
             <div v-if="invite.isUrgent" class="urgent-tag">急需</div>
             <div v-if="invite.ratingCount" class="rating-info">
               ⭐ {{ invite.socialRating?.toFixed(1) || '-' }} ({{ invite.ratingCount }})
+            </div>
+            <!-- 待处理邀约：同意/拒绝 -->
+            <div v-if="invite.myRole === 'TARGET_PENDING'" class="invite-pending-actions" @click.stop>
+              <el-button type="primary" size="small" @click="handleAcceptInviteCard(invite.id)">同意</el-button>
+              <el-button size="small" @click="handleDeclineInviteCard(invite.id)">拒绝</el-button>
             </div>
           </div>
         </div>
@@ -254,6 +281,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { useInviteStore } from '@/store/inviteStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import {
@@ -261,6 +289,8 @@ import {
   getMyInviteWaits,
   getMyCreatedInvites,
   getMyJoinedInvites,
+  joinInvite,
+  declineInvite,
   type InviteWait,
   type Invite,
   type HistoryRange,
@@ -277,6 +307,8 @@ import {
   formatInviteTime,
 } from '@/constants/inviteConst'
 
+const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect fill="%23f0f2f5" width="48" height="48" rx="24"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="22">👤</text></svg>'
+const router = useRouter()
 const inviteStore = useInviteStore()
 const badgeStore = useBadgeStore()
 
@@ -299,9 +331,10 @@ const tabs = [
 const statusOptions = [
   ...Object.entries(INVITE_STATUS_LABELS).map(([value, label]) => ({ value, label })),
   { value: 'LEFT', label: '已退出' },
+  { value: 'TARGET_PENDING', label: '待处理' },
 ]
 
-// 过滤后的邀约列表（我的邀约 = 我发起的 + 我参与的，按邀约时间倒序）
+// 过滤后的邀约列表（顺序由后端保证：状态优先级 + 同状态内按发布时间）
 const filteredInvites = computed(() => {
   let list = inviteStore.myListInvites
 
@@ -310,27 +343,49 @@ const filteredInvites = computed(() => {
   }
   if (filterStatus.value) {
     list = list.filter(i => {
+      if (i.myRole === 'TARGET_PENDING') return filterStatus.value === 'TARGET_PENDING'
       if (i.myRole === 'LEFT') return filterStatus.value === 'LEFT'
       return i.status === filterStatus.value
     })
   }
 
-  return list.slice().sort((a, b) => {
-    const tA = a.inviteTime ? new Date(a.inviteTime).getTime() : 0
-    const tB = b.inviteTime ? new Date(b.inviteTime).getTime() : 0
-    return tB - tA
-  })
+  return list.slice()
 })
 
 // 列表展示用状态文案（已退出优先）
 function getDisplayStatusLabel(invite: Invite) {
+  if (invite.myRole === 'TARGET_PENDING') return '待处理'
   if (invite.myRole === 'LEFT') return '已退出'
+  if (invite.inviteMode === 'PRIVATE' && invite.status === 'FULL' && invite.myRole === 'PARTICIPANT') return '已成行'
   return INVITE_STATUS_LABELS[invite.status as InviteStatus] ?? invite.status
 }
 
 function getDisplayStatusColor(invite: Invite) {
+  if (invite.myRole === 'TARGET_PENDING') return '#e6a23c'
   if (invite.myRole === 'LEFT') return '#8c8c8c'
   return INVITE_STATUS_COLORS[invite.status as InviteStatus] ?? '#8c8c8c'
+}
+
+async function handleAcceptInviteCard(inviteId: number) {
+  try {
+    await joinInvite(inviteId)
+    ElMessage.success('已接受邀约')
+    await inviteStore.fetchMyInvitesList(filterTimeRange.value)
+    await router.push(`/invite/${inviteId}`)
+  } catch (e: any) {
+    const msg = e?.response?.data?.message ?? e?.message ?? '操作失败'
+    ElMessage.error(msg)
+  }
+}
+
+async function handleDeclineInviteCard(inviteId: number) {
+  try {
+    await declineInvite(inviteId)
+    ElMessage.success('已拒绝')
+    await inviteStore.fetchMyInvitesList(filterTimeRange.value)
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败')
+  }
 }
 
 // 统计信息
@@ -547,6 +602,12 @@ onMounted(() => {
     border-color: $primary;
     box-shadow: $shadow-md;
   }
+
+  &.invite-card-1v1 {
+    border-left: 4px solid #9c27b0;
+    background: linear-gradient(135deg, rgba(#9c27b0, 0.08), rgba(#e1bee7, 0.06));
+    border-color: rgba(#9c27b0, 0.35);
+  }
 }
 
 .invite-header {
@@ -554,6 +615,28 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   margin-bottom: 12px;
+}
+
+.invite-header-badges {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.invite-badge-1v1 {
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: #7b1fa2;
+  background: rgba(#9c27b0, 0.15);
+  border-radius: $radius-full;
+}
+
+.invite-1v1-from {
+  font-size: 13px;
+  color: #7b1fa2;
+  margin: -4px 0 6px 0;
+  font-weight: 500;
 }
 
 .invite-type-badge {
@@ -586,9 +669,33 @@ onMounted(() => {
 .invite-meta {
   display: flex;
   flex-wrap: wrap;
+  align-items: center;
   gap: 16px;
   margin-bottom: 12px;
 
+  .invite-1v1-users {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .invite-1v1-user {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .invite-1v1-avatar {
+    border-radius: 50%;
+    object-fit: cover;
+  }
+  .invite-1v1-name {
+    font-size: 13px;
+    color: $text-secondary;
+  }
+  .invite-1v1-vs {
+    font-size: 12px;
+    color: $text-muted;
+  }
   .meta-item {
     display: flex;
     align-items: center;
@@ -601,9 +708,16 @@ onMounted(() => {
 .invite-footer {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 12px;
   padding-top: 12px;
   border-top: 1px solid $border-light;
+}
+
+.invite-pending-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
 }
 
 .participants-info {

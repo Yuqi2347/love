@@ -28,22 +28,47 @@
           height="36"
         />
         <div class="message-bubble">
-          <!-- 邀约消息：带查看详情按钮 -->
-          <template v-if="msg.msgType === 2">
-            <p class="msg-content">{{ msg.content }}</p>
-            <el-button
-              class="invite-link-btn"
-              type="primary"
-              text
-              size="small"
-              @click="goToInvite(msg.content)"
-            >
-              查看邀约详情
-            </el-button>
+          <!-- 邀约消息（msgType=4 或 content 含 INVITE#）：展示卡片可同意/拒绝，或跳转/提示去我的邀约 -->
+          <template v-if="isInviteMessage(msg)">
+            <div class="invite-card-in-chat" v-if="parsedInvite(msg.content)">
+              <div class="invite-card-title">{{ parsedInvite(msg.content)?.title || '邀约邀请' }}</div>
+              <div class="invite-card-meta" v-if="parsedInvite(msg.content)?.timeStr">
+                <el-icon><Clock /></el-icon>
+                {{ parsedInvite(msg.content)?.timeStr }}
+              </div>
+              <template v-if="msg.senderId === myId">
+                <el-button class="invite-card-btn" type="primary" size="small" @click="goToInvite(msg.content)">
+                  查看详情
+                </el-button>
+              </template>
+              <template v-else>
+                <template v-if="inviteActionState[parsedInvite(msg.content)?.inviteId ?? 0] === 'accepted'">
+                  <span class="invite-card-done">已接受</span>
+                </template>
+                <template v-else-if="inviteActionState[parsedInvite(msg.content)?.inviteId ?? 0] === 'declined'">
+                  <span class="invite-card-done declined">已拒绝</span>
+                </template>
+                <template v-else>
+                  <el-button class="invite-card-btn" type="primary" size="small" @click="handleAcceptInvite(msg.content)">
+                    同意
+                  </el-button>
+                  <el-button class="invite-card-btn outline" size="small" @click="handleDeclineInvite(msg.content)">
+                    拒绝
+                  </el-button>
+                </template>
+              </template>
+            </div>
+            <div v-else class="invite-fallback">
+              <p class="msg-content">{{ msg.content }}</p>
+              <el-button class="invite-link-btn" type="primary" text size="small" @click="goToInvite(msg.content)">
+                查看邀约详情
+              </el-button>
+              <p class="invite-fallback-hint">请到「我的邀约」查看并处理</p>
+            </div>
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
-          <!-- 图片消息 -->
-          <template v-else-if="msg.msgType === 3">
+          <!-- 图片消息（后端 msgType=2） -->
+          <template v-else-if="msg.msgType === 2">
             <el-image
               :src="imageUrl(msg.content)"
               :preview-src-list="[imageUrl(msg.content)]"
@@ -95,6 +120,7 @@ import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { getChatHistory, markAsRead, uploadChatImage } from '@/api/chatApi'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
+import { joinInvite, declineInvite } from '@/api/inviteApi'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { formatLocalDateTime } from '@/utils/dateTime'
@@ -188,11 +214,56 @@ function handleSend() {
   nextTick(scrollToBottom)
 }
 
-function goToInvite(content: string) {
+/** 是否为邀约类消息：后端 msgType=4 或 content 含 INVITE# */
+function isInviteMessage(msg: { msgType?: number; content?: string }): boolean {
+  return msg.msgType === 4 || !!(msg.content && String(msg.content).includes('INVITE#'))
+}
+
+/** 解析邀约消息 content：邀约邀请：标题｜时间 xx:xx｜INVITE#id */
+function parsedInvite(content: string): { title: string; timeStr: string; inviteId: number } | null {
   const match = content.match(/INVITE#(\d+)/)
-  if (match && match[1]) {
-    const inviteId = match[1]
-    router.push(`/invite/${inviteId}`)
+  if (!match || !match[1]) return null
+  const inviteId = parseInt(match[1], 10)
+  const parts = content.split(/[｜|]/)
+  let title = '邀约邀请'
+  let timeStr = ''
+  if (parts[0]) title = parts[0].replace(/^邀约邀请：?/, '').trim() || title
+  if (parts[1]) timeStr = parts[1].replace(/^时间\s*/, '').trim()
+  return { title, timeStr, inviteId }
+}
+
+const inviteActionState = ref<Record<number, 'accepted' | 'declined'>>({})
+
+async function handleAcceptInvite(content: string) {
+  const parsed = parsedInvite(content)
+  if (!parsed) return
+  try {
+    await joinInvite(parsed.inviteId)
+    inviteActionState.value[parsed.inviteId] = 'accepted'
+    ElMessage.success('已接受邀约')
+    router.push(`/invite/${parsed.inviteId}`)
+  } catch (e: any) {
+    const msg = e?.response?.data?.message ?? e?.message ?? '操作失败'
+    ElMessage.error(msg)
+  }
+}
+
+async function handleDeclineInvite(content: string) {
+  const parsed = parsedInvite(content)
+  if (!parsed) return
+  try {
+    await declineInvite(parsed.inviteId)
+    inviteActionState.value[parsed.inviteId] = 'declined'
+    ElMessage.success('已拒绝')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '操作失败')
+  }
+}
+
+function goToInvite(content: string) {
+  const parsed = parsedInvite(content)
+  if (parsed) {
+    router.push(`/invite/${parsed.inviteId}`)
   } else {
     ElMessage.warning('未找到邀约信息')
   }
@@ -331,6 +402,45 @@ async function handleImageSelect(e: Event) {
   margin-top: 4px;
   padding: 0;
   font-size: 12px;
+}
+
+.invite-card-in-chat {
+  padding: 4px 0;
+  min-width: 160px;
+
+  .invite-card-title {
+    font-size: 14px;
+    font-weight: 600;
+    margin-bottom: 6px;
+  }
+  .invite-card-meta {
+    font-size: 12px;
+    color: $text-muted;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    margin-bottom: 8px;
+  }
+  .invite-card-btn {
+    margin-right: 8px;
+    margin-bottom: 4px;
+    &.outline {
+      background: transparent;
+      border: 1px solid currentColor;
+    }
+  }
+  .invite-card-done {
+    font-size: 12px;
+    color: $text-muted;
+    &.declined { color: var(--el-text-color-secondary); }
+  }
+}
+
+.invite-fallback .msg-content { margin-bottom: 4px; }
+.invite-fallback-hint {
+  font-size: 12px;
+  color: var(--el-text-color-secondary);
+  margin: 6px 0 0;
 }
 
 .hidden-file-input { display: none; }

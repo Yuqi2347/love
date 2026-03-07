@@ -65,6 +65,13 @@ public class InviteController {
         return Result.success();
     }
 
+    @Operation(summary = "拒绝邀约（仅一对一邀约的被邀方）")
+    @PostMapping("/{id}/decline")
+    public Result<Void> declineInvite(@PathVariable Long id) {
+        inviteService.declineInvite(id);
+        return Result.success();
+    }
+
     @Operation(summary = "申请再次加入邀约（已退出用户）")
     @PostMapping("/{id}/rejoin-request")
     public Result<Void> requestRejoin(@PathVariable Long id) {

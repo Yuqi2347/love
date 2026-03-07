@@ -280,12 +280,17 @@ async function loadRecommendations() {
   }
 }
 
+function onVisibilityChange() {
+  if (document.visibilityState === 'visible' && userStore.user) badgeStore.fetchBadges()
+}
+
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
+  document.addEventListener('visibilitychange', onVisibilityChange)
   if (userStore.user) badgeStore.fetchBadges()
   badgePollTimer = setInterval(() => {
     if (userStore.user) badgeStore.fetchBadges()
-  }, 30000)
+  }, 15000)
   loadRecommendations()
 })
 
@@ -293,8 +298,13 @@ watch(() => route.path, () => {
   if (userStore.user) badgeStore.fetchBadges()
 }, { immediate: false })
 
+watch(() => userStore.user, (u) => {
+  if (u) badgeStore.fetchBadges()
+}, { immediate: true })
+
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
+  document.removeEventListener('visibilitychange', onVisibilityChange)
   if (badgePollTimer) clearInterval(badgePollTimer)
 })
 

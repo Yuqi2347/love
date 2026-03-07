@@ -129,15 +129,17 @@ public class FollowService {
                 .collect(Collectors.toList());
     }
 
-    /** 新粉丝数量（关注我且 created_at > 上次查看粉丝时间），用于导航/个人页红点；从未查看过则返回 0 */
+    /** 新粉丝数量：关注我且 created_at > 上次查看粉丝时间；从未查看过则统计全部粉丝数（视为全部未读） */
     public int getNewFollowerCount(Long userId) {
+        if (userId == null) return 0;
         User user = userMapper.selectById(userId);
         LocalDateTime since = user != null ? user.getLastFollowerViewedAt() : null;
-        if (since == null) return 0;
-        Long count = followMapper.selectCount(
-                new LambdaQueryWrapper<Follow>()
-                        .eq(Follow::getFollowingId, userId)
-                        .gt(Follow::getCreatedAt, since));
+        LambdaQueryWrapper<Follow> wrapper = new LambdaQueryWrapper<Follow>()
+                .eq(Follow::getFollowingId, userId);
+        if (since != null) {
+            wrapper.gt(Follow::getCreatedAt, since);
+        }
+        Long count = followMapper.selectCount(wrapper);
         return count != null ? count.intValue() : 0;
     }
 

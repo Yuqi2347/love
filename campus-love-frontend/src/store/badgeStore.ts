@@ -13,8 +13,14 @@ export const useBadgeStore = defineStore('badge', () => {
   async function fetchBadges() {
     try {
       const res = await getBadges()
-      if (res.data?.data) {
-        badges.value = res.data.data
+      const raw = res.data?.data ?? res.data
+      if (raw && typeof raw === 'object') {
+        badges.value = {
+          unreadMessageCount: Number(raw.unreadMessageCount) || 0,
+          newFollowerCount: Number(raw.newFollowerCount) || 0,
+          newFeedActivityCount: Number(raw.newFeedActivityCount) || 0,
+          newInviteActivityCount: Number(raw.newInviteActivityCount) || 0,
+        }
       }
     } catch {
       // 未登录或请求失败时保持原值

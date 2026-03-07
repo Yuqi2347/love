@@ -47,6 +47,9 @@ public class InviteResponse {
     // 发起人信息
     private CreatorInfo creator;
 
+    /** 1v1 专属邀约的被邀人信息（仅 inviteMode=PRIVATE 且 targetUserId 有值时） */
+    private CreatorInfo targetUser;
+
     // 参与者列表
     private List<ParticipantInfo> participants;
 

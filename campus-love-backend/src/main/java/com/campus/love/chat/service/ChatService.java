@@ -199,11 +199,14 @@ public class ChatService {
             Long otherUserId = entry.getKey();
             Message lastMsg = entry.getValue();
             User otherUser = userMap.get(otherUserId);
+            int inviteMsgType = com.campus.love.common.enums.MsgTypeEnum.INVITE.getCode();
+            String lastMsgText = (lastMsg.getMsgType() != null && lastMsg.getMsgType().intValue() == inviteMsgType)
+                    ? "[邀约邀请]" : (lastMsg.getContent() != null ? lastMsg.getContent() : "");
             return ConversationResponse.builder()
                     .userId(otherUserId)
                     .nickname(otherUser != null ? otherUser.getNickname() : "")
                     .avatarUrl(otherUser != null ? otherUser.getAvatarUrl() : "")
-                    .lastMessage(lastMsg.getContent())
+                    .lastMessage(lastMsgText)
                     .lastTime(lastMsg.getCreatedAt() != null ? lastMsg.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                     .unreadCount(unreadCounts.getOrDefault(otherUserId, 0))
                     .build();

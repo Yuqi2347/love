@@ -20,7 +20,7 @@
             <span class="conv-name text-ellipsis">{{ conv.nickname }}</span>
             <span class="conv-time">{{ formatConvTime(conv.lastTime) }}</span>
           </div>
-          <p class="conv-msg text-ellipsis">{{ conv.lastMessage }}</p>
+          <p class="conv-msg text-ellipsis">{{ displayLastMessage(conv.lastMessage) }}</p>
         </div>
       </div>
     </div>
@@ -82,6 +82,11 @@ function formatByDate(date: Date): string {
   if (d.getTime() === today.getTime()) return timeStr
   if (d.getTime() === yesterday.getTime()) return `昨天 ${timeStr}`
   return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
+}
+
+function displayLastMessage(text: string | undefined): string {
+  if (!text) return ''
+  return text.includes('INVITE#') ? '[邀约邀请]' : text
 }
 
 onMounted(() => { chatStore.fetchConversations() })

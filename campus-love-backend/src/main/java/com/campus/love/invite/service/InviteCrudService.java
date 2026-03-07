@@ -18,10 +18,13 @@ import com.campus.love.common.result.ResultCode;
 import com.campus.love.common.utils.TimeParseUtil;
 import com.campus.love.follow.service.FollowService;
 import com.campus.love.invite.dto.*;
-import com.campus.love.invite.entity.*;
+import com.campus.love.invite.entity.Invite;
+import com.campus.love.invite.entity.InviteDecline;
+import com.campus.love.invite.entity.InviteParticipant;
 import com.campus.love.invite.enums.InviteModeEnum;
 import com.campus.love.invite.enums.InviteStatusEnum;
 import com.campus.love.invite.event.InviteEvent;
+import com.campus.love.invite.mapper.InviteDeclineMapper;
 import com.campus.love.invite.mapper.InviteMapper;
 import com.campus.love.invite.mapper.InviteParticipantMapper;
 import com.campus.love.user.entity.User;
@@ -54,6 +57,7 @@ public class InviteCrudService {
 
     private final InviteMapper inviteMapper;
     private final InviteParticipantMapper participantMapper;
+    private final InviteDeclineMapper declineMapper;
     private final UserMapper userMapper;
     private final FollowService followService;
     private final ActivityService activityService;
@@ -248,24 +252,92 @@ public class InviteCrudService {
                 .collect(Collectors.toList());
     }
 
-    /** 我的邀约列表：我发起的 + 我参与的（含已退出），按邀约时间倒序 */
+    /** 我收到的待处理邀约（一对一邀约中 targetUserId=当前用户 且 尚未加入的） */
+    @Transactional(readOnly = true)
+    public List<InviteResponse> getReceivedPendingInvites(String range) {
+        Long currentUserId = CurrentUser.getId();
+        if (currentUserId == null) return List.of();
+        LocalDateTime from = getHistoryStartTime(range);
+        LambdaQueryWrapper<Invite> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Invite::getTargetUserId, currentUserId)
+                .eq(Invite::getDeleted, false)
+                .in(Invite::getStatus,
+                        InviteStatusEnum.RECRUITING.name(),
+                        InviteStatusEnum.FULL.name(),
+                        InviteStatusEnum.CONFIRMED.name());
+        if (from != null) wrapper.ge(Invite::getInviteTime, from);
+        wrapper.orderByDesc(Invite::getInviteTime);
+        List<Invite> list = inviteMapper.selectList(wrapper);
+        if (list.isEmpty()) return List.of();
+        List<Long> inviteIds = list.stream().map(Invite::getId).collect(Collectors.toList());
+        List<InviteParticipant> myParts = participantMapper.selectList(
+                new LambdaQueryWrapper<InviteParticipant>()
+                        .eq(InviteParticipant::getUserId, currentUserId)
+                        .in(InviteParticipant::getInviteId, inviteIds)
+                        .isNull(InviteParticipant::getLeftAt));
+        java.util.Set<Long> alreadyJoinedIds = myParts.stream().map(InviteParticipant::getInviteId).collect(Collectors.toSet());
+        List<InviteDecline> declines = declineMapper.selectList(
+                new LambdaQueryWrapper<InviteDecline>()
+                        .eq(InviteDecline::getUserId, currentUserId)
+                        .in(InviteDecline::getInviteId, inviteIds));
+        java.util.Set<Long> declinedIds = declines.stream().map(InviteDecline::getInviteId).collect(Collectors.toSet());
+        List<Invite> pending = list.stream()
+                .filter(inv -> !alreadyJoinedIds.contains(inv.getId()) && !declinedIds.contains(inv.getId()))
+                .collect(Collectors.toList());
+        if (pending.isEmpty()) return List.of();
+        Map<Long, User> creatorMap = batchLoadCreators(pending);
+        return pending.stream()
+                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "TARGET_PENDING", null))
+                .collect(Collectors.toList());
+    }
+
+    /** 我的邀约列表：我发起的 + 我参与的（含已退出）+ 我收到的待处理邀约，按邀约时间倒序 */
     @Transactional(readOnly = true)
     public List<InviteResponse> getMyInvitesList(String range) {
         List<InviteResponse> created = getMyCreatedInvites(range);
         List<InviteResponse> joined = getMyJoinedInvites(range);
+        List<InviteResponse> receivedPending = getReceivedPendingInvites(range);
         java.util.Set<Long> createdIds = created.stream().map(InviteResponse::getId).collect(Collectors.toSet());
+        java.util.Set<Long> joinedIds = joined.stream().map(InviteResponse::getId).collect(Collectors.toSet());
         List<InviteResponse> joinedOnly = joined.stream().filter(r -> !createdIds.contains(r.getId())).collect(Collectors.toList());
+        List<InviteResponse> pendingOnly = receivedPending.stream()
+                .filter(r -> !createdIds.contains(r.getId()) && !joinedIds.contains(r.getId()))
+                .collect(Collectors.toList());
         List<InviteResponse> merged = new java.util.ArrayList<>(created);
         merged.addAll(joinedOnly);
+        merged.addAll(pendingOnly);
         merged.sort((a, b) -> {
-            LocalDateTime ta = a.getInviteTime();
-            LocalDateTime tb = b.getInviteTime();
-            if (ta == null && tb == null) return 0;
-            if (ta == null) return 1;
-            if (tb == null) return -1;
-            return tb.compareTo(ta);
+            int pa = getDisplayPriority(a);
+            int pb = getDisplayPriority(b);
+            if (pa != pb) return Integer.compare(pb, pa);
+            LocalDateTime ca = a.getCreatedAt();
+            LocalDateTime cb = b.getCreatedAt();
+            if (ca == null && cb == null) return 0;
+            if (ca == null) return 1;
+            if (cb == null) return -1;
+            return cb.compareTo(ca);
         });
         return merged;
+    }
+
+    /**
+     * 我的邀约列表展示优先级（数值越大越靠前/在上方）：
+     * 6 待处理 -> 5 招募中 -> 4 已满员/已确认 -> 3 进行中 -> 2 已结束 -> 1 已退出 -> 0 已取消
+     */
+    private int getDisplayPriority(InviteResponse r) {
+        if (r == null) return -1;
+        if ("TARGET_PENDING".equals(r.getMyRole())) return 6;
+        if ("LEFT".equals(r.getMyRole())) return 1;
+        String status = r.getStatus();
+        if (status == null) return 2;
+        return switch (status) {
+            case "RECRUITING" -> 5;
+            case "FULL", "CONFIRMED" -> 4;
+            case "IN_PROGRESS" -> 3;
+            case "ENDED" -> 2;
+            case "CANCELLED" -> 0;
+            default -> 2;
+        };
     }
 
     public LocalDateTime getHistoryStartTime(String range) {
@@ -476,6 +548,32 @@ public class InviteCrudService {
         }
     }
 
+    /** 拒绝邀约（仅一对一邀约的目标用户可拒绝，拒绝后不再出现在待处理列表） */
+    @Transactional
+    public void declineInvite(Long inviteId) {
+        Long currentUserId = CurrentUser.getId();
+        Invite invite = getInviteOrThrow(inviteId);
+        if (!Long.valueOf(currentUserId).equals(invite.getTargetUserId())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "仅被邀约方可拒绝");
+        }
+        InviteParticipant existing = participantMapper.selectOne(
+                new LambdaQueryWrapper<InviteParticipant>()
+                        .eq(InviteParticipant::getInviteId, inviteId)
+                        .eq(InviteParticipant::getUserId, currentUserId));
+        if (existing != null && existing.getLeftAt() == null) {
+            throw new BusinessException(ResultCode.ALREADY_JOINED, "已加入该邀约，请使用退出");
+        }
+        long count = declineMapper.selectCount(
+                new LambdaQueryWrapper<InviteDecline>()
+                        .eq(InviteDecline::getInviteId, inviteId)
+                        .eq(InviteDecline::getUserId, currentUserId));
+        if (count > 0) return;
+        InviteDecline decline = new InviteDecline();
+        decline.setInviteId(inviteId);
+        decline.setUserId(currentUserId);
+        declineMapper.insert(decline);
+    }
+
     /**
      * 发起人同意某人再次加入：恢复参与记录、人数+1、加回群聊。调用方需已校验当前用户为发起人。
      */
@@ -648,6 +746,18 @@ public class InviteCrudService {
     }
 
     private InviteResponse buildInviteResponseWithCreator(Invite invite, User creator, String myRole, java.time.LocalDateTime myLeftAt) {
+        InviteResponse.CreatorInfo targetUserInfo = null;
+        if (invite.getTargetUserId() != null) {
+            User target = userMapper.selectById(invite.getTargetUserId());
+            if (target != null) {
+                targetUserInfo = InviteResponse.CreatorInfo.builder()
+                        .id(target.getId())
+                        .nickname(target.getNickname())
+                        .avatarUrl(target.getAvatarUrl())
+                        .creditScore(target.getCreditScore())
+                        .build();
+            }
+        }
         return InviteResponse.builder()
                 .id(invite.getId())
                 .creatorId(invite.getCreatorId())
@@ -679,6 +789,7 @@ public class InviteCrudService {
                         .avatarUrl(creator.getAvatarUrl())
                         .creditScore(creator.getCreditScore())
                         .build() : null)
+                .targetUser(targetUserInfo)
                 .build();
     }
 

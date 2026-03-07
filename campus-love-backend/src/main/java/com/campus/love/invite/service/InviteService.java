@@ -128,6 +128,11 @@ public class InviteService {
     }
 
     @Transactional
+    public void declineInvite(Long inviteId) {
+        crudService.declineInvite(inviteId);
+    }
+
+    @Transactional
     public void cancelInvite(Long inviteId, String reason) {
         crudService.cancelInvite(inviteId, reason);
     }

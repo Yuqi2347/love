@@ -277,6 +277,7 @@ function handleOpenFollowers() {
 
 async function loadProfile() {
   if (!profileId.value) return
+  if (isMe.value) void badgeStore.fetchBadges()
   try {
     const res = await getUserProfile(profileId.value)
     profile.value = res.data.data
@@ -302,6 +303,7 @@ async function loadProfile() {
 
     // 最后加载关注/粉丝数量（独立处理，不影响其他数据）
     loadFollowCounts()
+    if (isMe.value) await badgeStore.fetchBadges()
   } catch (err) {
     console.error('loadProfile error:', err)
   }
