@@ -26,4 +26,7 @@ public class InviteParticipant {
 
     /** 退出时间，非空表示已退出该邀约 */
     private LocalDateTime leftAt;
+
+    /** 退出理由（被踢时由发起人填写，被踢人可见） */
+    private String leftReason;
 }

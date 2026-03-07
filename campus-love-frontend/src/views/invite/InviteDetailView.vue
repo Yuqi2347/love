@@ -113,6 +113,15 @@
                 <span v-if="p.userId === myId" class="participant-tag">我</span>
               </span>
               <span class="join-time">{{ formatJoinTime(p.joinAt) }}</span>
+              <button
+                v-if="isCreator && p.userId !== myId && canKick"
+                type="button"
+                class="btn-kick"
+                title="踢出该参与者"
+                @click.stop="handleKick(p)"
+              >
+                踢出
+              </button>
             </div>
           </div>
           <div v-else class="empty-participants">
@@ -340,6 +349,7 @@ import {
   getRejoinRequests,
   approveRejoin,
   rejectRejoin,
+  kickParticipant,
   type Invite,
   type InviteRatingCreateRequest,
   type InviteRejoinRequestItem,
@@ -429,6 +439,12 @@ const canCancel = computed(() => {
   return invite.value?.status === 'RECRUITING' ||
          invite.value?.status === 'FULL' ||
          invite.value?.status === 'CONFIRMED'
+})
+
+// 发起人是否可踢人（招募中/满员/已确认时可踢，进行中或已结束不可踢）
+const canKick = computed(() => {
+  const s = invite.value?.status
+  return s === 'RECRUITING' || s === 'FULL' || s === 'CONFIRMED'
 })
 
 // 是否显示操作按钮
@@ -608,6 +624,35 @@ async function handleRejectRejoin(userId: number) {
     await loadRejoinRequests()
   } catch {
     // 错误由拦截器处理
+  }
+}
+
+// 发起人：踢出参与者（必须填写至少10字理由）
+async function handleKick(p: { userId: number; nickname?: string }) {
+  if (!invite.value) return
+  try {
+    const { value: reason } = await ElMessageBox.prompt(
+      `请输入踢出「${p.nickname || '该用户'}」的理由（至少10个字）`,
+      '踢出参与者',
+      {
+        confirmButtonText: '确定踢出',
+        cancelButtonText: '取消',
+        inputPlaceholder: '例如：多次迟到且未提前说明，影响活动安排',
+        inputValidator: (val) => {
+          if (!val || val.trim().length < 10) {
+            return '理由至少10个字'
+          }
+          return true
+        },
+      }
+    )
+    if (!reason || reason.trim().length < 10) return
+    await kickParticipant(invite.value.id, p.userId, reason.trim())
+    ElMessage.success('已踢出该参与者')
+    await loadInvite()
+    inviteStore.decrementParticipantCount(invite.value.id)
+  } catch {
+    // 用户取消或错误
   }
 }
 
@@ -1123,6 +1168,23 @@ onMounted(loadInvite)
 .join-time {
   font-size: 12px;
   color: $text-muted;
+}
+
+.btn-kick {
+  flex-shrink: 0;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: $danger;
+  background: transparent;
+  border: 1px solid rgba($danger, 0.5);
+  border-radius: $radius-full;
+  cursor: pointer;
+  transition: background $transition-fast, color $transition-fast;
+
+  &:hover {
+    background: rgba($danger, 0.08);
+    border-color: $danger;
+  }
 }
 
 .empty-participants {

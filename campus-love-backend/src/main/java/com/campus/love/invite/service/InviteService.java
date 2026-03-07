@@ -138,6 +138,11 @@ public class InviteService {
     }
 
     @Transactional
+    public void kickParticipant(Long inviteId, Long targetUserId, String reason) {
+        crudService.kickParticipant(inviteId, targetUserId, reason);
+    }
+
+    @Transactional
     public void confirmParticipants(Long inviteId, List<Long> userIds) {
         crudService.confirmParticipants(inviteId, userIds);
     }

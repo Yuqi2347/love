@@ -54,10 +54,17 @@ public class InviteEvent extends ApplicationEvent {
                 Collections.singletonList(waitUserId), null);
     }
 
+    /** 发起人踢出参与者（targetUserIds 为被踢用户 ID 列表，仅一个） */
+    public static InviteEvent participantKicked(Invite invite, Long creatorUserId, Long kickedUserId, String reason) {
+        return new InviteEvent(invite, InviteEventType.PARTICIPANT_KICKED, invite, creatorUserId,
+                Collections.singletonList(kickedUserId), reason);
+    }
+
     public enum InviteEventType {
         JOIN_SUCCESS,
         NEW_PARTICIPANT,
         PARTICIPANT_LEAVE,
+        PARTICIPANT_KICKED,
         INVITE_CANCELLED,
         WAIT_MATCH
     }

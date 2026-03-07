@@ -162,6 +162,22 @@ public class NotificationService {
     }
 
     /**
+     * 被发起人踢出邀约通知（发送给被踢用户）
+     */
+    public void notifyParticipantKicked(Long kickedUserId, Long creatorId, Invite invite, String reason) {
+        if (invite == null || kickedUserId == null) {
+            return;
+        }
+        String title = "你已被移出邀约";
+        String baseContent = "你参与的邀约「" + invite.getTitle() + "」已被发起人移出";
+        String fullContent = reason == null || reason.isBlank()
+                ? baseContent
+                : baseContent + "，原因：" + reason;
+        createNotification(kickedUserId, creatorId, invite.getId(),
+                NotificationTypeEnum.INVITE_PARTICIPANT_KICKED, title, fullContent);
+    }
+
+    /**
      * 等待邀约匹配到合适邀约（发送给等待邀约用户）
      */
     public void notifyWaitMatch(Long waitUserId, Invite invite) {

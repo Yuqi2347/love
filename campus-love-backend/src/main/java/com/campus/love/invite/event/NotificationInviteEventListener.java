@@ -40,6 +40,12 @@ public class NotificationInviteEventListener {
                                 event.getTargetUserIds().get(0), event.getActorUserId(), event.getInvite());
                     }
                     break;
+                case PARTICIPANT_KICKED:
+                    if (!event.getTargetUserIds().isEmpty()) {
+                        notificationService.notifyParticipantKicked(
+                                event.getTargetUserIds().get(0), event.getActorUserId(), event.getInvite(), event.getReason());
+                    }
+                    break;
                 case INVITE_CANCELLED:
                     notificationService.notifyInviteCancelled(
                             event.getTargetUserIds(), event.getActorUserId(), event.getInvite(), event.getReason());

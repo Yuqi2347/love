@@ -43,6 +43,8 @@ public class InviteResponse {
     private String myRole;
     /** 当前用户退出时间（仅当 myRole=LEFT 时有值） */
     private LocalDateTime myLeftAt;
+    /** 退出/踢人理由（仅当 myRole=LEFT 且被踢时有值，被踢人可见） */
+    private String myLeaveReason;
 
     // 发起人信息
     private CreatorInfo creator;

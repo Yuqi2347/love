@@ -110,6 +110,16 @@ public class InviteController {
         return Result.success();
     }
 
+    @Operation(summary = "发起人：踢出参与者（必须填写至少10字理由）")
+    @PostMapping("/{id}/kick/{userId}")
+    public Result<Void> kickParticipant(
+            @PathVariable Long id,
+            @PathVariable Long userId,
+            @Valid @RequestBody InviteKickRequest request) {
+        inviteService.kickParticipant(id, userId, request.getReason());
+        return Result.success();
+    }
+
     @Operation(summary = "确认参与者")
     @PutMapping("/{id}/confirm")
     public Result<Void> confirmParticipants(

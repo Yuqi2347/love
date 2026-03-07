@@ -110,6 +110,11 @@ public class InviteCrudService {
         commandService.cancelInvite(inviteId, reason);
     }
 
+    @Transactional
+    public void kickParticipant(Long inviteId, Long targetUserId, String reason) {
+        commandService.kickParticipant(inviteId, targetUserId, reason);
+    }
+
     public void sendPrivateInviteMessage(Long senderId, Invite invite) {
         commandService.sendPrivateInviteMessage(senderId, invite);
     }

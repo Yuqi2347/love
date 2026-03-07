@@ -94,6 +94,9 @@ public class InviteQueryService {
         }
         if (status != null && !status.isEmpty()) {
             wrapper.eq(Invite::getStatus, status);
+        } else {
+            // 未指定 status 时，仅展示招募中
+            wrapper.eq(Invite::getStatus, InviteStatusEnum.RECRUITING.name());
         }
         LocalDateTime now = LocalDateTime.now();
         String range = (timeRange != null && !timeRange.isEmpty()) ? timeRange.toUpperCase() : "WEEK";
@@ -161,7 +164,7 @@ public class InviteQueryService {
         List<Invite> list = inviteMapper.selectList(wrapper);
         Map<Long, User> creatorMap = batchLoadCreators(list);
         return list.stream()
-                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "CREATOR", null))
+                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "CREATOR", null, null))
                 .collect(Collectors.toList());
     }
 
@@ -198,7 +201,8 @@ public class InviteQueryService {
                     InviteParticipant p = inviteIdToMyParticipant.get(inv.getId());
                     String role = p != null && p.getLeftAt() != null ? "LEFT" : "PARTICIPANT";
                     LocalDateTime leftAt = p != null ? p.getLeftAt() : null;
-                    return buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), role, leftAt);
+                    String leaveReason = p != null && p.getLeftAt() != null ? p.getLeftReason() : null;
+                    return buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), role, leftAt, leaveReason);
                 })
                 .collect(Collectors.toList());
     }
@@ -237,7 +241,7 @@ public class InviteQueryService {
         if (pending.isEmpty()) return List.of();
         Map<Long, User> creatorMap = batchLoadCreators(pending);
         return pending.stream()
-                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "TARGET_PENDING", null))
+                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "TARGET_PENDING", null, null))
                 .collect(Collectors.toList());
     }
 
@@ -286,6 +290,7 @@ public class InviteQueryService {
                 if (myParticipant != null && myParticipant.getLeftAt() != null) {
                     response.setMyRole("LEFT");
                     response.setMyLeftAt(myParticipant.getLeftAt());
+                    response.setMyLeaveReason(myParticipant.getLeftReason());
                 } else if (myParticipant != null) {
                     response.setMyRole("PARTICIPANT");
                     response.setMyLeftAt(null);
@@ -363,10 +368,10 @@ public class InviteQueryService {
     }
 
     private InviteResponse buildInviteResponseWithCreator(Invite invite, User creator) {
-        return buildInviteResponseWithCreator(invite, creator, null, null);
+        return buildInviteResponseWithCreator(invite, creator, null, null, null);
     }
 
-    private InviteResponse buildInviteResponseWithCreator(Invite invite, User creator, String myRole, LocalDateTime myLeftAt) {
+    private InviteResponse buildInviteResponseWithCreator(Invite invite, User creator, String myRole, LocalDateTime myLeftAt, String myLeaveReason) {
         InviteResponse.CreatorInfo targetUserInfo = null;
         if (invite.getTargetUserId() != null) {
             User target = userMapper.selectById(invite.getTargetUserId());
@@ -404,6 +409,7 @@ public class InviteQueryService {
                 .chatGroupId(invite.getChatGroupId())
                 .myRole(myRole)
                 .myLeftAt(myLeftAt)
+                .myLeaveReason(myLeaveReason)
                 .creator(creator != null ? InviteResponse.CreatorInfo.builder()
                         .id(creator.getId())
                         .nickname(creator.getNickname())

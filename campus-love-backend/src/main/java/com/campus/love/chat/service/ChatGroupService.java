@@ -77,6 +77,21 @@ public class ChatGroupService {
     }
 
     /**
+     * 从群聊中移除成员
+     */
+    @Transactional
+    public void removeMember(Long groupId, Long userId) {
+        if (groupId == null || userId == null) {
+            return;
+        }
+        chatGroupMemberMapper.delete(
+                new LambdaQueryWrapper<ChatGroupMember>()
+                        .eq(ChatGroupMember::getGroupId, groupId)
+                        .eq(ChatGroupMember::getUserId, userId)
+        );
+    }
+
+    /**
      * 查询群成员ID列表
      */
     public List<ChatGroupMember> getMembers(Long groupId) {

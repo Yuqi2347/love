@@ -29,6 +29,11 @@ public enum NotificationTypeEnum {
     INVITE_PARTICIPANT_LEAVE("参与者退出邀约"),
 
     /**
+     * 被发起人踢出邀约（发送给被踢用户）
+     */
+    INVITE_PARTICIPANT_KICKED("被踢出邀约"),
+
+    /**
      * 匹配到合适邀约（发送给等待邀约用户）
      */
     INVITE_MATCH_FOUND("找到匹配邀约"),

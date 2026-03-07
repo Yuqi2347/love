@@ -194,6 +194,13 @@ export function rejectRejoin(inviteId: number, userId: number) {
 }
 
 /**
+ * 发起人：踢出参与者（必须填写至少10字理由）
+ */
+export function kickParticipant(inviteId: number, userId: number, reason: string) {
+  return service.post<ApiResult<void>>(`/invite/${inviteId}/kick/${userId}`, { reason })
+}
+
+/**
  * 取消邀约
  */
 export function cancelInvite(id: number, reason?: string) {

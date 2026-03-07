@@ -72,6 +72,16 @@
               <div class="feed-name">{{ item.post.nickname }}</div>
               <div class="feed-time">{{ formatTime(item.post.createdAt) }}</div>
             </div>
+            <button
+              v-if="canDeletePost(item.post)"
+              type="button"
+              class="feed-delete-btn"
+              title="删除"
+              @click.stop="handleDeletePost(item.post.id)"
+            >
+              <el-icon><Delete /></el-icon>
+              <span>删除</span>
+            </button>
           </div>
           <div class="feed-content">{{ item.post.content }}</div>
           <div v-if="item.post.images" class="feed-images" @click.stop>
@@ -113,13 +123,6 @@
             <button class="action-btn" @click="openComment(item.post)">
               <span class="action-icon">💬</span>
               <span>{{ item.post.commentCount }}</span>
-            </button>
-            <button
-              v-if="canDeletePost(item.post)"
-              class="action-btn delete-btn"
-              @click="handleDeletePost(item.post.id)"
-            >
-              <span class="action-icon">🗑️</span>
             </button>
           </div>
 
@@ -275,8 +278,8 @@ import {
 } from '@/api/feedApi'
 import { useUserStore } from '@/store/userStore'
 import { useInviteStore } from '@/store/inviteStore'
-import { ElMessage } from 'element-plus'
-import { Plus } from '@element-plus/icons-vue'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { Plus, Delete } from '@element-plus/icons-vue'
 import type { Invite } from '@/api/inviteApi'
 import {
   InviteType,
@@ -630,11 +633,12 @@ function getMediaUrl(url: string | null): string {
 
 async function handleDeletePost(postId: number) {
   try {
+    await ElMessageBox.confirm('确定删除这条动态？', '提示', { type: 'warning' })
     await deletePost(postId)
     posts.value = posts.value.filter(p => p.id !== postId)
-    ElMessage.success('删除成功')
+    ElMessage.success('已删除')
   } catch {
-    ElMessage.error('删除失败')
+    // 用户取消或删除失败
   }
 }
 </script>
@@ -831,7 +835,27 @@ async function handleDeletePost(postId: number) {
 }
 
 .feed-user {
+  flex: 1;
   cursor: pointer;
+}
+
+.feed-delete-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: $text-muted;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: $radius-md;
+  transition: color $transition-fast, background $transition-fast;
+
+  &:hover {
+    color: $danger;
+    background: rgba($danger, 0.08);
+  }
 }
 
 .feed-name {

@@ -227,6 +227,62 @@ public class InviteCommandService {
         }
     }
 
+    /**
+     * 发起人踢出参与者（必须填写至少10字理由）
+     */
+    @Transactional
+    public void kickParticipant(Long inviteId, Long targetUserId, String reason) {
+        Long currentUserId = CurrentUser.getId();
+
+        if (reason == null || reason.trim().length() < 10) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "踢人理由至少10个字");
+        }
+
+        Invite invite = queryService.getInviteOrThrow(inviteId);
+
+        if (!invite.getCreatorId().equals(currentUserId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "仅发起人可踢出参与者");
+        }
+
+        if (currentUserId.equals(targetUserId)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "不能踢出自己");
+        }
+
+        InviteParticipant participant = participantMapper.selectOne(
+                new LambdaQueryWrapper<InviteParticipant>()
+                        .eq(InviteParticipant::getInviteId, inviteId)
+                        .eq(InviteParticipant::getUserId, targetUserId));
+        if (participant == null || participant.getLeftAt() != null) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "该用户不是当前参与者或已退出");
+        }
+
+        if (InviteStatusEnum.IN_PROGRESS.name().equals(invite.getStatus())
+                || InviteStatusEnum.ENDED.name().equals(invite.getStatus())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "邀约进行中或已结束，无法踢人");
+        }
+
+        participant.setLeftAt(LocalDateTime.now());
+        participant.setLeftReason(reason.trim());
+        participantMapper.updateById(participant);
+
+        invite.setParticipantCount(invite.getParticipantCount() - 1);
+        boolean wasFull = InviteStatusEnum.FULL.name().equals(invite.getStatus())
+                || InviteStatusEnum.CONFIRMED.name().equals(invite.getStatus());
+        if (wasFull && invite.getMaxParticipants() != null
+                && invite.getParticipantCount() < invite.getMaxParticipants()) {
+            invite.setStatus(InviteStatusEnum.RECRUITING.name());
+        }
+        inviteMapper.updateById(invite);
+
+        creditService.decrementParticipateCount(targetUserId);
+
+        if (invite.getChatGroupId() != null) {
+            chatGroupService.removeMember(invite.getChatGroupId(), targetUserId);
+        }
+
+        eventPublisher.publishEvent(InviteEvent.participantKicked(invite, currentUserId, targetUserId, reason.trim()));
+    }
+
     @Transactional
     public void declineInvite(Long inviteId) {
         Long currentUserId = CurrentUser.getId();
