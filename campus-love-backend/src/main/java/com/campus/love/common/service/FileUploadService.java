@@ -16,7 +16,7 @@ import java.util.UUID;
 @Service
 public class FileUploadService {
 
-    @Value("${app.upload.path:./uploads/}")
+    @Value("${app.upload.path:${user.home}/campus-love/uploads/}")
     private String uploadPath;
 
     /** 图片 MIME 前缀 */
@@ -51,9 +51,12 @@ public class FileUploadService {
             throw new IllegalArgumentException(hint);
         }
         if (file.getSize() > maxSizeBytes) {
+            String limit = mediaType == MediaType.IMAGE
+                    ? (maxSizeBytes / 1024 / 1024) + "MB"
+                    : (maxSizeBytes / 1024 / 1024) + "MB";
             String hint = mediaType == MediaType.IMAGE
-                    ? "图片大小不能超过10MB"
-                    : "视频大小不能超过100MB";
+                    ? "图片大小不能超过" + limit
+                    : "视频大小不能超过" + limit;
             throw new IllegalArgumentException(hint);
         }
 
@@ -73,6 +76,11 @@ public class FileUploadService {
     /** 上传图片，限制 10MB */
     public String uploadImage(MultipartFile file, String filenamePrefix) throws IOException {
         return uploadMedia(file, MediaType.IMAGE, 10L * 1024 * 1024, filenamePrefix, ".jpg");
+    }
+
+    /** 上传图片，可指定最大大小（字节），用于头像等需更严格限制的场景 */
+    public String uploadImage(MultipartFile file, String filenamePrefix, long maxSizeBytes) throws IOException {
+        return uploadMedia(file, MediaType.IMAGE, maxSizeBytes, filenamePrefix, ".jpg");
     }
 
     /** 上传视频，限制 100MB */

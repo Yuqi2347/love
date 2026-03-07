@@ -13,7 +13,7 @@ import java.io.File;
 @Configuration
 public class FileUploadConfig implements WebMvcConfigurer {
 
-    @Value("${app.upload.path:./uploads/}")
+    @Value("${app.upload.path:${user.home}/campus-love/uploads/}")
     private String uploadPath;
 
     @Override

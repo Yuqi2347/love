@@ -22,108 +22,225 @@ public class YuanFenAnalysisSkill {
     private final AiService aiService;
     private final ObjectMapper objectMapper;
 
+    /** 系统 Prompt（异性） */
     private static final String SYSTEM_PROMPT_OPPOSITE = """
-            你是 Campus Love 的专属「缘分解析师」，精通 MBTI 性格理论、中国传统八字命理、以及现代心理学中的亲密关系研究。
-            你正在为一对异性用户进行缘分分析，可以从恋爱、感情发展、浪漫关系等角度进行分析。
-            你的分析风格：温暖、有趣、真实，像一位了解两人的智慧朋友，而不是冷冰冰的算法。
-            你的回答必须严格按照 JSON 格式输出，不要包含任何 JSON 以外的文字（不要用 ```json 包裹）。""";
+            你是 Campus Love 的「AI缘分解析师」，擅长从多维度分析人与人之间的情感关系。
 
+            你的知识背景包括：
+            - MBTI 性格理论
+            - 星座性格与恋爱模式
+            - 中国传统命理中的缘分观
+            - 现代心理学中的亲密关系理论（依恋理论、沟通模式、关系发展阶段）
+
+            你的分析风格：
+            像一位真正了解两个人的朋友在认真分析他们的关系。
+            语气温暖、有趣、真实，有洞察力。
+            不要使用玄学式断言，而是结合信息做合理推测。
+
+            你的目标：
+            生成一份 **有故事感、有代入感、同时有现实参考价值的「缘分解析报告」**。
+
+            要求：
+            - 分析要结合双方信息
+            - 内容要具体、自然、有人情味
+            - 可以适当举生活中的相处场景
+            - 语言要像朋友聊天，而不是论文
+            - 分析必须与系统评分大体一致（评分高就多肯定，评分低就更理性）
+
+            ⚠️ 输出必须严格为 JSON 格式
+            ⚠️ 不要输出 JSON 之外的任何文字
+            ⚠️ 不要使用 ```json 包裹
+            ⚠️ 所有字符串值必须且只能使用英文 ASCII 双引号 " 包裹，禁止使用中文引号或弯引号""";
+
+    /** 系统 Prompt（同性） */
     private static final String SYSTEM_PROMPT_SAME = """
-            你是 Campus Love 的专属「缘分解析师」，精通 MBTI 性格理论、中国传统八字命理、以及现代心理学中的人际关系研究。
-            你正在为两位同性用户进行缘分分析，请从友情、知己、灵魂伙伴等角度进行分析，重点分析两人成为好朋友/挚友的可能性。
-            你的分析风格：温暖、有趣、真实，像一位了解两人的智慧朋友，而不是冷冰冰的算法。
-            你的回答必须严格按照 JSON 格式输出，不要包含任何 JSON 以外的文字（不要用 ```json 包裹）。""";
+            你是 Campus Love 的「关系洞察解析师」，擅长分析人与人之间的情感连接与关系潜力。
 
+            你的知识背景包括：
+            - MBTI 性格理论
+            - 星座性格与互动模式
+            - 现代心理学中的亲密关系研究
+            - 人际互动与关系发展理论
+
+            你的分析风格：
+            像一位真正了解两个人的朋友在认真分析他们之间的关系。
+            语气温暖、有趣、真实，有洞察力。
+            避免刻板判断，也不要做命运式断言。
+
+            你的目标：
+            生成一份 **有趣、真实、有洞察力的「关系缘分解析报告」**，
+            帮助用户理解两个人之间的互动方式、情感连接，以及未来可能的发展方向。
+
+            注意：
+            两位用户是 **同性关系**。
+            这种关系可能是：
+
+            - 朋友
+            - 知己
+            - 搭子
+            - 灵魂伙伴
+            - 或者潜在的浪漫关系
+
+            请保持 **中性与开放的视角**，
+            不要默认他们一定是恋爱关系，
+            而是分析 **他们之间的情感化学反应与关系潜力**。
+
+            ⚠️ 输出必须严格为 JSON 格式
+            ⚠️ 不要输出 JSON 之外的任何文字
+            ⚠️ 不要使用 ```json 包裹
+            ⚠️ 所有字符串值必须且只能使用英文 ASCII 双引号 " 包裹，禁止使用中文引号或弯引号""";
+
+    /** 用户 Prompt 模板（异性） */
     private static final String PROMPT_TEMPLATE_OPPOSITE = """
-            请根据以下两位用户的真实信息，为他们生成一份「缘分解析报告」。
-            他们是一对异性朋友，请从感情发展和恋爱可能性的角度进行分析。
+            ------------------------------------------------
 
             【用户A信息】
+
             - 昵称：{nicknameA}
             - 性别：{genderA}
             - 年龄：{ageA} 岁
+            - 学校：{schoolA}
+            - 年级：{gradeA}
             - MBTI：{mbtiA}
             - 星座：{zodiacA}
             - 兴趣爱好：{interestsA}
             - 专业：{majorA}
 
             【用户B信息】
+
             - 昵称：{nicknameB}
             - 性别：{genderB}
             - 年龄：{ageB} 岁
+            - 学校：{schoolB}
+            - 年级：{gradeB}
             - MBTI：{mbtiB}
             - 星座：{zodiacB}
             - 兴趣爱好：{interestsB}
             - 专业：{majorB}
 
-            【匹配系统评分】
-            - 综合匹配度：{totalScore} 分（满分100）
-            - 兴趣契合：{interestScore} 分
-            - MBTI 契合：{mbtiScore} 分
-            - 星座契合：{zodiacScore} 分
-            - 八字缘分：{baziScore} 分
-            - 专业匹配：{majorScore} 分
+            ------------------------------------------------
+
+            匹配系统评分（分析时请参考）：
+
+            - 综合匹配度：{totalScore} /100
+            - 兴趣契合：{interestScore}
+            - MBTI 契合：{mbtiScore}
+            - 星座契合：{zodiacScore}
+            - 八字缘分：{baziScore}
+            - 专业匹配：{majorScore}
+
+            ------------------------------------------------
 
             【分析要求】
-            请按以下 JSON 结构输出，所有文字使用温暖亲切的中文，可以从恋爱和感情角度分析：
+
+            请综合以上信息，从性格、兴趣、学习环境、恋爱模式等角度进行分析。
+
+            分析要做到：
+            1. 有逻辑（解释为什么适合或不适合）
+            2. 有生活感（举简单的校园或日常相处场景）
+            3. 有情绪温度（读起来像朋友在认真分析）
+
+            ------------------------------------------------
+
+            请按以下 JSON 结构输出：
 
             {
-              "yuanFenIndex": "（用一个有创意的词或短语描述两人缘分等级，如「命中注定」「有缘千里」「相知恨晚」「怦然心动」等，禁止只输出数字）",
-              "personalityAnalysis": "（100字以内，分析两人性格如何互动互补，可以从恋爱相处的角度举一个具体的生活场景例子）",
+              "yuanFenIndex": "（用一个有创意、有情绪感的短语描述两人缘分等级，例如：命运的小小暗号、慢慢靠近的频率、可能错过也可能相遇、怦然心动型缘分等）",
+              "overallInterpretation": "（150字以内，总体评价两人的缘分气质，语气像一个懂他们的朋友在总结这段关系的感觉）",
+              "personalityAnalysis": "（150字以内，分析MBTI和性格互动模式，例如谁更主动、谁更理性，举一个具体生活场景）",
+              "interestChemistry": "（120字以内，分析兴趣爱好带来的互动方式，比如一起做什么会更容易产生好感）",
+              "campusStoryScene": "（100字以内，用一个很具体的校园场景描写两人的可能互动，例如图书馆、自习室、操场、咖啡店等，让用户产生画面感）",
               "recommendActivities": [
-                "活动1（结合两人兴趣，适合约会或增进感情的活动）",
+                "活动1（结合两人兴趣设计一个有点浪漫的约会或互动方式）",
                 "活动2",
                 "活动3"
               ],
-              "potentialChallenge": "（60字以内，真实指出一个感情相处中可能的摩擦点，语气要温柔，给出一句化解建议）",
-              "developmentPotential": "（80字以内，综合所有维度，从感情发展角度给出有温度的建议，不要做绝对化断言）",
-              "exclusiveQuote": "（一句20字以内的专属缘分金句，要有诗意或浪漫，让人想截图分享）"
+              "potentialChallenge": "（80字以内，指出一个现实中可能的摩擦点，但语气温柔，并给出一个简单建议）",
+              "developmentPotential": "（120字以内，结合评分理性判断两人的发展潜力，不要做绝对化结论，而是给出鼓励式建议）",
+              "exclusiveQuote": "（一句20字以内的浪漫金句，适合截图分享）"
             }""";
 
+    /** 用户 Prompt 模板（同性） */
     private static final String PROMPT_TEMPLATE_SAME = """
-            请根据以下两位用户的真实信息，为他们生成一份「友谊缘分解析报告」。
-            他们是两位同性朋友，请从友情和挚友角度进行分析，探讨他们成为好朋友、知己的可能性。
+            ------------------------------------------------
 
             【用户A信息】
+
             - 昵称：{nicknameA}
             - 性别：{genderA}
             - 年龄：{ageA} 岁
+            - 学校：{schoolA}
+            - 年级：{gradeA}
             - MBTI：{mbtiA}
             - 星座：{zodiacA}
             - 兴趣爱好：{interestsA}
             - 专业：{majorA}
 
             【用户B信息】
+
             - 昵称：{nicknameB}
             - 性别：{genderB}
             - 年龄：{ageB} 岁
+            - 学校：{schoolB}
+            - 年级：{gradeB}
             - MBTI：{mbtiB}
             - 星座：{zodiacB}
             - 兴趣爱好：{interestsB}
             - 专业：{majorB}
 
-            【匹配系统评分】
-            - 综合匹配度：{totalScore} 分（满分100）
-            - 兴趣契合：{interestScore} 分
-            - MBTI 契合：{mbtiScore} 分
-            - 星座契合：{zodiacScore} 分
-            - 八字缘分：{baziScore} 分
-            - 专业匹配：{majorScore} 分
+            ------------------------------------------------
+
+            匹配系统评分（请参考）：
+
+            - 综合匹配度：{totalScore} /100
+            - 兴趣契合：{interestScore}
+            - MBTI 契合：{mbtiScore}
+            - 星座契合：{zodiacScore}
+            - 八字缘分：{baziScore}
+            - 专业匹配：{majorScore}
+
+            ------------------------------------------------
 
             【分析要求】
-            请按以下 JSON 结构输出，所有文字使用温暖亲切的中文，从友情角度分析（不要涉及恋爱内容）：
+
+            请综合以上信息，从以下角度分析两人的关系：
+
+            - 性格互动模式
+            - 兴趣与生活方式契合度
+            - 在校园环境中的互动氛围
+            - 情感连接方式
+            - 关系发展的潜在可能
+
+            分析风格要求：
+
+            - 真实、有温度
+            - 有生活场景感
+            - 像朋友在认真观察两人的关系
+            - 可以适当描述日常互动情景
+
+            请确保分析内容 **大体符合系统评分**：
+            - 高分 → 更容易产生深度连接
+            - 中分 → 有潜力但需要磨合
+            - 低分 → 更像不同轨道的人
+
+            ------------------------------------------------
+
+            请按以下 JSON 结构输出：
 
             {
-              "yuanFenIndex": "（用一个有创意的词或短语描述两人友谊缘分等级，如「灵魂搭档」「志同道合」「相见恨晚」「铁杆知己」等，禁止只输出数字）",
-              "personalityAnalysis": "（100字以内，分析两人性格如何互补互助，举一个具体的友情生活场景例子）",
+              "yuanFenIndex": "（用一个有情绪感的短语描述两人关系，例如：同频的灵魂、默契搭子、奇妙组合、慢慢靠近的关系、意外的同路人等）",
+              "overallInterpretation": "（150字以内，总体描述两人之间的关系气质，例如更像朋友型关系、互补型关系、灵魂交流型关系等）",
+              "personalityInteraction": "（150字以内，分析两人MBTI性格互动方式，并举一个具体生活互动场景）",
+              "interestChemistry": "（120字以内，分析兴趣爱好带来的互动方式，例如一起做什么会更有默契）",
+              "campusMoment": "（100字以内，用一个具体的校园场景描写两人互动，例如自习室、社团活动、咖啡店聊天等，让用户产生画面感）",
+              "relationshipPotential": "（120字以内，分析这种关系未来可能的发展方向，例如成为长期好友、彼此支持的伙伴，或存在更深情感可能）",
+              "potentialChallenge": "（80字以内，指出可能的摩擦点，但语气温柔，并给出简单建议）",
               "recommendActivities": [
-                "活动1（结合两人兴趣，适合朋友一起做的活动）",
-                "活动2",
-                "活动3"
+                "互动建议1（适合两人的活动）",
+                "互动建议2",
+                "互动建议3"
               ],
-              "potentialChallenge": "（60字以内，真实指出友情相处中可能的摩擦点，语气要温柔，给出一句化解建议）",
-              "developmentPotential": "（80字以内，综合所有维度，从友情发展角度给出有温度的建议，不要做绝对化断言）",
-              "exclusiveQuote": "（一句20字以内的专属友谊金句，要有趣味或哲理，让人想截图分享）"
+              "exclusiveQuote": "（一句20字以内的关系金句，可以偏友情，也可以带一点暧昧氛围，适合截图分享）"
             }""";
 
     public YuanFenAnalysisResponse analyze(User userA, User userB, MatchResultResponse matchResult) {
@@ -135,7 +252,7 @@ public class YuanFenAnalysisSkill {
         try {
             aiResponse = aiService.chatCompletion(systemPrompt, userPrompt);
         } catch (Exception e) {
-            log.warn("AI 服务调用失败，使用本地降级结果: {}", e.getMessage());
+            log.warn("YuanFen AI call FAILED: {} - {}", e.getClass().getSimpleName(), e.getMessage());
             return buildFallbackResult(matchResult, sameGender);
         }
 
@@ -144,14 +261,29 @@ public class YuanFenAnalysisSkill {
         if (json.startsWith("```")) {
             json = json.replaceFirst("```(?:json)?\\s*", "").replaceFirst("\\s*```$", "");
         }
+        // 智谱等模型可能返回中文/弯引号包裹内容，直接移除这些字符（避免替换为"导致双引号破坏JSON）
+        json = json.replace("「", "").replace("」", "").replace("『", "").replace("』", "")
+                .replace("\u201C", "").replace("\u201D", "");  // " " 弯引号
 
         try {
             YuanFenAnalysisResponse result = objectMapper.readValue(json, YuanFenAnalysisResponse.class);
+            // 同性版本字段映射到统一 DTO
+            if (sameGender) {
+                if (result.getPersonalityInteraction() != null && result.getPersonalityAnalysis() == null) {
+                    result.setPersonalityAnalysis(result.getPersonalityInteraction());
+                }
+                if (result.getCampusMoment() != null && result.getCampusStoryScene() == null) {
+                    result.setCampusStoryScene(result.getCampusMoment());
+                }
+                if (result.getRelationshipPotential() != null && result.getDevelopmentPotential() == null) {
+                    result.setDevelopmentPotential(result.getRelationshipPotential());
+                }
+            }
             result.setGeneratedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
             result.setNextAvailableAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
             return result;
         } catch (Exception e) {
-            log.error("解析 AI 返回 JSON 失败: {}", json, e);
+            log.error("YuanFen JSON parse FAILED, len={}, preview={}", json.length(), json.length() > 200 ? json.substring(0, 200) + "..." : json, e);
             return buildFallbackResult(matchResult, sameGender);
         }
     }
@@ -171,6 +303,8 @@ public class YuanFenAnalysisSkill {
                 .replace("{nicknameA}", desensitize(a.getNickname()))
                 .replace("{genderA}", genderLabel(a.getGender()))
                 .replace("{ageA}", String.valueOf(calcAge(a.getBirthDate())))
+                .replace("{schoolA}", safe(a.getSchool()))
+                .replace("{gradeA}", safe(a.getGrade()))
                 .replace("{mbtiA}", safe(a.getMbti()))
                 .replace("{zodiacA}", safe(a.getZodiac()))
                 .replace("{interestsA}", safe(a.getInterests()))
@@ -178,6 +312,8 @@ public class YuanFenAnalysisSkill {
                 .replace("{nicknameB}", desensitize(b.getNickname()))
                 .replace("{genderB}", genderLabel(b.getGender()))
                 .replace("{ageB}", String.valueOf(calcAge(b.getBirthDate())))
+                .replace("{schoolB}", safe(b.getSchool()))
+                .replace("{gradeB}", safe(b.getGrade()))
                 .replace("{mbtiB}", safe(b.getMbti()))
                 .replace("{zodiacB}", safe(b.getZodiac()))
                 .replace("{interestsB}", safe(b.getInterests()))
@@ -216,15 +352,21 @@ public class YuanFenAnalysisSkill {
         int score = match.getMatchScore() != null ? match.getMatchScore() : 50;
 
         if (sameGender) {
-            result.setYuanFenIndex(score >= 70 ? "灵魂搭档" : score >= 50 ? "志同道合" : "有缘相识");
-            result.setPersonalityAnalysis("你们各有特点，在相处中可以互相学习、互相支持，有成为挚友的潜质。");
+            result.setYuanFenIndex(score >= 70 ? "同频的灵魂" : score >= 50 ? "默契搭子" : "有缘相识");
+            result.setOverallInterpretation("你们各有特点，在相处中可以互相学习、互相支持，有成为挚友的潜质。");
+            result.setPersonalityAnalysis("性格上各有互补，一个更主动一个更沉稳，在小组作业或社团活动中会配合得不错。");
+            result.setInterestChemistry("兴趣有交集的话，一起自习、打球、约饭都会很自然。");
+            result.setCampusStoryScene("图书馆里偶遇，或者在操场跑步时打个招呼，慢慢就从点头之交变成可以一起聊天的朋友。");
             result.setRecommendActivities(java.util.List.of("一起去校园咖啡馆聊天", "参加学校社团活动", "组队打比赛或一起自习"));
             result.setPotentialChallenge("好朋友之间也需要空间，学会尊重彼此的节奏，友谊会更长久。");
             result.setDevelopmentPotential("保持真诚的交流，多分享生活中的小事，你们会成为彼此最好的伙伴。");
             result.setExclusiveQuote("最好的友情是彼此成就，一起发光。");
         } else {
             result.setYuanFenIndex(score >= 70 ? "有缘千里" : score >= 50 ? "妙不可言" : "缘起缘落");
-            result.setPersonalityAnalysis("你们各有特点，在相处中可以相互欣赏、互相成长，未来充满可能性。");
+            result.setOverallInterpretation("你们各有特点，在相处中可以相互欣赏、互相成长，未来充满可能性。");
+            result.setPersonalityAnalysis("性格上各有互补，一个更主动一个更沉稳，在相处中会互相吸引。");
+            result.setInterestChemistry("兴趣有交集的话，一起看电影、约会吃饭都会很自然。");
+            result.setCampusStoryScene("图书馆里偶遇，或者在操场散步时打个招呼，慢慢就从点头之交变成可以约出来的人。");
             result.setRecommendActivities(java.util.List.of("一起去校园咖啡馆聊天", "找一部两人都喜欢的电影看", "周末一起探索校园周边美食"));
             result.setPotentialChallenge("每段感情都需要磨合，多一些耐心倾听，少一些急于求成。");
             result.setDevelopmentPotential("保持真诚的交流，用心去了解对方，美好的事情会自然发生。");

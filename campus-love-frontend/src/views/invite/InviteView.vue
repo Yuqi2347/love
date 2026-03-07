@@ -91,19 +91,19 @@
             <!-- 1v1 显示双方头像与昵称 -->
             <template v-if="invite.inviteMode === 'PRIVATE'">
               <div class="invite-1v1-users">
-                <div class="invite-1v1-user">
+                <div class="invite-1v1-user" @click.stop="$router.push(`/profile/${invite.creatorId}`)">
                   <img :src="invite.creator?.avatarUrl || defaultAvatar" class="invite-1v1-avatar" width="28" height="28" alt="" />
                   <span class="invite-1v1-name">{{ invite.creator?.nickname || '未知' }}</span>
                 </div>
                 <span class="invite-1v1-vs">↔</span>
-                <div class="invite-1v1-user">
+                <div class="invite-1v1-user" @click.stop="$router.push(`/profile/${invite.targetUserId}`)">
                   <img :src="invite.targetUser?.avatarUrl || defaultAvatar" class="invite-1v1-avatar" width="28" height="28" alt="" />
                   <span class="invite-1v1-name">{{ invite.targetUser?.nickname || 'TA' }}</span>
                 </div>
               </div>
             </template>
             <template v-else>
-              <span class="meta-item">
+              <span class="meta-item meta-item-clickable" @click.stop="$router.push(`/profile/${invite.creatorId}`)">
                 <el-icon><User /></el-icon>
                 {{ invite.creator?.nickname || '未知' }}
               </span>
@@ -683,6 +683,9 @@ onMounted(() => {
     display: flex;
     align-items: center;
     gap: 6px;
+    cursor: pointer;
+
+    &:hover .invite-1v1-name { color: $primary; }
   }
   .invite-1v1-avatar {
     border-radius: 50%;
@@ -702,6 +705,12 @@ onMounted(() => {
     gap: 4px;
     font-size: 13px;
     color: $text-secondary;
+  }
+
+  .meta-item-clickable {
+    cursor: pointer;
+
+    &:hover { color: $primary; }
   }
 }
 

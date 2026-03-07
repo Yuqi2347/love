@@ -39,7 +39,7 @@
           <h3 class="invite-title">{{ item.invite.title }}</h3>
           <p v-if="item.invite.content" class="invite-content">{{ item.invite.content }}</p>
           <div class="invite-meta">
-            <span class="meta-item">
+            <span class="meta-item meta-item-clickable" @click.stop="$router.push(`/profile/${item.invite.creatorId}`)">
               {{ item.invite.creator?.nickname || '未知' }}
             </span>
             <span class="meta-item">
@@ -257,8 +257,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import {
   getDiscoveryPosts,
   likePost,
@@ -288,6 +288,7 @@ import {
   formatInviteTime,
 } from '@/constants/inviteConst'
 
+const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const inviteStore = useInviteStore()
@@ -327,8 +328,19 @@ function canDeletePost(post: FeedPost): boolean {
   return isAdmin || isOwner
 }
 
+// 从 URL 读取邀约类型筛选（热门邀约看板跳转时传入）
+function getInviteTypeFromRoute(): string | undefined {
+  const t = route.query.type
+  return typeof t === 'string' && t ? t : undefined
+}
+
 onMounted(async () => {
   await Promise.all([loadPosts(), loadLevelInfo(), loadInvites()])
+})
+
+// 路由 query.type 变化时重新拉取邀约（如从热门看板切换类型）
+watch(() => route.query.type, () => {
+  loadInvites()
 })
 
 type TimelineItem =
@@ -388,8 +400,9 @@ async function loadPosts() {
 
 async function loadInvites() {
   try {
-    // 发现页每次进入都拉取邀约列表，保证卡片可见；用 month 扩大时间范围
-    await inviteStore.fetchInvites(undefined, undefined, 'month')
+    // 发现页拉取邀约列表；支持 type 筛选（热门邀约看板跳转时传入）
+    const type = getInviteTypeFromRoute()
+    await inviteStore.fetchInvites(type, undefined, 'month')
   } catch {
     // ignore
   }
@@ -751,6 +764,12 @@ async function handleDeletePost(postId: number) {
   .meta-item {
     font-size: 12px;
     color: $text-secondary;
+  }
+
+  .meta-item-clickable {
+    cursor: pointer;
+
+    &:hover { color: $primary; }
   }
 }
 

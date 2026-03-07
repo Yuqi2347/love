@@ -104,18 +104,14 @@
         <div v-else class="empty-hint">完善资料后查看推荐</div>
       </div>
 
-      <div class="panel-card">
-        <div class="panel-title-row">
-          <h3 class="panel-title">热门邀约看板</h3>
-          <button class="btn-text" @click="$router.push('/invite')">查看全部</button>
-        </div>
+      <div class="panel-card board-card" @click="$router.push('/discover')">
+        <h3 class="panel-title">热门邀约看板</h3>
         <div v-if="boardLoading" class="board-loading">加载中...</div>
         <div v-else-if="inviteBoard.length" class="board-list">
           <div
             v-for="item in inviteBoard"
             :key="item.inviteType"
             class="board-item"
-            @click="$router.push(`/invite?type=${item.inviteType}`)"
           >
             <div class="board-item-left">
               <span class="board-dot" :style="{ background: getTypeColor(item.inviteType) }" />
@@ -871,6 +867,15 @@ onMounted(loadInviteBoard)
   margin-bottom: 16px;
 }
 
+.board-card {
+  cursor: pointer;
+  transition: box-shadow $transition-fast;
+
+  &:hover {
+    box-shadow: $shadow-md;
+  }
+}
+
 .panel-title {
   font-size: 18px;
   font-weight: 700;
@@ -923,10 +928,6 @@ onMounted(loadInviteBoard)
   gap: 12px;
   padding: 12px 12px 10px;
   border-radius: $radius-lg;
-  cursor: pointer;
-  transition: background $transition-fast;
-
-  &:hover { background: $bg-tertiary; }
 }
 
 .board-item-left {

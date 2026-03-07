@@ -53,26 +53,34 @@ public class YuanFenService {
         long minId = Math.min(userId, targetUserId);
         long maxId = Math.max(userId, targetUserId);
 
-        // 4. 检查冷却 + 缓存（冷却时间为0时跳过）
-        if (cooldownHours > 0) {
+        // 4. 检查缓存：-1=永久缓存，>0=冷却期内缓存，0=不缓存（每次调用AI）
+        if (cooldownHours == 0) {
+            log.info("YuanFen CACHE SKIP (cooldown=0, always call AI) userId={} targetUserId={}", userId, targetUserId);
+        }
+        if (cooldownHours != 0) {
             try {
-                LocalDateTime cooldownSince = LocalDateTime.now().minusHours(cooldownHours);
-                YuanFenAnalysisLog cachedLog = logMapper.selectOne(
-                        new LambdaQueryWrapper<YuanFenAnalysisLog>()
-                                .eq(YuanFenAnalysisLog::getUserIdA, minId)
-                                .eq(YuanFenAnalysisLog::getUserIdB, maxId)
-                                .gt(YuanFenAnalysisLog::getCreatedAt, cooldownSince)
-                                .orderByDesc(YuanFenAnalysisLog::getCreatedAt)
-                                .last("LIMIT 1")
-                );
+                LambdaQueryWrapper<YuanFenAnalysisLog> wrapper = new LambdaQueryWrapper<YuanFenAnalysisLog>()
+                        .eq(YuanFenAnalysisLog::getUserIdA, minId)
+                        .eq(YuanFenAnalysisLog::getUserIdB, maxId)
+                        .orderByDesc(YuanFenAnalysisLog::getCreatedAt)
+                        .last("LIMIT 1");
+                // 永久缓存(-1)：不限制时间；限时冷却(>0)：只查冷却期内的记录
+                if (cooldownHours > 0) {
+                    LocalDateTime cooldownSince = LocalDateTime.now().minusHours(cooldownHours);
+                    wrapper.gt(YuanFenAnalysisLog::getCreatedAt, cooldownSince);
+                }
+                YuanFenAnalysisLog cachedLog = logMapper.selectOne(wrapper);
 
                 if (cachedLog != null && cachedLog.getAiResult() != null) {
                     try {
                         YuanFenAnalysisResponse cached = objectMapper.readValue(
                                 cachedLog.getAiResult(), YuanFenAnalysisResponse.class);
-                        LocalDateTime nextAvailable = cachedLog.getCreatedAt().plusHours(cooldownHours);
+                        LocalDateTime nextAvailable = cooldownHours > 0
+                                ? cachedLog.getCreatedAt().plusHours(cooldownHours)
+                                : cachedLog.getCreatedAt(); // 永久缓存时 nextAvailable 无意义
                         cached.setNextAvailableAt(nextAvailable.toString());
                         cached.setGeneratedAt(cachedLog.getCreatedAt().toString());
+                        log.info("YuanFen CACHE HIT userId={} targetUserId={}", userId, targetUserId);
                         return cached;
                     } catch (Exception e) {
                         log.warn("解析缓存的缘分分析结果失败，将重新生成", e);
@@ -84,6 +92,7 @@ public class YuanFenService {
         }
 
         // 5. 获取双方信息 + 匹配详情
+        log.info("YuanFen NO CACHE, calling AI userId={} targetUserId={}", userId, targetUserId);
         User userA = userMapper.selectById(userId);
         User userB = userMapper.selectById(targetUserId);
         if (userA == null || userB == null) {
@@ -95,13 +104,14 @@ public class YuanFenService {
         // 6. 调用 AI（失败时自动降级为本地生成结果）
         YuanFenAnalysisResponse result = yuanFenSkill.analyze(userA, userB, matchResult);
 
-        // 7. 保存日志
+        // 7. 保存日志（显式设置 createdAt，确保缓存查询能正确排序）
         try {
             YuanFenAnalysisLog logEntry = new YuanFenAnalysisLog();
             logEntry.setUserIdA(minId);
             logEntry.setUserIdB(maxId);
             logEntry.setTotalScore(matchResult.getMatchScore());
             logEntry.setAiResult(objectMapper.writeValueAsString(result));
+            logEntry.setCreatedAt(LocalDateTime.now());
             logMapper.insert(logEntry);
         } catch (Exception e) {
             log.warn("保存缘分解析日志失败（不影响返回结果）", e);

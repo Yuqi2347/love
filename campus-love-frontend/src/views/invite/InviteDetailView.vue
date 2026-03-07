@@ -33,7 +33,7 @@
         <h1 class="invite-title">{{ invite.title }}</h1>
 
         <div class="invite-meta">
-          <div class="meta-row">
+          <div class="meta-row meta-row-clickable" @click="$router.push(`/profile/${invite.creatorId}`)">
             <span class="meta-label">发起人:</span>
             <span class="meta-value">
               {{ invite.creator?.nickname || '未知' }}
@@ -91,7 +91,7 @@
           </div>
           <div v-if="invite.participants && invite.participants.length" class="participants-list">
             <!-- 发起人单独展示在列表最上方 -->
-            <div class="participant-item">
+            <div class="participant-item" @click="$router.push(`/profile/${invite.creatorId}`)">
               <img :src="invite.creator?.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
               <span class="participant-name">
                 {{ invite.creator?.nickname || '发起人' }}
@@ -105,6 +105,7 @@
               v-for="p in invite.participants.filter(p => p.userId !== invite!.creatorId)"
               :key="p.userId"
               class="participant-item"
+              @click="$router.push(`/profile/${p.userId}`)"
             >
               <img :src="p.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
               <span class="participant-name">
@@ -129,13 +130,14 @@
               v-for="r in rejoinRequests"
               :key="r.userId"
               class="rejoin-item"
+              @click="$router.push(`/profile/${r.userId}`)"
             >
               <img :src="r.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" alt="" />
               <div class="rejoin-info">
                 <span class="rejoin-name">{{ r.nickname || '用户' }}</span>
                 <span class="rejoin-time">{{ formatRequestTime(r.requestedAt) }}</span>
               </div>
-              <div class="rejoin-actions">
+              <div class="rejoin-actions" @click.stop>
                 <button type="button" class="btn-text primary" @click="handleApproveRejoin(r.userId)">
                   同意
                 </button>
@@ -1009,6 +1011,12 @@ onMounted(loadInvite)
   font-size: 14px;
 }
 
+.meta-row-clickable {
+  cursor: pointer;
+
+  &:hover .meta-value { color: $primary; }
+}
+
 .meta-label { color: $text-muted; }
 .meta-value { color: $text-primary; font-weight: 500; }
 
@@ -1089,6 +1097,9 @@ onMounted(loadInvite)
   display: flex;
   align-items: center;
   gap: 12px;
+  cursor: pointer;
+
+  &:hover .participant-name { color: $primary; }
   padding: 8px 0;
 }
 
@@ -1136,6 +1147,9 @@ onMounted(loadInvite)
   display: flex;
   align-items: center;
   gap: 12px;
+  cursor: pointer;
+
+  &:hover .rejoin-name { color: $primary; }
   padding: 10px 12px;
   background: rgba($primary, 0.04);
   border-radius: $radius-md;

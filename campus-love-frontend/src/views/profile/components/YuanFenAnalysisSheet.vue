@@ -37,13 +37,40 @@
 
       <div class="yf-divider"></div>
 
-      <!-- 性格契合 -->
-      <div class="yf-section">
+      <!-- 总体评价 -->
+      <div v-if="result.overallInterpretation" class="yf-section">
+        <div class="yf-section-head">
+          <span class="yf-section-icon">&#128172;</span>
+          <span class="yf-section-title">总体评价</span>
+        </div>
+        <p class="yf-section-body">{{ result.overallInterpretation }}</p>
+      </div>
+
+      <!-- 性格契合/互动 -->
+      <div v-if="personalityContent" class="yf-section">
         <div class="yf-section-head">
           <span class="yf-section-icon">&#129504;</span>
           <span class="yf-section-title">性格契合</span>
         </div>
-        <p class="yf-section-body">{{ result.personalityAnalysis }}</p>
+        <p class="yf-section-body">{{ personalityContent }}</p>
+      </div>
+
+      <!-- 兴趣互动 -->
+      <div v-if="result.interestChemistry" class="yf-section">
+        <div class="yf-section-head">
+          <span class="yf-section-icon">&#127925;</span>
+          <span class="yf-section-title">兴趣互动</span>
+        </div>
+        <p class="yf-section-body">{{ result.interestChemistry }}</p>
+      </div>
+
+      <!-- 校园场景/时刻 -->
+      <div v-if="campusContent" class="yf-section">
+        <div class="yf-section-head">
+          <span class="yf-section-icon">&#127979;</span>
+          <span class="yf-section-title">校园场景</span>
+        </div>
+        <p class="yf-section-body">{{ campusContent }}</p>
       </div>
 
       <!-- 推荐活动 -->
@@ -53,7 +80,7 @@
           <span class="yf-section-title">推荐一起做</span>
         </div>
         <div class="yf-activities">
-          <div v-for="(act, i) in result.recommendActivities" :key="i" class="yf-activity">
+          <div v-for="(act, i) in (result.recommendActivities || [])" :key="i" class="yf-activity">
             <span class="yf-activity-dot">{{ i + 1 }}</span>
             <span class="yf-activity-text">{{ act }}</span>
           </div>
@@ -69,13 +96,13 @@
         <p class="yf-section-body">{{ result.potentialChallenge }}</p>
       </div>
 
-      <!-- 发展可能 -->
-      <div class="yf-section">
+      <!-- 发展可能/关系潜力 -->
+      <div v-if="developmentContent" class="yf-section">
         <div class="yf-section-head">
           <span class="yf-section-icon">&#127793;</span>
           <span class="yf-section-title">发展可能</span>
         </div>
-        <p class="yf-section-body">{{ result.developmentPotential }}</p>
+        <p class="yf-section-body">{{ developmentContent }}</p>
       </div>
 
       <!-- 缘分金句 -->
@@ -91,7 +118,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { getYuanFenAnalysis, type YuanFenAnalysisResult } from '@/api/aiApi'
 
 const props = defineProps<{
@@ -111,6 +138,11 @@ const loading = ref(false)
 const error = ref('')
 const result = ref<YuanFenAnalysisResult | null>(null)
 const copied = ref(false)
+
+// 兼容异性/同性不同字段名
+const personalityContent = computed(() => result.value?.personalityAnalysis || result.value?.personalityInteraction)
+const campusContent = computed(() => result.value?.campusStoryScene || result.value?.campusMoment)
+const developmentContent = computed(() => result.value?.developmentPotential || result.value?.relationshipPotential)
 
 watch(() => props.modelValue, (val) => {
   visible.value = val

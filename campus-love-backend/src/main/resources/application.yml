@@ -47,19 +47,23 @@ app:
     access-token-expiration: 7200000    # 2 hours
     refresh-token-expiration: 604800000 # 7 days
   upload:
-    path: ./uploads/
+    # 跨平台绝对路径：Windows/Linux 均可用。可通过 APP_UPLOAD_PATH 覆盖（如 /var/www/uploads/）
+    path: ${APP_UPLOAD_PATH:${user.home}/campus-love/uploads/}
     max-size: 10485760  # 10MB
   follow:
     daily-chat-limit: 5
     daily-invite-limit: 3
 
-# AI 配置（OpenAI 兼容接口：智谱 GLM / DeepSeek / OpenAI 等均可）
+# AI 配置（通义千问 Qwen，OpenAI 兼容接口）
 ai:
-  api-key: ${AI_API_KEY:52876445a3f34e39a4c32de762eb8c94.LbYMRl3pM7EzO8Vq}
-  base-url: ${AI_BASE_URL:https://open.bigmodel.cn/api/paas/v4}
-  model: ${AI_MODEL:glm-4-plus}
+  api-key: ${AI_API_KEY:sk-6d110762b8914167b80ba848e3166bc0}  # 请填写你的 DashScope API Key
+  # qwen3.5-flash 需用 compatible-mode；原生 api/v1 text-generation 不支持该模型
+  base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
+  model: ${AI_MODEL:qwen3-max}
   max-tokens: 1000
-  yuanfen-cooldown-hours: 0  # 缘分解析冷却时间（小时），0=无限制，生产环境建议设为1
+  # 缘分解析冷却：-1=永久缓存（一经解析永不重复调用），0=每次调用AI，>0=冷却N小时
+  # 调试时设为 0 可强制每次调用 AI，便于排查问题
+  yuanfen-cooldown-hours: ${YUANFEN_COOLDOWN:-1}
 
 springdoc:
   api-docs:

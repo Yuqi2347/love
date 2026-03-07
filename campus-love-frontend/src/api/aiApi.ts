@@ -3,13 +3,19 @@ import type { ApiResult } from './request'
 
 export interface YuanFenAnalysisResult {
   yuanFenIndex: string
-  personalityAnalysis: string
+  overallInterpretation?: string
+  personalityAnalysis?: string
+  personalityInteraction?: string  // 同性版本
+  interestChemistry?: string
+  campusStoryScene?: string
+  campusMoment?: string           // 同性版本
   recommendActivities: string[]
   potentialChallenge: string
-  developmentPotential: string
+  developmentPotential?: string
+  relationshipPotential?: string // 同性版本
   exclusiveQuote: string
-  generatedAt: string
-  nextAvailableAt: string
+  generatedAt?: string
+  nextAvailableAt?: string
 }
 
 export function getYuanFenAnalysis(targetUserId: number) {
