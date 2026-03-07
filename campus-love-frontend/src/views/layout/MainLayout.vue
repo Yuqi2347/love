@@ -134,10 +134,73 @@
     </aside>
 
     <!-- Post Dialog -->
-    <el-dialog v-model="showPostDialog" title="发布动态" width="520px" :close-on-click-modal="false">
+    <el-dialog v-model="showPostDialog" title="发布动态" width="560px" :close-on-click-modal="false">
       <el-input v-model="postContent" type="textarea" :rows="4" placeholder="分享你的校园生活..." maxlength="500" show-word-limit />
+
+      <!-- 多媒体上传区域 -->
+      <div class="post-media-section">
+        <!-- 已上传的图片预览 -->
+        <div v-if="uploadedImages.length" class="media-preview-grid">
+          <div v-for="(img, idx) in uploadedImages" :key="idx" class="media-preview-item">
+            <img :src="getMediaUrl(img)" class="preview-img" />
+            <button class="preview-remove" @click="removeImage(idx)">
+              <el-icon><Close /></el-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- 已上传的视频预览 -->
+        <div v-if="uploadedVideos.length" class="media-preview-grid">
+          <div v-for="(video, idx) in uploadedVideos" :key="idx" class="media-preview-item">
+            <video :src="getMediaUrl(video)" class="preview-video" />
+            <button class="preview-remove" @click="removeVideo(idx)">
+              <el-icon><Close /></el-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- 链接预览 -->
+        <div v-if="linkPreview.url" class="link-preview-card">
+          <img v-if="linkPreview.image" :src="getMediaUrl(linkPreview.image)" class="link-preview-img" />
+          <div class="link-preview-content">
+            <div class="link-preview-title">{{ linkPreview.title || linkPreview.url }}</div>
+            <button class="link-preview-remove" @click="clearLink">
+              <el-icon><Close /></el-icon>
+            </button>
+          </div>
+        </div>
+
+        <!-- 上传按钮 -->
+        <div class="media-actions">
+          <input ref="imageInputRef" type="file" accept="image/*" multiple hidden @change="handleImageSelect" />
+          <button class="media-btn" @click="imageInputRef?.click()">
+            <el-icon><Picture /></el-icon>
+            <span>图片</span>
+          </button>
+
+          <input ref="videoInputRef" type="file" accept="video/*" hidden @change="handleVideoSelect" />
+          <button class="media-btn" @click="videoInputRef?.click()">
+            <el-icon><VideoCamera /></el-icon>
+            <span>视频</span>
+          </button>
+
+          <button class="media-btn" @click="showLinkInput = !showLinkInput">
+            <el-icon><Link /></el-icon>
+            <span>链接</span>
+          </button>
+        </div>
+
+        <!-- 链接输入 -->
+        <div v-if="showLinkInput" class="link-input-wrapper">
+          <el-input v-model="linkUrlInput" placeholder="粘贴链接 (https://...)" @keyup.enter="handleAddLink" />
+          <button class="btn-link-add" @click="handleAddLink">添加</button>
+        </div>
+      </div>
+
       <template #footer>
-        <button class="btn-primary" :disabled="!postContent.trim()" @click="handleCreatePost">发布</button>
+        <button class="btn-primary" :disabled="isPublishing || (!postContent.trim() && !uploadedImages.length && !uploadedVideos.length && !linkPreview.url)" @click="handleCreatePost">
+          {{ isPublishing ? '发布中...' : '发布' }}
+        </button>
       </template>
     </el-dialog>
   </div>
@@ -150,10 +213,10 @@ import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { getRecommendations, type MatchResult } from '@/api/matchApi'
 import { followUser, unfollowUser, getFollowingList } from '@/api/followApi'
-import { createPost } from '@/api/feedApi'
+import { createPost, uploadImage, uploadVideo } from '@/api/feedApi'
 import { searchUsers, type UserSearchItem } from '@/api/userApi'
 import { ElMessage } from 'element-plus'
-// 右侧面板不再展示“热门标签”，改为热门邀约看板
+// 右侧面板不再展示”热门标签”，改为热门邀约看板
 import { getHotInviteTypeCounts, type InviteTypeCount } from '@/api/inviteApi'
 import { InviteType, INVITE_TYPE_LABELS } from '@/constants/inviteConst'
 
@@ -182,6 +245,16 @@ const topMatches = ref<MatchResult[]>([])
 const recommendFollowedIds = ref<number[]>([])
 const showPostDialog = ref(false)
 const postContent = ref('')
+
+// 多媒体上传状态
+const uploadedImages = ref<string[]>([])
+const uploadedVideos = ref<string[]>([])
+const linkPreview = ref<{ url: string; title: string; image: string }>({ url: '', title: '', image: '' })
+const linkUrlInput = ref('')
+const showLinkInput = ref(false)
+const isPublishing = ref(false)
+const imageInputRef = ref<HTMLInputElement>()
+const videoInputRef = ref<HTMLInputElement>()
 
 // 邀约看板（按类型统计）
 const inviteBoard = ref<Array<InviteTypeCount & { percent: number }>>([])
@@ -324,13 +397,116 @@ async function handleRecommendFollow(userId: number) {
 }
 
 async function handleCreatePost() {
-  if (!postContent.value.trim()) return
+  if (!postContent.value.trim() && !uploadedImages.value.length && !uploadedVideos.value.length && !linkPreview.value.url) {
+    return
+  }
+
+  isPublishing.value = true
   try {
-    await createPost({ content: postContent.value.trim() })
+    await createPost({
+      content: postContent.value.trim(),
+      images: uploadedImages.value.length ? uploadedImages.value.join(',') : undefined,
+      videos: uploadedVideos.value.length ? uploadedVideos.value.join(',') : undefined,
+      linkUrl: linkPreview.value.url || undefined,
+      linkTitle: linkPreview.value.title || undefined,
+      linkImage: linkPreview.value.image || undefined
+    })
     ElMessage.success('发布成功')
     showPostDialog.value = false
-    postContent.value = ''
-  } catch { /* handled */ }
+    resetPostForm()
+  } catch {
+    ElMessage.error('发布失败')
+  } finally {
+    isPublishing.value = false
+  }
+}
+
+function resetPostForm() {
+  postContent.value = ''
+  uploadedImages.value = []
+  uploadedVideos.value = []
+  linkPreview.value = { url: '', title: '', image: '' }
+  linkUrlInput.value = ''
+  showLinkInput.value = false
+}
+
+// 图片上传
+async function handleImageSelect(e: Event) {
+  const target = e.target as HTMLInputElement
+  const files = target.files
+  if (!files) return
+
+  for (const file of Array.from(files)) {
+    if (file.size > 10 * 1024 * 1024) {
+      ElMessage.warning('图片大小不能超过10MB')
+      continue
+    }
+    try {
+      ElMessage.info('上传中...')
+      const res = await uploadImage(file)
+      // 后端返回 data 字段为 "/uploads/xxx.jpg"，存储原始路径，显示时用 getMediaUrl() 加前缀
+      const imagePath = res.data.data
+      if (imagePath) uploadedImages.value.push(imagePath)
+      ElMessage.success('图片上传成功')
+    } catch (err) {
+      ElMessage.error('图片上传失败')
+    }
+  }
+  target.value = ''
+}
+
+function removeImage(index: number) {
+  uploadedImages.value.splice(index, 1)
+}
+
+// 视频上传
+async function handleVideoSelect(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  if (file.size > 100 * 1024 * 1024) {
+    ElMessage.warning('视频大小不能超过100MB')
+    return
+  }
+
+  try {
+    ElMessage.info('视频上传中，请稍候...')
+    const res = await uploadVideo(file)
+    const videoPath = res.data.data
+    if (videoPath) uploadedVideos.value.push(videoPath)
+    ElMessage.success('视频上传成功')
+  } catch (err) {
+    ElMessage.error('视频上传失败')
+  }
+  target.value = ''
+}
+
+function removeVideo(index: number) {
+  uploadedVideos.value.splice(index, 1)
+}
+
+// 链接处理
+function handleAddLink() {
+  const url = linkUrlInput.value.trim()
+  if (!url) return
+
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    ElMessage.warning('请输入有效的链接（以 http:// 或 https:// 开头）')
+    return
+  }
+
+  linkPreview.value = {
+    url,
+    title: url, // 简单处理，实际可以抓取标题
+    image: '' // 简单处理，实际可以抓取预览图
+  }
+  linkUrlInput.value = ''
+  showLinkInput.value = false
+}
+
+function clearLink() {
+  linkPreview.value = { url: '', title: '', image: '' }
 }
 
 function typeLabel(t: string) {
@@ -346,6 +522,16 @@ function getTypeColor(type: string): string {
     OTHER: '#8c8c8c',
   }
   return colors[type] || '#8c8c8c'
+}
+
+function getMediaUrl(url: string | null): string {
+  if (!url) return ''
+  // 如果是完整 URL 或已包含 /api 前缀，直接返回
+  if (url.startsWith('http') || url.startsWith('/api')) {
+    return url
+  }
+  // 添加 /api 前缀
+  return '/api' + (url.startsWith('/') ? url : '/' + url)
 }
 
 async function loadInviteBoard() {
@@ -451,6 +637,147 @@ onMounted(loadInviteBoard)
   height: 48px;
   margin-top: 16px;
   font-size: 16px;
+}
+
+// 发布动态多媒体区域
+.post-media-section {
+  margin-top: 16px;
+}
+
+.media-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.media-preview-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: $bg-tertiary;
+
+  .preview-img,
+  .preview-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .preview-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s;
+
+    &:hover { background: rgba(245, 34, 45, 0.9); }
+  }
+}
+
+.link-preview-card {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: $bg-tertiary;
+  border-radius: 8px;
+  margin-bottom: 12px;
+
+  .link-preview-img {
+    width: 60px;
+    height: 60px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .link-preview-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 8px;
+  }
+
+  .link-preview-title {
+    flex: 1;
+    font-size: 14px;
+    font-weight: 500;
+    word-break: break-all;
+  }
+
+  .link-preview-remove {
+    flex-shrink: 0;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.1);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover { background: rgba(245, 34, 45, 0.2); }
+  }
+}
+
+.media-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.media-btn {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  background: $bg-tertiary;
+  border: 1px solid $border-light;
+  border-radius: $radius-full;
+  font-size: 14px;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba($primary, 0.1);
+    color: $primary;
+    border-color: $primary;
+  }
+}
+
+.link-input-wrapper {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+
+  .el-input { flex: 1; }
+}
+
+.btn-link-add {
+  padding: 8px 16px;
+  background: $primary;
+  color: white;
+  border: none;
+  border-radius: $radius-md;
+  font-size: 14px;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover { opacity: 0.9; }
 }
 
 .sidebar-user {

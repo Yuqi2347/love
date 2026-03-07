@@ -15,6 +15,10 @@ public class FeedPostResponse {
     private String avatarUrl;
     private String content;
     private String images;
+    private String videos;
+    private String linkUrl;
+    private String linkTitle;
+    private String linkImage;
     private Integer likeCount;
     private Integer commentCount;
     private Boolean liked;

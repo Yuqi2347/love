@@ -22,8 +22,9 @@ public class MatchController {
     @GetMapping("/recommendations")
     public Result<List<MatchResultResponse>> getRecommendations(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return Result.success(matchService.getRecommendations(page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(defaultValue = "all") String genderFilter) {
+        return Result.success(matchService.getRecommendations(page, size, genderFilter));
     }
 
     @Operation(summary = "查看与某用户的匹配详情")

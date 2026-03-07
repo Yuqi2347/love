@@ -150,8 +150,8 @@ const submitting = ref(false)
 
 function imageUrl(url: string) {
   if (!url) return ''
-  if (url.startsWith('http')) return url
-  return url.startsWith('/') ? url : '/' + url
+  if (url.startsWith('http') || url.startsWith('/api')) return url
+  return '/api' + (url.startsWith('/') ? url : '/' + url)
 }
 
 function formatTime(createdAt: string) {

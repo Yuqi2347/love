@@ -22,7 +22,23 @@
         <p class="feed-content">{{ post.content }}</p>
 
         <div v-if="post.images" class="feed-images">
-          <img v-for="(img, i) in post.images.split(',')" :key="i" :src="img" class="feed-img" />
+          <img v-for="(img, i) in post.images.split(',')" :key="i" :src="getMediaUrl(img)" class="feed-img" />
+        </div>
+
+        <!-- 视频展示 -->
+        <div v-if="post.videos" class="feed-videos">
+          <video v-for="(video, i) in post.videos.split(',')" :key="i" :src="getMediaUrl(video)" class="feed-video" controls />
+        </div>
+
+        <!-- 链接预览 -->
+        <div v-if="post.linkUrl" class="feed-link">
+          <a :href="post.linkUrl" target="_blank" class="link-card">
+            <img v-if="post.linkImage" :src="getMediaUrl(post.linkImage)" class="link-image" />
+            <div class="link-content">
+              <div class="link-title">{{ post.linkTitle || post.linkUrl }}</div>
+              <div class="link-url">{{ getDomain(post.linkUrl) }}</div>
+            </div>
+          </a>
         </div>
 
         <div class="feed-actions">
@@ -132,6 +148,25 @@ async function handleDelete(postId: number) {
     ElMessage.success('已删除')
   } catch { /* cancelled or error */ }
 }
+
+function getMediaUrl(url: string | null): string {
+  if (!url) return ''
+  // 如果是完整 URL 或已包含 /api 前缀，直接返回
+  if (url.startsWith('http') || url.startsWith('/api')) {
+    return url
+  }
+  // 添加 /api 前缀
+  return '/api' + (url.startsWith('/') ? url : '/' + url)
+}
+
+function getDomain(url: string) {
+  try {
+    const domain = new URL(url).hostname
+    return domain.replace('www.', '')
+  } catch {
+    return url
+  }
+}
 </script>
 
 <style lang="scss" scoped>
@@ -195,6 +230,69 @@ async function handleDelete(postId: number) {
   border-radius: $radius-md;
   object-fit: cover;
   aspect-ratio: 1;
+}
+
+.feed-videos {
+  margin-bottom: 10px;
+}
+
+.feed-video {
+  width: 100%;
+  max-height: 400px;
+  border-radius: $radius-md;
+  object-fit: contain;
+  background: #000;
+}
+
+.feed-link {
+  margin-bottom: 10px;
+}
+
+.link-card {
+  display: flex;
+  gap: 12px;
+  padding: 12px;
+  background: $bg-tertiary;
+  border-radius: $radius-md;
+  text-decoration: none;
+  transition: all $transition-fast;
+
+  &:hover {
+    background: darken($bg-tertiary, 5%);
+  }
+}
+
+.link-image {
+  width: 80px;
+  height: 80px;
+  border-radius: $radius-sm;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.link-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.link-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: $text-primary;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.link-url {
+  font-size: 12px;
+  color: $text-muted;
 }
 
 .feed-actions {

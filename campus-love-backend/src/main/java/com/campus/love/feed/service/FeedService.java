@@ -52,6 +52,10 @@ public class FeedService {
         post.setUserId(userId);
         post.setContent(request.getContent());
         post.setImages(request.getImages());
+        post.setVideos(request.getVideos());
+        post.setLinkUrl(request.getLinkUrl());
+        post.setLinkTitle(request.getLinkTitle());
+        post.setLinkImage(request.getLinkImage());
         // 默认发到朋友圈
         post.setPostType(request.getPostType() != null ? request.getPostType() : PostTypeConstants.TIMELINE);
         post.setRequiredLevel(UserLevelConstants.POST_FEED_MIN_LEVEL);
@@ -80,6 +84,10 @@ public class FeedService {
         post.setUserId(userId);
         post.setContent(request.getContent());
         post.setImages(request.getImages());
+        post.setVideos(request.getVideos());
+        post.setLinkUrl(request.getLinkUrl());
+        post.setLinkTitle(request.getLinkTitle());
+        post.setLinkImage(request.getLinkImage());
         post.setPostType(PostTypeConstants.DISCOVERY);
         post.setRequiredLevel(UserLevelConstants.POST_FEED_MIN_LEVEL);
         post.setLikeCount(0);
@@ -340,6 +348,10 @@ public class FeedService {
                 .avatarUrl(author != null ? author.getAvatarUrl() : "")
                 .content(post.getContent())
                 .images(post.getImages())
+                .videos(post.getVideos())
+                .linkUrl(post.getLinkUrl())
+                .linkTitle(post.getLinkTitle())
+                .linkImage(post.getLinkImage())
                 .likeCount(post.getLikeCount())
                 .commentCount(post.getCommentCount())
                 .liked(liked)

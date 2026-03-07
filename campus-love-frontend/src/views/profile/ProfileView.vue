@@ -95,6 +95,9 @@
       </div>
 
       <div class="profile-meta">
+        <span v-if="profile.gender !== null && profile.gender !== undefined" class="meta-item gender" :class="profile.gender === 1 ? 'male' : 'female'">
+          {{ profile.gender === 1 ? '♂ 男' : '♀ 女' }}
+        </span>
         <span v-if="profile.school" class="meta-item">🎓 {{ profile.school }}</span>
         <span v-if="profile.major" class="meta-item">📚 {{ profile.major }}</span>
         <span v-if="profile.grade" class="meta-item">📅 {{ profile.grade }}</span>
@@ -771,6 +774,13 @@ async function handleAvatarChange(event: Event) {
     font-size: 14px;
     color: $text-secondary;
     &.mbti { color: $primary; font-weight: 600; }
+    &.gender {
+      padding: 4px 12px;
+      border-radius: $radius-full;
+      font-weight: 600;
+      &.male { background: rgba(#2196F3, 0.1); color: #2196F3; }
+      &.female { background: rgba(#E91E63, 0.1); color: #E91E63; }
+    }
   }
 }
 

@@ -113,16 +113,10 @@ public class UserWeightService {
     /**
      * 用户触发行为后更新其个性化权重
      *
-     * 保守策略说明（V2.1）：
-     * 1. 只有"关注"行为才更新权重（明确的正向信号）
-     * 2. "忽略"行为不更新权重（原因不明，可能是长相、距离等非匹配因素）
-     * 3. 关注时：根据被关注用户的各维度得分，提高相应维度权重
-     * 4. 每次调整极其微小（0.001级别），需要大量行为才能看到明显变化
-     *
-     * 设计理念：
-     * - 用户忽略一个人可能是因为长相、距离、个人简介等非匹配因素
-     * - 用户关注一个人说明整体画像有吸引力，但不知道具体是哪方面吸引
-     * - 因此关注时均匀提高所有维度的权重，让系统更多样化推荐
+     * 平衡策略说明（V2.1）：
+     * 1. "关注"行为：提高被关注用户优势维度的权重（正向信号）
+     * 2. "忽略"行为：降低被忽略用户低分维度的权重（负向信号）
+     * 3. 权重调整幅度适中，用户行为能较快影响推荐
      *
      * @param userId       操作用户
      * @param targetUserId 被操作的目标用户
@@ -131,40 +125,59 @@ public class UserWeightService {
      */
     @Transactional
     public void updateWeightsOnAction(Long userId, Long targetUserId, String actionType, int signalStrength) {
-        // 保守策略：只有关注行为才更新权重
-        if (!"FOLLOW".equals(actionType)) {
-            // 其他行为（忽略、查看等）不更新权重
+        // 只处理关注和忽略行为
+        if (!"FOLLOW".equals(actionType) && !"IGNORE".equals(actionType)) {
             return;
         }
 
         // 读取当前用户权重
         UserWeights weights = getUserWeights(userId);
 
-        // 计算各维度得分（用于分析）
+        // 计算各维度得分
         Map<String, Integer> dimensionScores = calculateDimensionScores(userId, targetUserId);
         if (dimensionScores.isEmpty()) {
             log.warn("Failed to calculate dimension scores for users: {} -> {}", userId, targetUserId);
             return;
         }
 
-        // 计算综合匹配分（用于判断推荐质量）
+        // 计算综合匹配分
         double avgScore = dimensionScores.values().stream().mapToInt(Integer::intValue).average().orElse(50.0);
 
-        // 保守的权重更新策略
         Map<String, Double> newWeights = new HashMap<>(weights.getWeightMap());
 
-        // 如果关注的是高质量匹配（综合分>60），说明用户认可系统的推荐逻辑
-        // 轻微提高所有维度权重，让系统继续按现有逻辑推荐
-        if (avgScore > 60) {
-            for (String dim : GlobalWeights.getAllDimensions()) {
-                double currentWeight = newWeights.get(dim);
-                double dimScore = dimensionScores.getOrDefault(dim, 50);
+        if ("FOLLOW".equals(actionType)) {
+            // 关注行为：提高被关注用户优势维度的权重
+            // 如果关注的是高质量匹配（综合分>55），提高所有维度权重
+            if (avgScore > 55) {
+                for (String dim : GlobalWeights.getAllDimensions()) {
+                    double currentWeight = newWeights.get(dim);
+                    double dimScore = dimensionScores.getOrDefault(dim, 50);
 
-                // 该维度得分越高，权重增加越多（但总量很小）
-                double scoreFactor = dimScore / 100.0; // 0.0~1.0
-                double adjustment = 0.001 * scoreFactor * GlobalWeights.EMA_ALPHA;
+                    // 该维度得分越高，权重增加越多
+                    double scoreFactor = dimScore / 100.0;
+                    // 增大调整幅度：0.001 → 0.005
+                    double adjustment = 0.005 * scoreFactor * GlobalWeights.EMA_ALPHA;
 
-                newWeights.put(dim, GlobalWeights.clipWeightToBounds(dim, currentWeight + adjustment));
+                    newWeights.put(dim, GlobalWeights.clipWeightToBounds(dim, currentWeight + adjustment));
+                }
+            }
+        } else if ("IGNORE".equals(actionType)) {
+            // 忽略行为：降低低分维度的权重
+            // 如果忽略的是低质量匹配（综合分<50），降低其低分维度权重
+            if (avgScore < 50) {
+                for (String dim : GlobalWeights.getAllDimensions()) {
+                    double currentWeight = newWeights.get(dim);
+                    double dimScore = dimensionScores.getOrDefault(dim, 50);
+
+                    // 该维度得分越低，权重降低越多
+                    double scoreFactor = (50 - dimScore) / 50.0; // 0~1，得分越低因子越大
+                    if (scoreFactor > 0) {
+                        // 负向调整，但幅度稍微小一些
+                        double adjustment = 0.003 * scoreFactor * GlobalWeights.EMA_ALPHA;
+
+                        newWeights.put(dim, GlobalWeights.clipWeightToBounds(dim, currentWeight - adjustment));
+                    }
+                }
             }
         }
 
@@ -176,8 +189,8 @@ public class UserWeightService {
         weights.incrementActionCount();
         try {
             userWeightsMapper.updateById(weights);
-            log.info("User {} followed target {} (avg score: {}), slight weight adjustment applied",
-                    userId, targetUserId, String.format("%.1f", avgScore));
+            log.info("User {} {} target {} (avg score: {}), weight adjustment applied",
+                    userId, actionType.toLowerCase(), targetUserId, String.format("%.1f", avgScore));
         } catch (Exception e) {
             log.warn("Failed to save weights to database (table may not exist), using in-memory weights for user: {}", userId, e);
         }

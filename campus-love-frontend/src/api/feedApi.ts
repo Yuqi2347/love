@@ -18,6 +18,10 @@ export interface FeedPost {
   avatarUrl: string | null
   content: string
   images: string | null
+  videos: string | null
+  linkUrl: string | null
+  linkTitle: string | null
+  linkImage: string | null
   likeCount: number
   commentCount: number
   liked: boolean
@@ -25,12 +29,44 @@ export interface FeedPost {
   comments: FeedComment[]
 }
 
-export function createPost(data: { content: string; images?: string }) {
+export function createPost(data: {
+  content: string
+  images?: string
+  videos?: string
+  linkUrl?: string
+  linkTitle?: string
+  linkImage?: string
+}) {
   return request.post<ApiResult<FeedPost>>('/feed', data)
 }
 
-export function createDiscoveryPost(data: { content: string; images?: string }) {
+export function createDiscoveryPost(data: {
+  content: string
+  images?: string
+  videos?: string
+  linkUrl?: string
+  linkTitle?: string
+  linkImage?: string
+}) {
   return request.post<ApiResult<FeedPost>>('/feed/discovery', data)
+}
+
+// 上传图片 - 返回图片路径字符串
+export function uploadImage(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post<ApiResult<string>>('/feed/upload/image', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
+}
+
+// 上传视频 - 返回视频路径字符串
+export function uploadVideo(file: File) {
+  const formData = new FormData()
+  formData.append('file', file)
+  return request.post<ApiResult<string>>('/feed/upload/video', formData, {
+    headers: { 'Content-Type': 'multipart/form-data' }
+  })
 }
 
 export function getTimeline(page = 0, size = 10) {

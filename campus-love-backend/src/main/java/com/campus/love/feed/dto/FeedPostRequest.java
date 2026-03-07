@@ -1,15 +1,19 @@
 package com.campus.love.feed.dto;
 
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
 public class FeedPostRequest {
 
-    @NotBlank(message = "动态内容不能为空")
+    @Size(max = 500, message = "动态内容不能超过500字")
     private String content;
 
     private String images;
+    private String videos;
+    private String linkUrl;
+    private String linkTitle;
+    private String linkImage;
 
     /**
      * 帖子类型：TIMELINE(朋友圈) / DISCOVERY(发现模块)

@@ -78,9 +78,29 @@
             <img
               v-for="(img, idx) in item.post.images.split(',').slice(0, 3)"
               :key="idx"
-              :src="img"
+              :src="getMediaUrl(img)"
               class="feed-image"
             />
+          </div>
+          <!-- 视频展示 -->
+          <div v-if="item.post.videos" class="feed-videos" @click.stop>
+            <video
+              v-for="(video, idx) in item.post.videos.split(',')"
+              :key="idx"
+              :src="getMediaUrl(video)"
+              class="feed-video"
+              controls
+            />
+          </div>
+          <!-- 链接预览 -->
+          <div v-if="item.post.linkUrl" class="feed-link" @click.stop>
+            <a :href="item.post.linkUrl" target="_blank" class="link-card">
+              <img v-if="item.post.linkImage" :src="getMediaUrl(item.post.linkImage)" class="link-image" />
+              <div class="link-content">
+                <div class="link-title">{{ item.post.linkTitle || item.post.linkUrl }}</div>
+                <div class="link-url">{{ getDomain(item.post.linkUrl) }}</div>
+              </div>
+            </a>
           </div>
           <div class="feed-actions" @click.stop>
             <button
@@ -142,7 +162,7 @@
     </div>
 
     <!-- 发布动态弹窗 -->
-    <el-dialog v-model="showPostDialog" title="发布动态" width="500px">
+    <el-dialog v-model="showPostDialog" title="发布动态" width="560px" :close-on-click-modal="false">
       <el-form @submit.prevent="handlePost">
         <el-form-item>
           <el-input
@@ -154,13 +174,74 @@
             show-word-limit
           />
         </el-form-item>
+
+        <!-- 多媒体上传区域 -->
+        <div class="post-media-section">
+          <!-- 已上传的图片预览 -->
+          <div v-if="uploadedImages.length" class="media-preview-grid">
+            <div v-for="(img, idx) in uploadedImages" :key="idx" class="media-preview-item">
+              <img :src="getMediaUrl(img)" class="preview-img" />
+              <button type="button" class="preview-remove" @click="removeImage(idx)">
+                <el-icon><Close /></el-icon>
+              </button>
+            </div>
+          </div>
+
+          <!-- 已上传的视频预览 -->
+          <div v-if="uploadedVideos.length" class="media-preview-grid">
+            <div v-for="(video, idx) in uploadedVideos" :key="idx" class="media-preview-item">
+              <video :src="getMediaUrl(video)" class="preview-video" />
+              <button type="button" class="preview-remove" @click="removeVideo(idx)">
+                <el-icon><Close /></el-icon>
+              </button>
+            </div>
+          </div>
+
+          <!-- 链接预览 -->
+          <div v-if="linkPreview.url" class="link-preview-card">
+            <img v-if="linkPreview.image" :src="getMediaUrl(linkPreview.image)" class="link-preview-img" />
+            <div class="link-preview-content">
+              <div class="link-preview-title">{{ linkPreview.title || linkPreview.url }}</div>
+              <button type="button" class="link-preview-remove" @click="clearLink">
+                <el-icon><Close /></el-icon>
+              </button>
+            </div>
+          </div>
+
+          <!-- 上传按钮 -->
+          <div class="media-actions">
+            <input ref="imageInputRef" type="file" accept="image/*" multiple hidden @change="handleImageSelect" />
+            <button type="button" class="media-btn" @click="imageInputRef?.click()">
+              <el-icon><Picture /></el-icon>
+              <span>图片</span>
+            </button>
+
+            <input ref="videoInputRef" type="file" accept="video/*" hidden @change="handleVideoSelect" />
+            <button type="button" class="media-btn" @click="videoInputRef?.click()">
+              <el-icon><VideoCamera /></el-icon>
+              <span>视频</span>
+            </button>
+
+            <button type="button" class="media-btn" @click="showLinkInput = !showLinkInput">
+              <el-icon><Link /></el-icon>
+              <span>链接</span>
+            </button>
+          </div>
+
+          <!-- 链接输入 -->
+          <div v-if="showLinkInput" class="link-input-wrapper">
+            <el-input v-model="linkUrlInput" placeholder="粘贴链接 (https://...)" @keyup.enter="handleAddLink" />
+            <button type="button" class="btn-link-add" @click="handleAddLink">添加</button>
+          </div>
+        </div>
+
         <div v-if="levelInfo && levelInfo.level < 3" class="post-tip">
           当前等级 Lv{{ levelInfo.level }}，升级到 Lv3 可发布动态
         </div>
       </el-form>
       <template #footer>
-        <el-button @click="showPostDialog = false">取消</el-button>
-        <el-button type="primary" :disabled="posting || !postContent.trim()" @click="handlePost">
+        <el-button @click="closePostDialog">取消</el-button>
+        <el-button type="primary" :disabled="posting || (!postContent.trim() && !uploadedImages.length && !uploadedVideos.length && !linkPreview.url)" @click="handlePost">
           {{ posting ? '发布中...' : '发布' }}
         </el-button>
       </template>
@@ -186,6 +267,8 @@ import {
   createDiscoveryPost,
   deletePost,
   addComment,
+  uploadImage,
+  uploadVideo,
   type FeedPost,
   type FeedComment,
   type UserLevelInfo,
@@ -216,6 +299,15 @@ const postContent = ref('')
 const posting = ref(false)
 const commentingPostId = ref<number | null>(null)
 const commentText = ref('')
+
+// 多媒体上传状态
+const uploadedImages = ref<string[]>([])
+const uploadedVideos = ref<string[]>([])
+const linkPreview = ref<{ url: string; title: string; image: string }>({ url: '', title: '', image: '' })
+const linkUrlInput = ref('')
+const showLinkInput = ref(false)
+const imageInputRef = ref<HTMLInputElement>()
+const videoInputRef = ref<HTMLInputElement>()
 
 // 管理员或Lv3及以上可以发布
 const canPost = computed(() => {
@@ -383,16 +475,23 @@ function formatTime(timeStr: string): string {
 }
 
 async function handlePost() {
-  if (!postContent.value.trim()) {
-    ElMessage.warning('请输入内容')
+  if (!postContent.value.trim() && !uploadedImages.value.length && !uploadedVideos.value.length && !linkPreview.value.url) {
+    ElMessage.warning('请输入内容或添加媒体')
     return
   }
 
   posting.value = true
   try {
-    const res = await createDiscoveryPost({ content: postContent.value.trim() })
+    const res = await createDiscoveryPost({
+      content: postContent.value.trim(),
+      images: uploadedImages.value.length ? uploadedImages.value.join(',') : undefined,
+      videos: uploadedVideos.value.length ? uploadedVideos.value.join(',') : undefined,
+      linkUrl: linkPreview.value.url || undefined,
+      linkTitle: linkPreview.value.title || undefined,
+      linkImage: linkPreview.value.image || undefined
+    })
     posts.value.unshift(res.data.data)
-    postContent.value = ''
+    resetPostForm()
     showPostDialog.value = false
     await loadLevelInfo()
     ElMessage.success('发布成功')
@@ -402,6 +501,118 @@ async function handlePost() {
   } finally {
     posting.value = false
   }
+}
+
+function resetPostForm() {
+  postContent.value = ''
+  uploadedImages.value = []
+  uploadedVideos.value = []
+  linkPreview.value = { url: '', title: '', image: '' }
+  linkUrlInput.value = ''
+  showLinkInput.value = false
+}
+
+function closePostDialog() {
+  showPostDialog.value = false
+  resetPostForm()
+}
+
+// 图片上传
+async function handleImageSelect(e: Event) {
+  const target = e.target as HTMLInputElement
+  const files = target.files
+  if (!files) return
+
+  for (const file of Array.from(files)) {
+    if (file.size > 10 * 1024 * 1024) {
+      ElMessage.warning('图片大小不能超过10MB')
+      continue
+    }
+    try {
+      ElMessage.info('上传中...')
+      const res = await uploadImage(file)
+      // 后端返回 data 字段为 "/uploads/xxx.jpg"，存储原始路径，显示时用 getMediaUrl() 加前缀
+      const imagePath = res.data.data
+      if (imagePath) uploadedImages.value.push(imagePath)
+      ElMessage.success('图片上传成功')
+    } catch (err) {
+      ElMessage.error('图片上传失败')
+    }
+  }
+  target.value = ''
+}
+
+function removeImage(index: number) {
+  uploadedImages.value.splice(index, 1)
+}
+
+// 视频上传
+async function handleVideoSelect(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file) return
+
+  if (file.size > 100 * 1024 * 1024) {
+    ElMessage.warning('视频大小不能超过100MB')
+    return
+  }
+
+  try {
+    ElMessage.info('视频上传中，请稍候...')
+    const res = await uploadVideo(file)
+    const videoPath = res.data.data
+    if (videoPath) uploadedVideos.value.push(videoPath)
+    ElMessage.success('视频上传成功')
+  } catch (err) {
+    ElMessage.error('视频上传失败')
+  }
+  target.value = ''
+}
+
+function removeVideo(index: number) {
+  uploadedVideos.value.splice(index, 1)
+}
+
+// 链接处理
+function handleAddLink() {
+  const url = linkUrlInput.value.trim()
+  if (!url) return
+
+  if (!url.startsWith('http://') && !url.startsWith('https://')) {
+    ElMessage.warning('请输入有效的链接（以 http:// 或 https:// 开头）')
+    return
+  }
+
+  linkPreview.value = {
+    url,
+    title: url,
+    image: ''
+  }
+  linkUrlInput.value = ''
+  showLinkInput.value = false
+}
+
+function clearLink() {
+  linkPreview.value = { url: '', title: '', image: '' }
+}
+
+function getDomain(url: string) {
+  try {
+    const domain = new URL(url).hostname
+    return domain.replace('www.', '')
+  } catch {
+    return url
+  }
+}
+
+function getMediaUrl(url: string | null): string {
+  if (!url) return ''
+  // 如果是完整 URL 或已包含 /api 前缀，直接返回
+  if (url.startsWith('http') || url.startsWith('/api')) {
+    return url
+  }
+  // 添加 /api 前缀
+  return '/api' + (url.startsWith('/') ? url : '/' + url)
 }
 
 async function handleDeletePost(postId: number) {
@@ -722,5 +933,206 @@ async function handleDeletePost(postId: number) {
   .empty-icon { font-size: 64px; }
   p { color: $text-muted; font-size: 15px; }
   .empty-hint { font-size: 13px; color: $text-secondary; }
+}
+
+// 多媒体上传样式
+.post-media-section {
+  margin-top: 12px;
+}
+
+.media-preview-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.media-preview-item {
+  position: relative;
+  aspect-ratio: 1;
+  border-radius: 8px;
+  overflow: hidden;
+  background: $bg-tertiary;
+
+  .preview-img,
+  .preview-video {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  .preview-remove {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    color: white;
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover { background: rgba(245, 34, 45, 0.9); }
+  }
+}
+
+.link-preview-card {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background: $bg-tertiary;
+  border-radius: 8px;
+  margin-bottom: 12px;
+
+  .link-preview-img {
+    width: 50px;
+    height: 50px;
+    border-radius: 6px;
+    object-fit: cover;
+    flex-shrink: 0;
+  }
+
+  .link-preview-content {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 6px;
+  }
+
+  .link-preview-title {
+    flex: 1;
+    font-size: 13px;
+    font-weight: 500;
+    word-break: break-all;
+  }
+
+  .link-preview-remove {
+    flex-shrink: 0;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.1);
+    border: none;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    &:hover { background: rgba(245, 34, 45, 0.2); }
+  }
+}
+
+.media-actions {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.media-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  background: $bg-tertiary;
+  border: 1px solid $border-light;
+  border-radius: $radius-full;
+  font-size: 13px;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    background: rgba($primary, 0.1);
+    color: $primary;
+    border-color: $primary;
+  }
+}
+
+.link-input-wrapper {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+
+  .el-input { flex: 1; }
+}
+
+.btn-link-add {
+  padding: 6px 14px;
+  background: $primary;
+  color: white;
+  border: none;
+  border-radius: $radius-md;
+  font-size: 13px;
+  cursor: pointer;
+
+  &:hover { opacity: 0.9; }
+}
+
+// 动态列表中的视频和链接样式
+.feed-videos {
+  margin: 8px 0;
+}
+
+.feed-video {
+  width: 100%;
+  max-height: 300px;
+  border-radius: $radius-md;
+  object-fit: contain;
+  background: #000;
+}
+
+.feed-link {
+  margin: 8px 0;
+}
+
+.link-card {
+  display: flex;
+  gap: 10px;
+  padding: 10px;
+  background: $bg-tertiary;
+  border-radius: $radius-md;
+  text-decoration: none;
+  transition: all 0.2s;
+
+  &:hover { background: darken($bg-tertiary, 5%); }
+}
+
+.link-image {
+  width: 60px;
+  height: 60px;
+  border-radius: $radius-sm;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.link-content {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.link-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-primary;
+  margin-bottom: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.link-url {
+  font-size: 11px;
+  color: $text-muted;
 }
 </style>

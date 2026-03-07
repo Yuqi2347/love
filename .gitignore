@@ -21,6 +21,12 @@ application-*.local.yml
 # Uploads (local dev)
 uploads/
 
+# Logs
+*.log
+
+# Windows special device names
+nul
+
 # === Frontend (Node) ===
 node_modules/
 dist/

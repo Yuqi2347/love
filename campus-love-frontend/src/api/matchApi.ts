@@ -26,8 +26,8 @@ export interface MatchResult {
   detail: MatchDetail
 }
 
-export function getRecommendations(page = 0, size = 10) {
-  return request.get<ApiResult<MatchResult[]>>('/match/recommendations', { params: { page, size } })
+export function getRecommendations(page = 0, size = 10, genderFilter: 'all' | 'same' | 'opposite' = 'all') {
+  return request.get<ApiResult<MatchResult[]>>('/match/recommendations', { params: { page, size, genderFilter } })
 }
 
 export function getMatchDetail(targetUserId: number) {

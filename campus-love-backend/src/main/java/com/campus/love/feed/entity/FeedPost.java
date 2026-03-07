@@ -20,6 +20,10 @@ public class FeedPost {
     private String postType;
     private Integer requiredLevel;
     private String images;
+    private String videos;
+    private String linkUrl;
+    private String linkTitle;
+    private String linkImage;
     private Integer likeCount;
     private Integer commentCount;
 

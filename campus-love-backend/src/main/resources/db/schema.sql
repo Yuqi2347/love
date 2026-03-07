@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS t_message (
     INDEX idx_message_created (created_at)
 ) COMMENT '聊天消息';
 
--- 朋友圈动态表（含 V1.0.1 post_type / required_level）
+-- 朋友圈动态表（含 V1.0.1 post_type / required_level，V11 多媒体字段）
 CREATE TABLE IF NOT EXISTS t_feed_post (
     id              BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id         BIGINT          NOT NULL COMMENT '发布者',
@@ -81,6 +81,10 @@ CREATE TABLE IF NOT EXISTS t_feed_post (
     post_type       VARCHAR(32)     DEFAULT 'USER' COMMENT '帖子类型：SYSTEM/ADMIN/USER',
     required_level  INT             DEFAULT 1 COMMENT '发布所需等级',
     images          VARCHAR(1024)   DEFAULT NULL COMMENT '图片URL列表，逗号分隔',
+    videos          TEXT            DEFAULT NULL COMMENT '视频URL列表，逗号分隔',
+    link_url        VARCHAR(500)    DEFAULT NULL COMMENT '链接URL',
+    link_title      VARCHAR(200)    DEFAULT NULL COMMENT '链接标题',
+    link_image      VARCHAR(500)    DEFAULT NULL COMMENT '链接预览图',
     like_count      INT             DEFAULT 0 COMMENT '点赞数',
     comment_count   INT             DEFAULT 0 COMMENT '评论数',
     deleted         TINYINT(1)      DEFAULT 0,

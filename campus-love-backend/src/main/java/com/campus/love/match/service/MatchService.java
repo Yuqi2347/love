@@ -47,7 +47,13 @@ public class MatchService {
     private final InterestMatcher interestMatcher;
     private final MajorCategoryMatcher majorCategoryMatcher;
 
-    public List<MatchResultResponse> getRecommendations(int page, int size) {
+    /**
+     * 获取推荐用户列表
+     * @param page 页码
+     * @param size 每页大小
+     * @param genderFilter 性别筛选: all-全部, same-同性, opposite-异性
+     */
+    public List<MatchResultResponse> getRecommendations(int page, int size, String genderFilter) {
         Long currentUserId = CurrentUser.getId();
         User currentUser = userMapper.selectById(currentUserId);
         if (currentUser == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
@@ -63,6 +69,15 @@ public class MatchService {
                 .ne(User::getId, currentUserId)
                 .eq(User::getStatus, 1)
                 .eq(User::getProfileComplete, true);
+
+        // 性别筛选 (1=男, 2=女)
+        if ("same".equals(genderFilter) && currentUser.getGender() != null) {
+            wrapper.eq(User::getGender, currentUser.getGender());
+        } else if ("opposite".equals(genderFilter) && currentUser.getGender() != null) {
+            // 异性：男(1)找女(2)，女(2)找男(1)
+            int oppositeGender = currentUser.getGender() == 1 ? 2 : 1;
+            wrapper.eq(User::getGender, oppositeGender);
+        }
 
         // 仅在已关注列表非空时排除，避免生成 `NOT IN ()` 语法错误
         if (!followingIds.isEmpty()) {
@@ -106,7 +121,9 @@ public class MatchService {
         int interestScore = calculateInterestScore(self.getInterests(), target.getInterests());
         int mbtiScore = MbtiCompatibilityMatrix.getCompatibility(self.getMbti(), target.getMbti());
         int zodiacScore = ZodiacCompatibilityTable.getCompatibility(self.getZodiac(), target.getZodiac());
-        int baziScore = calculateBaziScore(self.getBirthDate(), self.getBirthTime(), target.getBirthDate(), target.getBirthTime());
+        // 八字合婚：同性交友时使用中性分数（不参与合婚评分）
+        boolean isSameSex = self.getGender() != null && self.getGender().equals(target.getGender());
+        int baziScore = isSameSex ? 50 : calculateBaziScore(self.getBirthDate(), self.getBirthTime(), target.getBirthDate(), target.getBirthTime());
         int majorScore = calculateMajorScore(self.getMajor(), target.getMajor());
         int ageScore = calculateAgeScore(self.getBirthDate(), target.getBirthDate());
 
