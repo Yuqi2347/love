@@ -8,11 +8,13 @@ import com.campus.love.follow.service.FollowService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @Tag(name = "关注", description = "关注/取消关注管理")
+@Slf4j
 @RestController
 @RequestMapping("/follow")
 @RequiredArgsConstructor

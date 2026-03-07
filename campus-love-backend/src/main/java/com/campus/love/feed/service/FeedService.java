@@ -7,6 +7,7 @@ import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.feed.constants.PostTypeConstants;
 import com.campus.love.feed.dto.FeedCommentRequest;
+import com.campus.love.feed.constants.FeedConstants;
 import com.campus.love.feed.dto.FeedPostRequest;
 import com.campus.love.feed.dto.FeedPostResponse;
 import com.campus.love.feed.entity.FeedComment;
@@ -256,7 +257,7 @@ public class FeedService {
         Long currentUserId = CurrentUser.getId();
         FeedPost post = feedPostMapper.selectById(postId);
         if (post == null) throw new BusinessException(ResultCode.FEED_NOT_FOUND);
-        return toResponse(post, currentUserId, null, 200);
+        return toResponse(post, currentUserId, null, FeedConstants.DETAIL_COMMENT_LIMIT);
     }
 
     public void deletePost(Long postId) {
@@ -304,11 +305,11 @@ public class FeedService {
     }
 
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId) {
-        return toResponse(post, currentUserId, null, 10);
+        return toResponse(post, currentUserId, null, FeedConstants.LIST_COMMENT_LIMIT);
     }
 
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap) {
-        return toResponse(post, currentUserId, authorMap, 10);
+        return toResponse(post, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT);
     }
 
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap, int commentLimit) {

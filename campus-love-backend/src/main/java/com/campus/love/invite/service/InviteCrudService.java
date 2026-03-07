@@ -1,828 +1,121 @@
 package com.campus.love.invite.service;
 
-import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
-import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
-import com.campus.love.auth.security.CurrentUser;
-import com.campus.love.chat.entity.ChatGroup;
-import com.campus.love.chat.service.ChatService;
-import com.campus.love.chat.service.ChatGroupService;
-import com.campus.love.common.constants.DateTimeConstants;
-import com.campus.love.common.constants.InviteCreditConstants;
-import com.campus.love.common.enums.ActivityTypeEnum;
-import com.campus.love.common.enums.MsgTypeEnum;
-import com.campus.love.common.exception.BusinessException;
-import com.campus.love.common.result.ResultCode;
-import com.campus.love.common.utils.TimeParseUtil;
-import com.campus.love.follow.service.FollowService;
-import com.campus.love.invite.dto.*;
+import com.campus.love.invite.dto.InviteCreateRequest;
+import com.campus.love.invite.dto.InviteResponse;
+import com.campus.love.invite.dto.InviteTypeCountResponse;
 import com.campus.love.invite.entity.Invite;
-import com.campus.love.invite.entity.InviteDecline;
 import com.campus.love.invite.entity.InviteParticipant;
-import com.campus.love.invite.enums.InviteModeEnum;
-import com.campus.love.invite.enums.InviteStatusEnum;
-import com.campus.love.invite.event.InviteEvent;
-import com.campus.love.invite.mapper.InviteDeclineMapper;
-import com.campus.love.invite.mapper.InviteMapper;
-import com.campus.love.invite.mapper.InviteParticipantMapper;
-import com.campus.love.user.entity.User;
-import com.campus.love.user.mapper.UserMapper;
-import com.campus.love.user.service.ActivityService;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
-import java.util.Collections;
 import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.stream.Collectors;
-
-import static java.util.stream.Collectors.toMap;
 
 /**
- * 邀约 CRUD、列表/详情、加入/退出/取消/确认、响应构建。对外提供 getInviteOrThrow 供 Stats 等使用。
+ * 邀约 CRUD 门面：对外保持原有 API，内部委托给 InviteQueryService、InviteCommandService。
+ * 供 InviteService、InviteStatsService 使用。
  */
-@Slf4j
 @Service
 @RequiredArgsConstructor
 public class InviteCrudService {
 
-    private final InviteMapper inviteMapper;
-    private final InviteParticipantMapper participantMapper;
-    private final InviteDeclineMapper declineMapper;
-    private final UserMapper userMapper;
-    private final FollowService followService;
-    private final ActivityService activityService;
-    private final ChatService chatService;
-    private final ChatGroupService chatGroupService;
-    private final InviteCreditService creditService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final InviteQueryService queryService;
+    private final InviteCommandService commandService;
 
-    /**
-     * 获取邀约（未删除），不存在则抛 INVITE_NOT_FOUND。供本包内 Stats 等调用。
-     */
     public Invite getInviteOrThrow(Long inviteId) {
-        Invite invite = inviteMapper.selectById(inviteId);
-        if (invite == null || Boolean.TRUE.equals(invite.getDeleted())) {
-            throw new BusinessException(ResultCode.INVITE_NOT_FOUND);
-        }
-        return invite;
+        return queryService.getInviteOrThrow(inviteId);
     }
 
-    /** 查询某用户在某邀约的参与记录（含已退出的），不存在则返回 null */
     public InviteParticipant findParticipant(Long inviteId, Long userId) {
-        if (inviteId == null || userId == null) {
-            return null;
-        }
-        return participantMapper.selectOne(
-                new LambdaQueryWrapper<InviteParticipant>()
-                        .eq(InviteParticipant::getInviteId, inviteId)
-                        .eq(InviteParticipant::getUserId, userId));
+        return queryService.findParticipant(inviteId, userId);
     }
 
-    /**
-     * 仅构建并插入邀约记录，不包含信用校验、匹配、活动、私信。由门面在 createInvite 中编排后调用。
-     */
+    public LocalDateTime getHistoryStartTime(String range) {
+        return queryService.getHistoryStartTime(range);
+    }
+
     @Transactional(rollbackFor = Exception.class)
     public Invite saveNewInvite(InviteCreateRequest request) {
-        Long currentUserId = CurrentUser.getId();
-
-        Invite invite = new Invite();
-        invite.setCreatorId(currentUserId);
-        invite.setInviteMode(request.getInviteMode());
-        invite.setTargetUserId(request.getTargetUserId());
-        invite.setInviteType(request.getInviteType());
-        invite.setTitle(request.getTitle());
-        invite.setContent(request.getContent());
-        invite.setInvitePeriod(request.getInvitePeriod());
-        invite.setPeriodConfig(request.getPeriodConfig());
-        invite.setInviteTime(TimeParseUtil.parseUtcToLocalDateTime(request.getInviteTime()));
-        invite.setLocation(request.getLocation());
-        if (InviteModeEnum.PRIVATE.name().equals(request.getInviteMode())) {
-            invite.setMaxParticipants(1);
-        } else {
-            invite.setMaxParticipants(request.getMaxParticipants());
-        }
-        invite.setParticipantCount(0);
-        invite.setStatus(InviteStatusEnum.RECRUITING.name());
-        invite.setDeadlineHours(request.getDeadlineHours());
-        invite.setAtmosphereTags(request.getAtmosphereTags());
-        invite.setIsUrgent(request.getIsUrgent() != null && request.getIsUrgent());
-        invite.setDeleted(false);
-
-        inviteMapper.insert(invite);
-
-        // 公开/私密邀约创建时即建群，保证讨论区始终走群聊通道（避免 chat_group_id 为 null 导致消息未落库）
-        if (InviteModeEnum.PUBLIC.name().equals(invite.getInviteMode())
-                || InviteModeEnum.PRIVATE.name().equals(invite.getInviteMode())) {
-            ChatGroup group = chatGroupService.createGroupIfAbsent(invite);
-            invite.setChatGroupId(group.getId());
-            inviteMapper.updateById(invite);
-        }
-
-        return invite;
+        return commandService.saveNewInvite(request);
     }
 
     @Transactional(readOnly = true)
     public IPage<InviteResponse> getInviteList(String type, String status, String timeRange, Integer page, Integer size) {
-        int current = (page == null || page < 1) ? 1 : page;
-        int pageSize = (size == null || size < 1) ? 20 : Math.min(size, 100);
-
-        LambdaQueryWrapper<Invite> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Invite::getDeleted, false);
-        if (type != null && !type.isEmpty()) {
-            wrapper.eq(Invite::getInviteType, type);
-        }
-        if (status != null && !status.isEmpty()) {
-            wrapper.eq(Invite::getStatus, status);
-        }
-        LocalDateTime now = LocalDateTime.now();
-        String range = (timeRange != null && !timeRange.isEmpty()) ? timeRange.toUpperCase() : "WEEK";
-        if ("WEEK".equals(range)) {
-            wrapper.ge(Invite::getInviteTime, now.minusDays(7));
-        } else if ("MONTH".equals(range)) {
-            wrapper.ge(Invite::getInviteTime, now.minusDays(30));
-        } else if ("YEAR".equals(range)) {
-            wrapper.ge(Invite::getInviteTime, now.minusDays(365));
-        }
-        wrapper.orderByDesc(Invite::getInviteTime).orderByDesc(Invite::getCreatedAt);
-
-        Page<Invite> pageInfo = new Page<>(current, pageSize);
-        IPage<Invite> invitePage = inviteMapper.selectPage(pageInfo, wrapper);
-        List<Invite> records = invitePage.getRecords();
-        Map<Long, User> creatorMap = batchLoadCreators(records);
-        IPage<InviteResponse> responsePage = new Page<>(current, pageSize, invitePage.getTotal());
-        responsePage.setRecords(records.stream()
-                .map(inv -> buildInviteResponse(inv, creatorMap))
-                .collect(Collectors.toList()));
-        return responsePage;
+        return queryService.getInviteList(type, status, timeRange, page, size);
     }
 
     @Transactional(readOnly = true)
     public List<InviteResponse> getRecommendInvites(Integer limit) {
-        Long currentUserId = CurrentUser.getId();
-        int size = (limit == null || limit < 1) ? 10 : Math.min(limit, 20);
-
-        LambdaQueryWrapper<Invite> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Invite::getDeleted, false)
-                .eq(Invite::getInviteMode, InviteModeEnum.PUBLIC.name())
-                .eq(Invite::getStatus, InviteStatusEnum.RECRUITING.name())
-                .gt(Invite::getInviteTime, LocalDateTime.now());
-        if (currentUserId != null) {
-            wrapper.ne(Invite::getCreatorId, currentUserId);
-        }
-        wrapper.orderByDesc(Invite::getIsUrgent)
-                .orderByAsc(Invite::getInviteTime);
-
-        Page<Invite> pageInfo = new Page<>(1, size);
-        IPage<Invite> invitePage = inviteMapper.selectPage(pageInfo, wrapper);
-        List<Invite> records = invitePage.getRecords();
-        Map<Long, User> creatorMap = batchLoadCreators(records);
-        return records.stream()
-                .map(inv -> buildInviteResponse(inv, creatorMap))
-                .collect(Collectors.toList());
+        return queryService.getRecommendInvites(limit);
     }
 
     @Transactional(readOnly = true)
     public List<InviteResponse> getMyCreatedInvites(String range) {
-        Long currentUserId = CurrentUser.getId();
-        if (currentUserId == null) {
-            throw new BusinessException(ResultCode.UNAUTHORIZED);
-        }
-        LocalDateTime from = getHistoryStartTime(range);
-
-        LambdaQueryWrapper<Invite> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Invite::getCreatorId, currentUserId)
-                .eq(Invite::getDeleted, false);
-        if (from != null) {
-            wrapper.ge(Invite::getInviteTime, from);
-        }
-        wrapper.orderByDesc(Invite::getInviteTime);
-
-        List<Invite> list = inviteMapper.selectList(wrapper);
-        Map<Long, User> creatorMap = batchLoadCreators(list);
-        return list.stream()
-                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "CREATOR", null))
-                .collect(Collectors.toList());
+        return queryService.getMyCreatedInvites(range);
     }
 
     @Transactional(readOnly = true)
     public List<InviteResponse> getMyJoinedInvites(String range) {
-        Long currentUserId = CurrentUser.getId();
-        if (currentUserId == null) {
-            throw new BusinessException(ResultCode.UNAUTHORIZED);
-        }
-        LocalDateTime from = getHistoryStartTime(range);
-
-        List<InviteParticipant> myParticipants = participantMapper.selectList(
-                new LambdaQueryWrapper<InviteParticipant>()
-                        .eq(InviteParticipant::getUserId, currentUserId));
-        if (myParticipants.isEmpty()) {
-            return List.of();
-        }
-        Map<Long, InviteParticipant> inviteIdToMyParticipant = myParticipants.stream()
-                .collect(Collectors.toMap(InviteParticipant::getInviteId, p -> p, (a, b) -> a));
-        List<Long> inviteIds = new java.util.ArrayList<>(inviteIdToMyParticipant.keySet());
-
-        LambdaQueryWrapper<Invite> wrapper = new LambdaQueryWrapper<>();
-        wrapper.in(Invite::getId, inviteIds)
-                .eq(Invite::getDeleted, false);
-        if (from != null) {
-            wrapper.ge(Invite::getInviteTime, from);
-        }
-        wrapper.orderByDesc(Invite::getInviteTime);
-
-        List<Invite> list = inviteMapper.selectList(wrapper);
-        Map<Long, User> creatorMap = batchLoadCreators(list);
-        return list.stream()
-                .map(inv -> {
-                    InviteParticipant p = inviteIdToMyParticipant.get(inv.getId());
-                    String role = p != null && p.getLeftAt() != null ? "LEFT" : "PARTICIPANT";
-                    LocalDateTime leftAt = p != null ? p.getLeftAt() : null;
-                    return buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), role, leftAt);
-                })
-                .collect(Collectors.toList());
+        return queryService.getMyJoinedInvites(range);
     }
 
-    /** 我收到的待处理邀约（一对一邀约中 targetUserId=当前用户 且 尚未加入的） */
     @Transactional(readOnly = true)
     public List<InviteResponse> getReceivedPendingInvites(String range) {
-        Long currentUserId = CurrentUser.getId();
-        if (currentUserId == null) return List.of();
-        LocalDateTime from = getHistoryStartTime(range);
-        LambdaQueryWrapper<Invite> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Invite::getTargetUserId, currentUserId)
-                .eq(Invite::getDeleted, false)
-                .in(Invite::getStatus,
-                        InviteStatusEnum.RECRUITING.name(),
-                        InviteStatusEnum.FULL.name(),
-                        InviteStatusEnum.CONFIRMED.name());
-        if (from != null) wrapper.ge(Invite::getInviteTime, from);
-        wrapper.orderByDesc(Invite::getInviteTime);
-        List<Invite> list = inviteMapper.selectList(wrapper);
-        if (list.isEmpty()) return List.of();
-        List<Long> inviteIds = list.stream().map(Invite::getId).collect(Collectors.toList());
-        List<InviteParticipant> myParts = participantMapper.selectList(
-                new LambdaQueryWrapper<InviteParticipant>()
-                        .eq(InviteParticipant::getUserId, currentUserId)
-                        .in(InviteParticipant::getInviteId, inviteIds)
-                        .isNull(InviteParticipant::getLeftAt));
-        java.util.Set<Long> alreadyJoinedIds = myParts.stream().map(InviteParticipant::getInviteId).collect(Collectors.toSet());
-        List<InviteDecline> declines = declineMapper.selectList(
-                new LambdaQueryWrapper<InviteDecline>()
-                        .eq(InviteDecline::getUserId, currentUserId)
-                        .in(InviteDecline::getInviteId, inviteIds));
-        java.util.Set<Long> declinedIds = declines.stream().map(InviteDecline::getInviteId).collect(Collectors.toSet());
-        List<Invite> pending = list.stream()
-                .filter(inv -> !alreadyJoinedIds.contains(inv.getId()) && !declinedIds.contains(inv.getId()))
-                .collect(Collectors.toList());
-        if (pending.isEmpty()) return List.of();
-        Map<Long, User> creatorMap = batchLoadCreators(pending);
-        return pending.stream()
-                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "TARGET_PENDING", null))
-                .collect(Collectors.toList());
+        return queryService.getReceivedPendingInvites(range);
     }
 
-    /** 我的邀约列表：我发起的 + 我参与的（含已退出）+ 我收到的待处理邀约，按邀约时间倒序 */
     @Transactional(readOnly = true)
     public List<InviteResponse> getMyInvitesList(String range) {
-        List<InviteResponse> created = getMyCreatedInvites(range);
-        List<InviteResponse> joined = getMyJoinedInvites(range);
-        List<InviteResponse> receivedPending = getReceivedPendingInvites(range);
-        java.util.Set<Long> createdIds = created.stream().map(InviteResponse::getId).collect(Collectors.toSet());
-        java.util.Set<Long> joinedIds = joined.stream().map(InviteResponse::getId).collect(Collectors.toSet());
-        List<InviteResponse> joinedOnly = joined.stream().filter(r -> !createdIds.contains(r.getId())).collect(Collectors.toList());
-        List<InviteResponse> pendingOnly = receivedPending.stream()
-                .filter(r -> !createdIds.contains(r.getId()) && !joinedIds.contains(r.getId()))
-                .collect(Collectors.toList());
-        List<InviteResponse> merged = new java.util.ArrayList<>(created);
-        merged.addAll(joinedOnly);
-        merged.addAll(pendingOnly);
-        merged.sort((a, b) -> {
-            int pa = getDisplayPriority(a);
-            int pb = getDisplayPriority(b);
-            if (pa != pb) return Integer.compare(pb, pa);
-            LocalDateTime ca = a.getCreatedAt();
-            LocalDateTime cb = b.getCreatedAt();
-            if (ca == null && cb == null) return 0;
-            if (ca == null) return 1;
-            if (cb == null) return -1;
-            return cb.compareTo(ca);
-        });
-        return merged;
+        return queryService.getMyInvitesList(range);
     }
 
-    /**
-     * 我的邀约列表展示优先级（数值越大越靠前/在上方）：
-     * 6 待处理 -> 5 招募中 -> 4 已满员/已确认 -> 3 进行中 -> 2 已结束 -> 1 已退出 -> 0 已取消
-     */
-    private int getDisplayPriority(InviteResponse r) {
-        if (r == null) return -1;
-        if ("TARGET_PENDING".equals(r.getMyRole())) return 6;
-        if ("LEFT".equals(r.getMyRole())) return 1;
-        String status = r.getStatus();
-        if (status == null) return 2;
-        return switch (status) {
-            case "RECRUITING" -> 5;
-            case "FULL", "CONFIRMED" -> 4;
-            case "IN_PROGRESS" -> 3;
-            case "ENDED" -> 2;
-            case "CANCELLED" -> 0;
-            default -> 2;
-        };
-    }
-
-    public LocalDateTime getHistoryStartTime(String range) {
-        if (range == null || range.isBlank()) {
-            range = "week";
-        }
-        range = range.toLowerCase();
-        LocalDateTime now = LocalDateTime.now();
-        return switch (range) {
-            case "week" -> now.minusDays(7);
-            case "month" -> now.minusDays(30);
-            case "all" -> null;
-            default -> now.minusDays(7);
-        };
-    }
-
-    /**
-     * 历史邀约可能 chat_group_id 为 null，首次进入讨论区时按需补建群。使用 REQUIRES_NEW 保证在独立写事务中执行，
-     * 避免在 InviteService 的 readOnly 事务中执行写操作导致 "Connection is read-only"。
-     */
-    @Transactional(propagation = Propagation.REQUIRES_NEW, readOnly = false)
     public void ensureChatGroupForInvite(Long inviteId) {
-        Invite invite = getInviteOrThrow(inviteId);
-        if (!InviteModeEnum.PUBLIC.name().equals(invite.getInviteMode())
-                && !InviteModeEnum.PRIVATE.name().equals(invite.getInviteMode())) {
-            return;
-        }
-        if (invite.getChatGroupId() != null) {
-            return;
-        }
-        ChatGroup group = chatGroupService.createGroupIfAbsent(invite);
-        invite.setChatGroupId(group.getId());
-        inviteMapper.updateById(invite);
-        List<InviteParticipant> participants = participantMapper.selectList(
-                new LambdaQueryWrapper<InviteParticipant>().eq(InviteParticipant::getInviteId, inviteId));
-        for (InviteParticipant p : participants) {
-            if (p.getUserId() != null) {
-                chatGroupService.addMemberIfAbsent(group.getId(), p.getUserId());
-            }
-        }
+        commandService.ensureChatGroupForInvite(inviteId);
     }
 
     @Transactional(readOnly = true)
     public InviteResponse getInviteDetail(Long inviteId) {
-        Invite invite = getInviteOrThrow(inviteId);
-        InviteResponse response = buildInviteDetailResponse(invite);
-        Long currentUserId = CurrentUser.getId();
-        if (currentUserId != null) {
-            if (currentUserId.equals(invite.getCreatorId())) {
-                response.setMyRole("CREATOR");
-                response.setMyLeftAt(null);
-            } else {
-                InviteParticipant myParticipant = participantMapper.selectOne(
-                        new LambdaQueryWrapper<InviteParticipant>()
-                                .eq(InviteParticipant::getInviteId, inviteId)
-                                .eq(InviteParticipant::getUserId, currentUserId));
-                if (myParticipant != null && myParticipant.getLeftAt() != null) {
-                    response.setMyRole("LEFT");
-                    response.setMyLeftAt(myParticipant.getLeftAt());
-                } else if (myParticipant != null) {
-                    response.setMyRole("PARTICIPANT");
-                    response.setMyLeftAt(null);
-                }
-            }
-        }
-        return response;
+        return queryService.getInviteDetail(inviteId);
     }
 
-    /**
-     * 热门邀约看板：按邀约类型聚合当前「进行中/招募中」邀约数量（所有用户可见）。
-     */
     @Transactional(readOnly = true)
     public List<InviteTypeCountResponse> getHotInviteTypeCounts(Integer limit) {
-        int size = Optional.ofNullable(limit).orElse(10);
-        size = Math.min(Math.max(size, 1), 10);
-
-        // “邀约中”定义：未删除，且状态为 RECRUITING / FULL / CONFIRMED / IN_PROGRESS
-        QueryWrapper<Invite> wrapper = new QueryWrapper<>();
-        wrapper.select("invite_type AS inviteType", "COUNT(*) AS cnt")
-                .eq("deleted", 0)
-                .in("status",
-                        InviteStatusEnum.RECRUITING.name(),
-                        InviteStatusEnum.FULL.name(),
-                        InviteStatusEnum.CONFIRMED.name(),
-                        InviteStatusEnum.IN_PROGRESS.name())
-                .groupBy("invite_type")
-                .orderByDesc("cnt")
-                .last("LIMIT " + size);
-
-        return inviteMapper.selectMaps(wrapper).stream()
-                .map(m -> new InviteTypeCountResponse(
-                        (String) m.get("inviteType"),
-                        m.get("cnt") == null ? 0L : ((Number) m.get("cnt")).longValue()
-                ))
-                .collect(Collectors.toList());
+        return queryService.getHotInviteTypeCounts(limit);
     }
 
     @Transactional
     public void joinInvite(Long inviteId) {
-        Long currentUserId = CurrentUser.getId();
-
-        creditService.checkUserCredit(currentUserId, InviteCreditConstants.CREDIT_JOIN_THRESHOLD);
-        creditService.checkParticipateLimit(currentUserId);
-
-        Invite invite = getInviteOrThrow(inviteId);
-
-        if (!InviteStatusEnum.RECRUITING.name().equals(invite.getStatus())) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "邀约不在招募中");
-        }
-
-        InviteParticipant existing = participantMapper.selectOne(
-                new LambdaQueryWrapper<InviteParticipant>()
-                        .eq(InviteParticipant::getInviteId, inviteId)
-                        .eq(InviteParticipant::getUserId, currentUserId));
-        if (existing != null && existing.getLeftAt() == null) {
-            throw new BusinessException(ResultCode.ALREADY_JOINED);
-        }
-        if (existing != null && existing.getLeftAt() != null) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "您已退出该邀约，无法再次加入，如需参与请联系发起人");
-        }
-
-        if (invite.getMaxParticipants() != null && invite.getParticipantCount() >= invite.getMaxParticipants()) {
-            throw new BusinessException(ResultCode.INVITE_FULL);
-        }
-
-        if (InviteModeEnum.PRIVATE.name().equals(invite.getInviteMode())) {
-            if (!currentUserId.equals(invite.getTargetUserId())) {
-                throw new BusinessException(ResultCode.BAD_REQUEST, "不是受邀目标用户");
-            }
-        }
-
-        InviteParticipant participant = new InviteParticipant();
-        participant.setInviteId(inviteId);
-        participant.setUserId(currentUserId);
-        participant.setJoinAt(LocalDateTime.now());
-        participantMapper.insert(participant);
-
-        invite.setParticipantCount(invite.getParticipantCount() + 1);
-        if (invite.getMaxParticipants() != null && invite.getParticipantCount() >= invite.getMaxParticipants()) {
-            invite.setStatus(InviteStatusEnum.FULL.name());
-        }
-        inviteMapper.updateById(invite);
-
-        creditService.incrementParticipateCount(currentUserId);
-
-        activityService.recordActivity(ActivityTypeEnum.INVITE_JOIN, inviteId);
-
-        eventPublisher.publishEvent(InviteEvent.joinSuccess(invite, currentUserId));
-        if (!currentUserId.equals(invite.getCreatorId())) {
-            eventPublisher.publishEvent(InviteEvent.newParticipant(invite, invite.getCreatorId(), currentUserId));
-        }
-
-        // 公开邀约和私密邀约都为参与者创建群聊，用于邀约讨论（避免一对一聊天的互关/频率限制导致消息未落库）
-        if (InviteModeEnum.PUBLIC.name().equals(invite.getInviteMode())
-                || InviteModeEnum.PRIVATE.name().equals(invite.getInviteMode())) {
-            ChatGroup group = chatGroupService.createGroupIfAbsent(invite);
-            invite.setChatGroupId(group.getId());
-            inviteMapper.updateById(invite);
-            chatGroupService.addMemberIfAbsent(group.getId(), invite.getCreatorId());
-            chatGroupService.addMemberIfAbsent(group.getId(), currentUserId);
-        }
+        commandService.joinInvite(inviteId);
     }
 
     @Transactional
     public void leaveInvite(Long inviteId) {
-        Long currentUserId = CurrentUser.getId();
-
-        Invite invite = getInviteOrThrow(inviteId);
-
-        InviteParticipant participant = participantMapper.selectOne(
-                new LambdaQueryWrapper<InviteParticipant>()
-                        .eq(InviteParticipant::getInviteId, inviteId)
-                        .eq(InviteParticipant::getUserId, currentUserId));
-        if (participant == null) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "未加入该邀约");
-        }
-
-        if (InviteStatusEnum.IN_PROGRESS.name().equals(invite.getStatus()) ||
-                InviteStatusEnum.ENDED.name().equals(invite.getStatus())) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "邀约进行中或已结束，无法退出");
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        LocalDateTime inviteTime = invite.getInviteTime();
-        if (inviteTime != null) {
-            if (now.isAfter(inviteTime)) {
-                creditService.adjustCreditScore(currentUserId, InviteCreditConstants.CREDIT_NO_SHOW);
-            } else if (!now.isBefore(inviteTime.minusHours(InviteCreditConstants.TEMP_CANCEL_HOURS))) {
-                creditService.adjustCreditScore(currentUserId, InviteCreditConstants.CREDIT_TEMP_CANCEL);
-            }
-        }
-
-        participant.setLeftAt(LocalDateTime.now());
-        participantMapper.updateById(participant);
-
-        invite.setParticipantCount(invite.getParticipantCount() - 1);
-        if (InviteStatusEnum.FULL.name().equals(invite.getStatus()) &&
-                invite.getMaxParticipants() != null &&
-                invite.getParticipantCount() < invite.getMaxParticipants()) {
-            invite.setStatus(InviteStatusEnum.RECRUITING.name());
-        }
-        inviteMapper.updateById(invite);
-
-        creditService.decrementParticipateCount(currentUserId);
-
-        if (!currentUserId.equals(invite.getCreatorId())) {
-            eventPublisher.publishEvent(InviteEvent.participantLeave(invite, currentUserId, invite.getCreatorId()));
-        }
+        commandService.leaveInvite(inviteId);
     }
 
-    /** 拒绝邀约（仅一对一邀约的目标用户可拒绝，拒绝后不再出现在待处理列表） */
     @Transactional
     public void declineInvite(Long inviteId) {
-        Long currentUserId = CurrentUser.getId();
-        Invite invite = getInviteOrThrow(inviteId);
-        if (!Long.valueOf(currentUserId).equals(invite.getTargetUserId())) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "仅被邀约方可拒绝");
-        }
-        InviteParticipant existing = participantMapper.selectOne(
-                new LambdaQueryWrapper<InviteParticipant>()
-                        .eq(InviteParticipant::getInviteId, inviteId)
-                        .eq(InviteParticipant::getUserId, currentUserId));
-        if (existing != null && existing.getLeftAt() == null) {
-            throw new BusinessException(ResultCode.ALREADY_JOINED, "已加入该邀约，请使用退出");
-        }
-        long count = declineMapper.selectCount(
-                new LambdaQueryWrapper<InviteDecline>()
-                        .eq(InviteDecline::getInviteId, inviteId)
-                        .eq(InviteDecline::getUserId, currentUserId));
-        if (count > 0) return;
-        InviteDecline decline = new InviteDecline();
-        decline.setInviteId(inviteId);
-        decline.setUserId(currentUserId);
-        declineMapper.insert(decline);
+        commandService.declineInvite(inviteId);
     }
 
-    /**
-     * 发起人同意某人再次加入：恢复参与记录、人数+1、加回群聊。调用方需已校验当前用户为发起人。
-     */
     @Transactional
     public void approveRejoin(Long inviteId, Long applicantUserId) {
-        Invite invite = getInviteOrThrow(inviteId);
-        if (!InviteStatusEnum.RECRUITING.name().equals(invite.getStatus()) && !InviteStatusEnum.FULL.name().equals(invite.getStatus())) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "当前邀约状态不允许再次加入");
-        }
-        InviteParticipant participant = participantMapper.selectOne(
-                new LambdaQueryWrapper<InviteParticipant>()
-                        .eq(InviteParticipant::getInviteId, inviteId)
-                        .eq(InviteParticipant::getUserId, applicantUserId));
-        if (participant == null || participant.getLeftAt() == null) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "该用户未退出或不存在参与记录");
-        }
-        if (invite.getMaxParticipants() != null && invite.getParticipantCount() >= invite.getMaxParticipants()) {
-            throw new BusinessException(ResultCode.INVITE_FULL, "邀约人数已满");
-        }
-
-        LocalDateTime now = LocalDateTime.now();
-        // 必须用 UpdateWrapper 显式 set left_at=null，否则 updateById 不会更新 null 字段
-        participantMapper.update(null,
-                new LambdaUpdateWrapper<InviteParticipant>()
-                        .eq(InviteParticipant::getId, participant.getId())
-                        .set(InviteParticipant::getLeftAt, null)
-                        .set(InviteParticipant::getJoinAt, now));
-
-        invite.setParticipantCount(invite.getParticipantCount() + 1);
-        if (invite.getMaxParticipants() != null && invite.getParticipantCount() >= invite.getMaxParticipants()) {
-            invite.setStatus(InviteStatusEnum.FULL.name());
-        }
-        inviteMapper.updateById(invite);
-
-        if (InviteModeEnum.PUBLIC.name().equals(invite.getInviteMode())
-                || InviteModeEnum.PRIVATE.name().equals(invite.getInviteMode())) {
-            ChatGroup group = chatGroupService.createGroupIfAbsent(invite);
-            invite.setChatGroupId(group.getId());
-            inviteMapper.updateById(invite);
-            chatGroupService.addMemberIfAbsent(group.getId(), invite.getCreatorId());
-            chatGroupService.addMemberIfAbsent(group.getId(), applicantUserId);
-        }
-
-        eventPublisher.publishEvent(InviteEvent.joinSuccess(invite, applicantUserId));
-        if (!applicantUserId.equals(invite.getCreatorId())) {
-            eventPublisher.publishEvent(InviteEvent.newParticipant(invite, invite.getCreatorId(), applicantUserId));
-        }
+        commandService.approveRejoin(inviteId, applicantUserId);
     }
 
     @Transactional
     public void cancelInvite(Long inviteId, String reason) {
-        Long currentUserId = CurrentUser.getId();
-
-        Invite invite = getInviteOrThrow(inviteId);
-
-        if (!invite.getCreatorId().equals(currentUserId)) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "只有发起人可以取消邀约");
-        }
-
-        if (!InviteStatusEnum.RECRUITING.name().equals(invite.getStatus()) &&
-                !InviteStatusEnum.FULL.name().equals(invite.getStatus()) &&
-                !InviteStatusEnum.CONFIRMED.name().equals(invite.getStatus())) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "邀约已进行中或已结束，无法取消");
-        }
-
-        LocalDateTime inviteTime = invite.getInviteTime();
-        if (inviteTime != null) {
-            boolean hasReason = reason != null && !reason.isBlank();
-            LocalDateTime now = LocalDateTime.now();
-            if (now.isAfter(inviteTime)) {
-                creditService.adjustCreditScore(currentUserId, InviteCreditConstants.CREDIT_NO_SHOW);
-            } else if (!now.isBefore(inviteTime.minusHours(InviteCreditConstants.TEMP_CANCEL_HOURS)) && !hasReason) {
-                creditService.adjustCreditScore(currentUserId, InviteCreditConstants.CREDIT_TEMP_CANCEL);
-            }
-        }
-
-        List<InviteParticipant> participants = participantMapper.selectList(
-                new LambdaQueryWrapper<InviteParticipant>()
-                        .eq(InviteParticipant::getInviteId, inviteId));
-
-        invite.setStatus(InviteStatusEnum.CANCELLED.name());
-        inviteMapper.updateById(invite);
-
-        if (!participants.isEmpty()) {
-            List<Long> participantIds = participants.stream()
-                    .map(InviteParticipant::getUserId)
-                    .collect(Collectors.toList());
-            eventPublisher.publishEvent(InviteEvent.inviteCancelled(invite, currentUserId, participantIds, reason));
-        }
+        commandService.cancelInvite(inviteId, reason);
     }
 
-    /**
-     * 一对一邀约：向目标用户发送一条邀约消息
-     */
     public void sendPrivateInviteMessage(Long senderId, Invite invite) {
-        if (invite.getTargetUserId() == null) {
-            return;
-        }
-        try {
-            String timeStr = invite.getInviteTime() != null
-                    ? invite.getInviteTime().format(DateTimeConstants.TIME_FMT)
-                    : "";
-            StringBuilder content = new StringBuilder();
-            content.append("邀约邀请：").append(invite.getTitle());
-            if (!timeStr.isEmpty()) {
-                content.append("｜时间 ").append(timeStr);
-            }
-            if (invite.getLocation() != null && !invite.getLocation().isEmpty()) {
-                content.append("｜地点 ").append(invite.getLocation());
-            }
-            content.append("｜INVITE#").append(invite.getId());
-            chatService.sendMessage(senderId, invite.getTargetUserId(), content.toString(), MsgTypeEnum.INVITE.getCode());
-        } catch (Exception e) {
-            log.warn("发送邀约聊天消息失败, inviteId={}", invite.getId(), e);
-        }
+        commandService.sendPrivateInviteMessage(senderId, invite);
     }
 
     @Transactional
     public void confirmParticipants(Long inviteId, List<Long> userIds) {
-        Long currentUserId = CurrentUser.getId();
-        if (userIds == null) {
-            userIds = Collections.emptyList();
-        }
-
-        Invite invite = getInviteOrThrow(inviteId);
-
-        if (!invite.getCreatorId().equals(currentUserId)) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "只有发起人可以确认参与者");
-        }
-
-        if (!InviteStatusEnum.FULL.name().equals(invite.getStatus()) &&
-                !InviteStatusEnum.CONFIRMED.name().equals(invite.getStatus())) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "邀约状态不正确");
-        }
-
-        invite.setStatus(InviteStatusEnum.CONFIRMED.name());
-        inviteMapper.updateById(invite);
-    }
-
-    // ---------- 响应构建 ----------
-
-    private Map<Long, User> batchLoadCreators(List<Invite> invites) {
-        if (invites == null || invites.isEmpty()) {
-            return Map.of();
-        }
-        List<Long> ids = invites.stream()
-                .map(Invite::getCreatorId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
-        if (ids.isEmpty()) {
-            return Map.of();
-        }
-        List<User> users = userMapper.selectBatchIds(ids);
-        return users != null ? users.stream().filter(Objects::nonNull).collect(toMap(User::getId, u -> u, (a, b) -> a)) : Map.of();
-    }
-
-    private InviteResponse buildInviteResponse(Invite invite) {
-        User creator = userMapper.selectById(invite.getCreatorId());
-        return buildInviteResponseWithCreator(invite, creator);
-    }
-
-    private InviteResponse buildInviteResponse(Invite invite, Map<Long, User> creatorMap) {
-        User creator = creatorMap != null ? creatorMap.get(invite.getCreatorId()) : null;
-        return buildInviteResponseWithCreator(invite, creator);
-    }
-
-    private InviteResponse buildInviteResponseWithCreator(Invite invite, User creator) {
-        return buildInviteResponseWithCreator(invite, creator, null, null);
-    }
-
-    private InviteResponse buildInviteResponseWithCreator(Invite invite, User creator, String myRole, java.time.LocalDateTime myLeftAt) {
-        InviteResponse.CreatorInfo targetUserInfo = null;
-        if (invite.getTargetUserId() != null) {
-            User target = userMapper.selectById(invite.getTargetUserId());
-            if (target != null) {
-                targetUserInfo = InviteResponse.CreatorInfo.builder()
-                        .id(target.getId())
-                        .nickname(target.getNickname())
-                        .avatarUrl(target.getAvatarUrl())
-                        .creditScore(target.getCreditScore())
-                        .build();
-            }
-        }
-        return InviteResponse.builder()
-                .id(invite.getId())
-                .creatorId(invite.getCreatorId())
-                .inviteType(invite.getInviteType())
-                .inviteMode(invite.getInviteMode())
-                .targetUserId(invite.getTargetUserId())
-                .title(invite.getTitle())
-                .content(invite.getContent())
-                .invitePeriod(invite.getInvitePeriod())
-                .periodConfig(invite.getPeriodConfig())
-                .inviteTime(invite.getInviteTime())
-                .location(invite.getLocation())
-                .maxParticipants(invite.getMaxParticipants())
-                .participantCount(invite.getParticipantCount())
-                .status(invite.getStatus())
-                .deadlineHours(invite.getDeadlineHours())
-                .atmosphereTags(invite.getAtmosphereTags())
-                .isUrgent(invite.getIsUrgent())
-                .socialRating(invite.getSocialRating())
-                .orgRating(invite.getOrgRating())
-                .ratingCount(invite.getRatingCount())
-                .createdAt(invite.getCreatedAt())
-                .chatGroupId(invite.getChatGroupId())
-                .myRole(myRole)
-                .myLeftAt(myLeftAt)
-                .creator(creator != null ? InviteResponse.CreatorInfo.builder()
-                        .id(creator.getId())
-                        .nickname(creator.getNickname())
-                        .avatarUrl(creator.getAvatarUrl())
-                        .creditScore(creator.getCreditScore())
-                        .build() : null)
-                .targetUser(targetUserInfo)
-                .build();
-    }
-
-    private InviteResponse buildInviteDetailResponse(Invite invite) {
-        InviteResponse response = buildInviteResponse(invite);
-
-        List<InviteParticipant> participants = participantMapper.selectList(
-                new LambdaQueryWrapper<InviteParticipant>()
-                        .eq(InviteParticipant::getInviteId, invite.getId())
-                        .isNull(InviteParticipant::getLeftAt));
-        if (participants.isEmpty()) {
-            response.setParticipants(List.of());
-            return response;
-        }
-        List<Long> participantUserIds = participants.stream()
-                .map(InviteParticipant::getUserId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .collect(Collectors.toList());
-        Map<Long, User> userMap = participantUserIds.isEmpty() ? Map.of()
-                : userMapper.selectBatchIds(participantUserIds).stream()
-                        .filter(Objects::nonNull)
-                        .collect(toMap(User::getId, u -> u, (a, b) -> a));
-        List<InviteResponse.ParticipantInfo> participantInfos = participants.stream().map(p -> {
-            User user = userMap.get(p.getUserId());
-            return InviteResponse.ParticipantInfo.builder()
-                    .userId(p.getUserId())
-                    .nickname(user != null ? user.getNickname() : "")
-                    .avatarUrl(user != null ? user.getAvatarUrl() : null)
-                    .joinAt(p.getJoinAt())
-                    .build();
-        }).collect(Collectors.toList());
-        response.setParticipants(participantInfos);
-        return response;
+        commandService.confirmParticipants(inviteId, userIds);
     }
 }

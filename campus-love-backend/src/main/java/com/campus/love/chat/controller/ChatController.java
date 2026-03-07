@@ -8,12 +8,14 @@ import com.campus.love.common.result.Result;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.util.List;
 
 @Tag(name = "聊天", description = "即时聊天相关接口")
+@Slf4j
 @RestController
 @RequestMapping("/chat")
 @RequiredArgsConstructor

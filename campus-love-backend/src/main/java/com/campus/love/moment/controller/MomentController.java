@@ -8,6 +8,7 @@ import com.campus.love.moment.dto.MomentEnrollRequest;
 import com.campus.love.moment.dto.MomentResultResponse;
 import com.campus.love.moment.dto.MomentStatusResponse;
 import com.campus.love.moment.entity.MomentProfile;
+import com.campus.love.moment.service.MomentAdminService;
 import com.campus.love.moment.service.MomentService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
@@ -29,6 +30,7 @@ import java.util.Map;
 public class MomentController {
 
     private final MomentService momentService;
+    private final MomentAdminService momentAdminService;
     private final UserMapper userMapper;
 
     private void requireAdmin() {
@@ -71,10 +73,10 @@ public class MomentController {
             return Result.success("上传成功", photoUrl);
         } catch (IllegalArgumentException e) {
             log.warn("心动照片上传参数错误: {}", e.getMessage());
-            return Result.error(400, e.getMessage());
+            return Result.error(ResultCode.BAD_REQUEST, e.getMessage());
         } catch (Exception e) {
             log.error("心动照片上传失败", e);
-            return Result.error(500, "文件上传失败，请稍后重试");
+            return Result.error(ResultCode.INTERNAL_ERROR, "文件上传失败，请稍后重试");
         }
     }
 
@@ -85,7 +87,7 @@ public class MomentController {
     public Result<Map<String, Object>> triggerMatching(
             @RequestParam(value = "weekTag", required = false) String weekTag) {
         requireAdmin();
-        return Result.success(momentService.triggerMatching(weekTag));
+        return Result.success(momentAdminService.triggerMatching(weekTag, momentService.getCurrentWeekTag()));
     }
 
     @Operation(summary = "管理员手动截止报名")
@@ -93,7 +95,7 @@ public class MomentController {
     public Result<Map<String, Object>> closeEnrollment(
             @RequestParam(value = "weekTag", required = false) String weekTag) {
         requireAdmin();
-        return Result.success(momentService.closeEnrollment(weekTag));
+        return Result.success(momentAdminService.closeEnrollment(weekTag, momentService.getCurrentWeekTag()));
     }
 
     @Operation(summary = "管理员重新开放报名（调试用）")
@@ -101,7 +103,7 @@ public class MomentController {
     public Result<Map<String, Object>> reopenEnrollment(
             @RequestParam(value = "weekTag", required = false) String weekTag) {
         requireAdmin();
-        return Result.success(momentService.reopenEnrollment(weekTag));
+        return Result.success(momentAdminService.reopenEnrollment(weekTag, momentService.getCurrentWeekTag()));
     }
 
     @Operation(summary = "管理员重置本周活动（调试用：删除匹配结果+重置报名+重新开放）")
@@ -109,6 +111,6 @@ public class MomentController {
     public Result<Map<String, Object>> resetWeek(
             @RequestParam(value = "weekTag", required = false) String weekTag) {
         requireAdmin();
-        return Result.success(momentService.resetWeek(weekTag));
+        return Result.success(momentAdminService.resetWeek(weekTag, momentService.getCurrentWeekTag()));
     }
 }

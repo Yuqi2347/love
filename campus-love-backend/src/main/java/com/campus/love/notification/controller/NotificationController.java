@@ -6,11 +6,13 @@ import com.campus.love.notification.service.NotificationService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 
 @Tag(name = "通知", description = "站内通知")
+@Slf4j
 @RestController
 @RequestMapping("/notification")
 @RequiredArgsConstructor

@@ -5,10 +5,10 @@ import lombok.Data;
 import java.util.List;
 
 /**
- * 缘分解析 AI 返回结果
+ * 缘分解析 AI 返回结果（响应 DTO）
  */
 @Data
-public class YuanFenAnalysisResult {
+public class YuanFenAnalysisResponse {
 
     /** 缘分指数（创意短语） */
     private String yuanFenIndex;

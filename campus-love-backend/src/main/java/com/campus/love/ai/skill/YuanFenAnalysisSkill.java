@@ -1,6 +1,6 @@
 package com.campus.love.ai.skill;
 
-import com.campus.love.ai.dto.YuanFenAnalysisResult;
+import com.campus.love.ai.dto.YuanFenAnalysisResponse;
 import com.campus.love.ai.service.AiService;
 import com.campus.love.match.dto.MatchResultResponse;
 import com.campus.love.user.entity.User;
@@ -126,7 +126,7 @@ public class YuanFenAnalysisSkill {
               "exclusiveQuote": "（一句20字以内的专属友谊金句，要有趣味或哲理，让人想截图分享）"
             }""";
 
-    public YuanFenAnalysisResult analyze(User userA, User userB, MatchResultResponse matchResult) {
+    public YuanFenAnalysisResponse analyze(User userA, User userB, MatchResultResponse matchResult) {
         boolean sameGender = isSameGender(userA.getGender(), userB.getGender());
         String systemPrompt = sameGender ? SYSTEM_PROMPT_SAME : SYSTEM_PROMPT_OPPOSITE;
         String userPrompt = buildPrompt(userA, userB, matchResult, sameGender);
@@ -146,7 +146,7 @@ public class YuanFenAnalysisSkill {
         }
 
         try {
-            YuanFenAnalysisResult result = objectMapper.readValue(json, YuanFenAnalysisResult.class);
+            YuanFenAnalysisResponse result = objectMapper.readValue(json, YuanFenAnalysisResponse.class);
             result.setGeneratedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
             result.setNextAvailableAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
             return result;
@@ -211,8 +211,8 @@ public class YuanFenAnalysisSkill {
     }
 
     /** AI 调用失败时的降级结果 */
-    private YuanFenAnalysisResult buildFallbackResult(MatchResultResponse match, boolean sameGender) {
-        YuanFenAnalysisResult result = new YuanFenAnalysisResult();
+    private YuanFenAnalysisResponse buildFallbackResult(MatchResultResponse match, boolean sameGender) {
+        YuanFenAnalysisResponse result = new YuanFenAnalysisResponse();
         int score = match.getMatchScore() != null ? match.getMatchScore() : 50;
 
         if (sameGender) {

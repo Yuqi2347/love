@@ -2,6 +2,7 @@ package com.campus.love.user.controller;
 
 import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.result.Result;
+import com.campus.love.common.result.ResultCode;
 import com.campus.love.user.dto.UserProfileRequest;
 import com.campus.love.user.dto.UserProfileResponse;
 import com.campus.love.user.dto.UserSearchItemResponse;
@@ -10,12 +11,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
 import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "用户", description = "个人信息管理")
+@Slf4j
 @RestController
 @RequestMapping("/user")
 @RequiredArgsConstructor
@@ -51,7 +54,12 @@ public class UserController {
 
     @Operation(summary = "上传头像")
     @PostMapping("/avatar")
-    public Result<String> uploadAvatar(@RequestParam("file") MultipartFile file) throws Exception {
-        return Result.success("头像上传成功", userService.uploadAvatar(file));
+    public Result<String> uploadAvatar(@RequestParam("file") MultipartFile file) {
+        try {
+            return Result.success("头像上传成功", userService.uploadAvatar(file));
+        } catch (Exception e) {
+            log.warn("头像上传失败: {}", e.getMessage());
+            return Result.error(ResultCode.INTERNAL_ERROR, "头像上传失败，请稍后重试");
+        }
     }
 }

@@ -23,11 +23,11 @@ import java.util.Map;
  * @author Campus Love Team
  * @version 2.0
  */
+@Tag(name = "匹配行为追踪", description = "用户行为上报和权重管理相关接口")
 @Slf4j
 @RestController
 @RequestMapping("/match")
 @RequiredArgsConstructor
-@Tag(name = "匹配行为追踪", description = "用户行为上报和权重管理相关接口")
 public class MatchActionController {
 
     private final UserWeightService userWeightService;

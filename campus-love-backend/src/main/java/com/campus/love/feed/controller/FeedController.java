@@ -2,6 +2,8 @@ package com.campus.love.feed.controller;
 
 import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.result.Result;
+import com.campus.love.common.result.ResultCode;
+import com.campus.love.common.service.FileUploadService;
 import com.campus.love.feed.dto.FeedCommentRequest;
 import com.campus.love.feed.dto.FeedPostRequest;
 import com.campus.love.feed.dto.FeedPostResponse;
@@ -11,16 +13,14 @@ import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.beans.factory.annotation.Value;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
 
-import java.io.File;
-import java.io.IOException;
 import java.util.List;
-import java.util.UUID;
 
 @Tag(name = "朋友圈", description = "动态发布与互动")
+@Slf4j
 @RestController
 @RequestMapping("/feed")
 @RequiredArgsConstructor
@@ -28,9 +28,7 @@ public class FeedController {
 
     private final FeedService feedService;
     private final ActivityService activityService;
-
-    @Value("${app.upload.path}")
-    private String uploadPath;
+    private final FileUploadService fileUploadService;
 
     @Operation(summary = "发布动态")
     @PostMapping
@@ -144,31 +142,12 @@ public class FeedController {
     @PostMapping("/upload/image")
     public Result<String> uploadImage(@RequestParam("file") MultipartFile file) {
         try {
-            if (file.isEmpty()) {
-                return Result.error(400, "请选择文件");
-            }
-            String contentType = file.getContentType();
-            if (contentType == null || !contentType.startsWith("image/")) {
-                return Result.error(400, "仅支持图片格式");
-            }
-            // 限制图片大小 10MB
-            if (file.getSize() > 10 * 1024 * 1024) {
-                return Result.error(400, "图片大小不能超过10MB");
-            }
-
-            String ext = getFileExtension(file.getOriginalFilename(), contentType);
-            if (ext.isEmpty()) {
-                ext = ".jpg"; // 默认扩展名
-            }
-            String filename = "feed_img_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8) + ext;
-
-            File uploadDir = getUploadDir();
-            File dest = new File(uploadDir, filename);
-            file.transferTo(dest);
-
-            return Result.success("上传成功", "/uploads/" + filename);
-        } catch (IOException e) {
-            return Result.error(500, "文件上传失败: " + e.getMessage());
+            String url = fileUploadService.uploadImage(file, "feed_img_");
+            return Result.success("上传成功", url);
+        } catch (IllegalArgumentException e) {
+            return Result.error(ResultCode.BAD_REQUEST, e.getMessage());
+        } catch (Exception e) {
+            return Result.error(ResultCode.INTERNAL_ERROR, "文件上传失败，请稍后重试");
         }
     }
 
@@ -176,77 +155,12 @@ public class FeedController {
     @PostMapping("/upload/video")
     public Result<String> uploadVideo(@RequestParam("file") MultipartFile file) {
         try {
-            if (file.isEmpty()) {
-                return Result.error(400, "请选择文件");
-            }
-            String contentType = file.getContentType();
-            if (contentType == null || !contentType.startsWith("video/")) {
-                return Result.error(400, "仅支持视频格式");
-            }
-            // 限制视频大小 100MB
-            if (file.getSize() > 100 * 1024 * 1024) {
-                return Result.error(400, "视频大小不能超过100MB");
-            }
-
-            String ext = getFileExtension(file.getOriginalFilename(), contentType);
-            if (ext.isEmpty()) {
-                ext = ".mp4"; // 默认扩展名
-            }
-            String filename = "feed_video_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8) + ext;
-
-            File uploadDir = getUploadDir();
-            File dest = new File(uploadDir, filename);
-            file.transferTo(dest);
-
-            return Result.success("上传成功", "/uploads/" + filename);
-        } catch (IOException e) {
-            return Result.error(500, "文件上传失败: " + e.getMessage());
+            String url = fileUploadService.uploadVideo(file, "feed_video_");
+            return Result.success("上传成功", url);
+        } catch (IllegalArgumentException e) {
+            return Result.error(ResultCode.BAD_REQUEST, e.getMessage());
+        } catch (Exception e) {
+            return Result.error(ResultCode.INTERNAL_ERROR, "文件上传失败，请稍后重试");
         }
-    }
-
-    /**
-     * 获取上传目录的绝对路径，确保目录存在
-     */
-    private File getUploadDir() {
-        File dir = new File(uploadPath);
-        if (!dir.isAbsolute()) {
-            dir = new File(System.getProperty("user.dir"), uploadPath);
-        }
-        if (!dir.exists()) {
-            dir.mkdirs();
-        }
-        return dir;
-    }
-
-    private String getFileExtension(String filename, String contentType) {
-        // 优先从文件名获取扩展名
-        if (filename != null && filename.contains(".")) {
-            String lower = filename.toLowerCase();
-            int lastDot = lower.lastIndexOf('.');
-            String ext = lower.substring(lastDot);
-            // 支持的图片格式
-            if (ext.equals(".png") || ext.equals(".jpg") || ext.equals(".jpeg") ||
-                ext.equals(".gif") || ext.equals(".webp") || ext.equals(".bmp") ||
-                ext.equals(".svg")) {
-                return ext;
-            }
-            // 支持的视频格式
-            if (ext.equals(".mp4") || ext.equals(".mov") || ext.equals(".webm") ||
-                ext.equals(".avi") || ext.equals(".mkv")) {
-                return ext;
-            }
-        }
-        // 从 contentType 推断扩展名
-        if (contentType != null) {
-            if (contentType.equals("image/jpeg")) return ".jpg";
-            if (contentType.equals("image/png")) return ".png";
-            if (contentType.equals("image/gif")) return ".gif";
-            if (contentType.equals("image/webp")) return ".webp";
-            if (contentType.equals("image/svg+xml")) return ".svg";
-            if (contentType.equals("video/mp4")) return ".mp4";
-            if (contentType.equals("video/quicktime")) return ".mov";
-            if (contentType.equals("video/webm")) return ".webm";
-        }
-        return "";
     }
 }

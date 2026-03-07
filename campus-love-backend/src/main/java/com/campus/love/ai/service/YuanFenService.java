@@ -2,7 +2,7 @@ package com.campus.love.ai.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.love.ai.config.AiConfig;
-import com.campus.love.ai.dto.YuanFenAnalysisResult;
+import com.campus.love.ai.dto.YuanFenAnalysisResponse;
 import com.campus.love.ai.entity.YuanFenAnalysisLog;
 import com.campus.love.ai.mapper.YuanFenAnalysisLogMapper;
 import com.campus.love.ai.skill.YuanFenAnalysisSkill;
@@ -35,7 +35,7 @@ public class YuanFenService {
     private final ObjectMapper objectMapper;
     private final AiConfig aiConfig;
 
-    public YuanFenAnalysisResult getAnalysis(Long targetUserId) {
+    public YuanFenAnalysisResponse getAnalysis(Long targetUserId) {
         Long userId = CurrentUser.getId();
         long cooldownHours = aiConfig.getYuanfenCooldownHours();
 
@@ -68,8 +68,8 @@ public class YuanFenService {
 
                 if (cachedLog != null && cachedLog.getAiResult() != null) {
                     try {
-                        YuanFenAnalysisResult cached = objectMapper.readValue(
-                                cachedLog.getAiResult(), YuanFenAnalysisResult.class);
+                        YuanFenAnalysisResponse cached = objectMapper.readValue(
+                                cachedLog.getAiResult(), YuanFenAnalysisResponse.class);
                         LocalDateTime nextAvailable = cachedLog.getCreatedAt().plusHours(cooldownHours);
                         cached.setNextAvailableAt(nextAvailable.toString());
                         cached.setGeneratedAt(cachedLog.getCreatedAt().toString());
@@ -93,7 +93,7 @@ public class YuanFenService {
         MatchResultResponse matchResult = matchService.getMatchDetail(targetUserId);
 
         // 6. 调用 AI（失败时自动降级为本地生成结果）
-        YuanFenAnalysisResult result = yuanFenSkill.analyze(userA, userB, matchResult);
+        YuanFenAnalysisResponse result = yuanFenSkill.analyze(userA, userB, matchResult);
 
         // 7. 保存日志
         try {

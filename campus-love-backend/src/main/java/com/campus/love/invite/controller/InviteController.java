@@ -10,6 +10,7 @@ import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +19,7 @@ import java.util.List;
  * 邀约控制器
  */
 @Tag(name = "邀约", description = "邀约管理")
+@Slf4j
 @RestController
 @RequestMapping("/invite")
 @RequiredArgsConstructor
