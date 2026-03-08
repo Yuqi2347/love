@@ -32,13 +32,13 @@ export const useInviteStore = defineStore('invite', () => {
   )
 
   // 获取邀约列表
-  async function fetchInvites(type?: string, status?: string, timeRange?: string) {
+  async function fetchInvites(type?: string, status?: string, timeRange?: string, keyword?: string) {
     loading.value = true
     currentType.value = type
     currentStatus.value = status
     currentTimeRange.value = timeRange
     try {
-      const res = await getInviteList(type, status, timeRange, 0, 50)
+      const res = await getInviteList(type, status, timeRange, keyword, 1, 50)
       invites.value = res.data.data?.records || []
     } catch (error) {
       console.error('获取邀约列表失败:', error)
@@ -48,12 +48,13 @@ export const useInviteStore = defineStore('invite', () => {
   }
 
   // 加载更多邀约
-  async function loadMoreInvites(page: number) {
+  async function loadMoreInvites(page: number, keyword?: string) {
     try {
       const res = await getInviteList(
         currentType.value,
         currentStatus.value,
         currentTimeRange.value,
+        keyword,
         page,
         20
       )
@@ -67,8 +68,8 @@ export const useInviteStore = defineStore('invite', () => {
   }
 
   // 刷新邀约列表
-  function refreshInvites() {
-    return fetchInvites(currentType.value, currentStatus.value, currentTimeRange.value)
+  function refreshInvites(keyword?: string) {
+    return fetchInvites(currentType.value, currentStatus.value, currentTimeRange.value, keyword)
   }
 
   // 获取「我的邀约」列表（我发起的 + 我参与的，含已退出）

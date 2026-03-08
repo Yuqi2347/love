@@ -35,7 +35,25 @@
 
     <div v-if="profile" class="profile-info">
       <div class="profile-name-row">
-        <h2 class="profile-name">{{ profile.nickname }}</h2>
+        <h2
+          v-if="!editingNickname"
+          class="profile-name profile-name-clickable"
+          @click="isMe && startEditNickname()"
+        >
+          {{ profile.nickname }}
+        </h2>
+        <div v-else class="profile-name-edit">
+          <el-input
+            ref="nicknameInputRef"
+            v-model="editingNicknameValue"
+            size="small"
+            maxlength="20"
+            show-word-limit
+            @keyup.enter="saveNickname"
+          />
+          <button class="btn-save-nickname" @click="saveNickname">保存</button>
+          <button class="btn-cancel-nickname" @click="cancelEditNickname">取消</button>
+        </div>
         <div class="level-display">
           <span class="level-badge large">Lv{{ profile.userLevel }}</span>
           <span v-if="profile.isAdmin" class="admin-badge">管理员</span>
@@ -225,7 +243,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
-import { getUserProfile, type UserProfile } from '@/api/userApi'
+import { getUserProfile, updateNickname, type UserProfile } from '@/api/userApi'
 import { getMatchDetail, type MatchResult } from '@/api/matchApi'
 import { getInviteStats, getUserInviteStats, type InviteStats } from '@/api/inviteApi'
 import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, type FollowUser } from '@/api/followApi'
@@ -294,6 +312,11 @@ function startCooldownTimer(seconds: number) {
 const followingList = ref<FollowUser[]>([])
 const followerList = ref<FollowUser[]>([])
 const avatarInput = ref<HTMLInputElement | null>(null)
+
+// 昵称编辑
+const editingNickname = ref(false)
+const editingNicknameValue = ref('')
+const nicknameInputRef = ref<InstanceType<typeof import('element-plus').Input> | null>(null)
 
 const followLabel = computed(() => FOLLOW_STATUS_LABELS[followStatus.value as FollowStatus] || '关注')
 const newFollowerCount = computed(() => badgeStore.badges.newFollowerCount)
@@ -507,6 +530,39 @@ function getLevelByScore(score: number): number {
   return 1
 }
 
+function startEditNickname() {
+  if (!profile.value) return
+  editingNicknameValue.value = profile.value.nickname
+  editingNickname.value = true
+  setTimeout(() => nicknameInputRef.value?.focus(), 50)
+}
+
+function cancelEditNickname() {
+  editingNickname.value = false
+  editingNicknameValue.value = ''
+}
+
+async function saveNickname() {
+  const val = editingNicknameValue.value.trim()
+  if (!val) {
+    ElMessage.warning('昵称不能为空')
+    return
+  }
+  if (val === profile.value?.nickname) {
+    cancelEditNickname()
+    return
+  }
+  try {
+    const res = await updateNickname(val)
+    if (profile.value) profile.value.nickname = res.data.data?.nickname ?? val
+    await userStore.fetchProfile()
+    ElMessage.success('昵称已更新')
+    cancelEditNickname()
+  } catch {
+    ElMessage.error('昵称更新失败')
+  }
+}
+
 async function handleAvatarChange(event: Event) {
   const target = event.target as HTMLInputElement
   const file = target.files?.[0]
@@ -618,6 +674,33 @@ async function handleAvatarChange(event: Event) {
 }
 
 .profile-name { font-size: 22px; font-weight: 800; }
+.profile-name-clickable {
+  cursor: pointer;
+  &:hover { color: $primary; }
+}
+.profile-name-edit {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  .el-input { width: 180px; }
+}
+.btn-save-nickname, .btn-cancel-nickname {
+  padding: 6px 14px;
+  border-radius: $radius-md;
+  font-size: 13px;
+  cursor: pointer;
+  border: none;
+}
+.btn-save-nickname {
+  background: $primary;
+  color: white;
+  &:hover { opacity: 0.9; }
+}
+.btn-cancel-nickname {
+  background: $bg-tertiary;
+  color: $text-secondary;
+  &:hover { background: $border-light; }
+}
 
 .level-display {
   display: flex;

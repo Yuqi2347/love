@@ -40,9 +40,10 @@ public class InviteController {
             @Parameter(description = "邀约类型") @RequestParam(required = false) String type,
             @Parameter(description = "邀约状态") @RequestParam(required = false) String status,
             @Parameter(description = "邀约时间范围：week/month/year") @RequestParam(required = false) String timeRange,
+            @Parameter(description = "搜索关键词（标题、内容、地点）") @RequestParam(required = false) String keyword,
             @Parameter(description = "页码，从 1 开始") @RequestParam(defaultValue = "1") Integer page,
             @Parameter(description = "每页数量") @RequestParam(defaultValue = "20") Integer size) {
-        IPage<InviteResponse> invites = inviteService.getInviteList(type, status, timeRange, page, size);
+        IPage<InviteResponse> invites = inviteService.getInviteList(type, status, timeRange, keyword, page, size);
         return Result.success(invites);
     }
 

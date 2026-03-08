@@ -9,6 +9,11 @@ public final class RedisKeyConstants {
     public static final String CHAT_DAILY_COUNT_PREFIX = "chat:daily:count:";
     public static final String MATCH_RECOMMEND_PREFIX = "match:recommend:";
     public static final String FEED_TIMELINE_PREFIX = "feed:timeline:";
+    public static final String EMAIL_VERIFY_CODE_PREFIX = "auth:email:verify:";
+
+    public static String emailVerifyCode(String email) {
+        return EMAIL_VERIFY_CODE_PREFIX + email;
+    }
 
     public static String userProfile(Long userId) {
         return USER_PROFILE_PREFIX + userId;

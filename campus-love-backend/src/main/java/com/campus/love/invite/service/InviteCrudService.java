@@ -42,8 +42,8 @@ public class InviteCrudService {
     }
 
     @Transactional(readOnly = true)
-    public IPage<InviteResponse> getInviteList(String type, String status, String timeRange, Integer page, Integer size) {
-        return queryService.getInviteList(type, status, timeRange, page, size);
+    public IPage<InviteResponse> getInviteList(String type, String status, String timeRange, String keyword, Integer page, Integer size) {
+        return queryService.getInviteList(type, status, timeRange, keyword, page, size);
     }
 
     @Transactional(readOnly = true)

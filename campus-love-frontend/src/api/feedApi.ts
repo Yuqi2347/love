@@ -101,8 +101,8 @@ export function deletePost(postId: number) {
   return request.delete<ApiResult<void>>(`/feed/${postId}`)
 }
 
-export function getDiscoveryPosts(page = 0, size = 10) {
-  return request.get<ApiResult<FeedPost[]>>('/feed/discovery', { params: { page, size } })
+export function getDiscoveryPosts(page = 0, size = 10, keyword?: string) {
+  return request.get<ApiResult<FeedPost[]>>('/feed/discovery', { params: { page, size, keyword } })
 }
 
 export function getPostDetail(postId: number) {

@@ -19,6 +19,17 @@ spring:
       port: 6379
       database: 0
 
+  # 邮件配置（用于注册验证码，发件人必须与认证邮箱一致）
+  mail:
+    host: ${MAIL_HOST:smtp.qq.com}
+    port: ${MAIL_PORT:465}
+    username: ${MAIL_USERNAME:1553304293@qq.com}
+    password: ${MAIL_PASSWORD:vwvybmuifperbafg}
+    from: ${MAIL_USERNAME:1553304293@qq.com}
+    properties:
+      mail.smtp.ssl.enable: true
+      mail.smtp.auth: true
+
   servlet:
     multipart:
       max-file-size: 10MB

@@ -83,7 +83,7 @@ public class InviteQueryService {
     }
 
     @Transactional(readOnly = true)
-    public IPage<InviteResponse> getInviteList(String type, String status, String timeRange, Integer page, Integer size) {
+    public IPage<InviteResponse> getInviteList(String type, String status, String timeRange, String keyword, Integer page, Integer size) {
         int current = (page == null || page < 1) ? 1 : page;
         int pageSize = (size == null || size < 1) ? 20 : Math.min(size, 100);
 
@@ -97,6 +97,10 @@ public class InviteQueryService {
         } else {
             // 未指定 status 时，仅展示招募中
             wrapper.eq(Invite::getStatus, InviteStatusEnum.RECRUITING.name());
+        }
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String k = keyword.trim();
+            wrapper.and(w -> w.like(Invite::getTitle, k).or().like(Invite::getContent, k).or().like(Invite::getLocation, k));
         }
         LocalDateTime now = LocalDateTime.now();
         String range = (timeRange != null && !timeRange.isEmpty()) ? timeRange.toUpperCase() : "WEEK";

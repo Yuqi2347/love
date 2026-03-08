@@ -104,15 +104,19 @@ public class FeedService {
     /**
      * 获取发现模块帖子列表（按时间排序）
      * 只显示 DISCOVERY 类型的帖子
+     * @param keyword 可选，按内容模糊搜索
      */
-    public List<FeedPostResponse> getDiscoveryPosts(int page, int size) {
+    public List<FeedPostResponse> getDiscoveryPosts(int page, int size, String keyword) {
         Long currentUserId = CurrentUser.getId();
 
+        LambdaQueryWrapper<FeedPost> wrapper = new LambdaQueryWrapper<FeedPost>()
+                .eq(FeedPost::getPostType, PostTypeConstants.DISCOVERY)
+                .orderByDesc(FeedPost::getCreatedAt);
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            wrapper.like(FeedPost::getContent, keyword.trim());
+        }
         List<FeedPost> posts = feedPostMapper.selectList(
-                new LambdaQueryWrapper<FeedPost>()
-                        .eq(FeedPost::getPostType, PostTypeConstants.DISCOVERY)
-                        .orderByDesc(FeedPost::getCreatedAt)
-                        .last("LIMIT " + (page * size) + "," + size)
+                wrapper.last("LIMIT " + (page * size) + "," + size)
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
         return posts.stream().map(p -> {
@@ -125,6 +129,7 @@ public class FeedService {
 
     /**
      * 获取朋友圈动态流（互相关注用户的 TIMELINE 类型帖子）
+     * 根据作者的 feed_visibility 过滤：ALL=所有人，FOLLOWERS=仅粉丝，SELF=仅自己
      */
     public List<FeedPostResponse> getTimeline(int page, int size) {
         Long currentUserId = CurrentUser.getId();
@@ -136,10 +141,27 @@ public class FeedService {
                         .in(FeedPost::getUserId, mutualIds)
                         .eq(FeedPost::getPostType, PostTypeConstants.TIMELINE)
                         .orderByDesc(FeedPost::getCreatedAt)
-                        .last("LIMIT " + (page * size) + "," + size)
+                        .last("LIMIT " + Math.min(300, (page + 1) * size * 5))
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
-        return posts.stream().map(p -> toResponse(p, currentUserId, authorMap)).collect(Collectors.toList());
+        List<FeedPost> filtered = posts.stream()
+                .filter(p -> canSeeTimelinePost(p.getUserId(), currentUserId, authorMap))
+                .skip((long) page * size)
+                .limit(size)
+                .collect(Collectors.toList());
+        return filtered.stream().map(p -> toResponse(p, currentUserId, authorMap)).collect(Collectors.toList());
+    }
+
+    private boolean canSeeTimelinePost(Long authorId, Long viewerId, Map<Long, User> authorMap) {
+        if (authorId == null || viewerId == null) return false;
+        if (authorId.equals(viewerId)) return true;
+        User author = authorMap.get(authorId);
+        if (author == null) return true;
+        String vis = author.getFeedVisibility();
+        if (vis == null || "ALL".equals(vis)) return true;
+        if ("SELF".equals(vis)) return false;
+        if ("FOLLOWERS".equals(vis)) return followService.isFollowed(authorId, viewerId);
+        return true;
     }
 
     public List<FeedPostResponse> getUserPosts(Long userId, int page, int size) {
@@ -156,9 +178,17 @@ public class FeedService {
 
     /**
      * 获取用户的朋友圈帖子（TIMELINE类型）
+     * 根据作者的 feed_visibility 过滤：SELF 仅本人可见，FOLLOWERS 仅粉丝可见，ALL 所有人可见
      */
     public List<FeedPostResponse> getUserTimelinePosts(Long userId, int page, int size) {
         Long currentUserId = CurrentUser.getId();
+        User author = userMapper.selectById(userId);
+        if (author == null) return List.of();
+        String vis = author.getFeedVisibility() != null ? author.getFeedVisibility() : "ALL";
+        if ("SELF".equals(vis) && !userId.equals(currentUserId)) return List.of();
+        if ("FOLLOWERS".equals(vis) && !userId.equals(currentUserId) && !followService.isFollowed(userId, currentUserId)) {
+            return List.of();
+        }
         List<FeedPost> posts = feedPostMapper.selectList(
                 new LambdaQueryWrapper<FeedPost>()
                         .eq(FeedPost::getUserId, userId)

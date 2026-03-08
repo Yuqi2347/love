@@ -1,16 +1,43 @@
 <template>
   <div class="discover-page">
     <div class="page-header">
-      <h2 class="page-title">发现</h2>
-      <div class="header-right">
-        <!-- 始终显示等级信息 -->
-        <div v-if="levelInfo" class="level-info">
-          <span class="level-badge">Lv{{ levelInfo.level }}</span>
-          <span class="level-progress">{{ levelInfo.score }}/{{ levelInfo.scoreToNext }}</span>
-        </div>
-        <!-- 可发布时显示发布按钮 -->
+      <!-- 顶部搜索框 -->
+      <div class="search-bar-wrapper">
+        <el-input
+          v-model="searchKeyword"
+          placeholder="搜索邀约、帖子..."
+          class="search-input"
+          clearable
+          @keyup.enter="doSearch"
+        >
+          <template #prefix>
+            <el-icon><Search /></el-icon>
+          </template>
+        </el-input>
         <button v-if="canPost" class="btn-primary post-btn" @click="showPostDialog = true">
           <el-icon><Plus /></el-icon> 发布
+        </button>
+      </div>
+
+      <!-- Tab 模块切换 -->
+      <div class="discover-tabs">
+        <button
+          :class="['tab-btn', { active: activeTab === 'recommend' }]"
+          @click="switchTab('recommend')"
+        >
+          为你推荐
+        </button>
+        <button
+          :class="['tab-btn', { active: activeTab === 'invite' }]"
+          @click="switchTab('invite')"
+        >
+          邀约
+        </button>
+        <button
+          :class="['tab-btn', { active: activeTab === 'post' }]"
+          @click="switchTab('post')"
+        >
+          帖贴
         </button>
       </div>
     </div>
@@ -279,7 +306,7 @@ import {
 import { useUserStore } from '@/store/userStore'
 import { useInviteStore } from '@/store/inviteStore'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete } from '@element-plus/icons-vue'
+import { Plus, Delete, Search } from '@element-plus/icons-vue'
 import type { Invite } from '@/api/inviteApi'
 import {
   InviteType,
@@ -298,6 +325,8 @@ const inviteStore = useInviteStore()
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
 const posts = ref<FeedPost[]>([])
 const levelInfo = ref<UserLevelInfo | null>(null)
+const searchKeyword = ref('')
+const activeTab = ref<'recommend' | 'invite' | 'post'>('recommend')
 const showPostDialog = ref(false)
 const postContent = ref('')
 const posting = ref(false)
@@ -337,13 +366,34 @@ function getInviteTypeFromRoute(): string | undefined {
   return typeof t === 'string' && t ? t : undefined
 }
 
+function switchTab(tab: 'recommend' | 'invite' | 'post') {
+  activeTab.value = tab
+  loadByTab()
+}
+
+function doSearch() {
+  loadByTab()
+}
+
+async function loadByTab() {
+  const kw = searchKeyword.value.trim() || undefined
+  if (activeTab.value === 'recommend') {
+    await Promise.all([loadPosts(kw), loadInvites(kw)])
+  } else if (activeTab.value === 'invite') {
+    await loadInvites(kw)
+  } else {
+    await loadPosts(kw)
+  }
+}
+
 onMounted(async () => {
-  await Promise.all([loadPosts(), loadLevelInfo(), loadInvites()])
+  await loadLevelInfo()
+  await loadByTab()
 })
 
 // 路由 query.type 变化时重新拉取邀约（如从热门看板切换类型）
 watch(() => route.query.type, () => {
-  loadInvites()
+  loadInvites(searchKeyword.value.trim() || undefined)
 })
 
 type TimelineItem =
@@ -351,7 +401,9 @@ type TimelineItem =
   | { kind: 'post'; post: FeedPost; time: string; key: string }
 
 const timelineItems = computed<TimelineItem[]>(() => {
-  const inviteItems: TimelineItem[] = inviteStore.invites
+  const invites = activeTab.value === 'post' ? [] : inviteStore.invites
+  const postList = activeTab.value === 'invite' ? [] : posts.value
+  const inviteItems: TimelineItem[] = invites
     // 只展示公开且进行中的邀约：过滤掉私密、一对一、已取消和已结束
     .filter(invite =>
       invite.inviteMode === InviteMode.PUBLIC &&
@@ -368,7 +420,7 @@ const timelineItems = computed<TimelineItem[]>(() => {
       }
     })
 
-  const postItems: TimelineItem[] = posts.value.map(post => ({
+  const postItems: TimelineItem[] = postList.map(post => ({
     kind: 'post',
     post,
     time: post.createdAt,
@@ -394,18 +446,17 @@ function getTypeColor(type: string): string {
   return colors[type] || '#8c8c8c'
 }
 
-async function loadPosts() {
+async function loadPosts(keyword?: string) {
   try {
-    const res = await getDiscoveryPosts(0, 20)
+    const res = await getDiscoveryPosts(0, 20, keyword)
     posts.value = res.data.data || []
   } catch { /* empty */ }
 }
 
-async function loadInvites() {
+async function loadInvites(keyword?: string) {
   try {
-    // 发现页拉取邀约列表；支持 type 筛选（热门邀约看板跳转时传入）
     const type = getInviteTypeFromRoute()
-    await inviteStore.fetchInvites(type, undefined, 'month')
+    await inviteStore.fetchInvites(type, undefined, 'month', keyword)
   } catch {
     // ignore
   }
@@ -644,13 +695,11 @@ async function handleDeletePost(postId: number) {
 </script>
 
 <style lang="scss" scoped>
+@use 'sass:color';
 .discover-page { padding: 0; }
 
 .page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px 24px;
+  padding: 16px 24px;
   border-bottom: 1px solid $border-light;
   position: sticky;
   top: 0;
@@ -659,7 +708,49 @@ async function handleDeletePost(postId: number) {
   z-index: 10;
 }
 
-.page-title { font-size: 20px; font-weight: 700; }
+.search-bar-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.search-input {
+  flex: 1;
+  max-width: 400px;
+
+  :deep(.el-input__wrapper) {
+    border-radius: $radius-full;
+    box-shadow: 0 0 0 1px $border-light;
+  }
+}
+
+.discover-tabs {
+  display: flex;
+  gap: 8px;
+}
+
+.tab-btn {
+  padding: 8px 20px;
+  border: none;
+  background: transparent;
+  color: $text-secondary;
+  font-size: 15px;
+  font-weight: 500;
+  cursor: pointer;
+  border-radius: $radius-full;
+  transition: all $transition-fast;
+
+  &:hover {
+    background: rgba($primary, 0.08);
+    color: $primary;
+  }
+
+  &.active {
+    background: $primary;
+    color: white;
+  }
+}
 
 .header-right {
   display: flex;
@@ -1143,7 +1234,7 @@ async function handleDeletePost(postId: number) {
   text-decoration: none;
   transition: all 0.2s;
 
-  &:hover { background: darken($bg-tertiary, 5%); }
+  &:hover { background: color.adjust($bg-tertiary, $lightness: -5%); }
 }
 
 .link-image {

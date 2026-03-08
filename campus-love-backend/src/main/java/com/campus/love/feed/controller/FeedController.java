@@ -115,8 +115,9 @@ public class FeedController {
     @GetMapping("/discovery")
     public Result<List<FeedPostResponse>> getDiscoveryPosts(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return Result.success(feedService.getDiscoveryPosts(page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String keyword) {
+        return Result.success(feedService.getDiscoveryPosts(page, size, keyword));
     }
 
     @Operation(summary = "获取我的等级信息")

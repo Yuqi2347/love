@@ -77,6 +77,12 @@ public class UserService {
         user.setMbti(request.getMbti());
         user.setBio(request.getBio());
         user.setInterests(request.getInterests());
+        if (request.getFeedVisibility() != null && !request.getFeedVisibility().isEmpty()) {
+            String v = request.getFeedVisibility().toUpperCase();
+            if ("ALL".equals(v) || "FOLLOWERS".equals(v) || "SELF".equals(v)) {
+                user.setFeedVisibility(v);
+            }
+        }
 
         if (request.getBirthDate() != null) {
             LocalDate birthDate = LocalDate.parse(request.getBirthDate());
@@ -96,6 +102,31 @@ public class UserService {
                 && user.getInterests() != null && !user.getInterests().isEmpty();
         user.setProfileComplete(complete);
 
+        userMapper.updateById(user);
+        return toProfileResponse(user, true);
+    }
+
+    public UserProfileResponse updateNickname(String nickname) {
+        Long userId = CurrentUser.getId();
+        User user = userMapper.selectById(userId);
+        if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        if (nickname == null || nickname.trim().isEmpty()) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "昵称不能为空");
+        }
+        user.setNickname(nickname.trim());
+        userMapper.updateById(user);
+        return toProfileResponse(user, true);
+    }
+
+    public UserProfileResponse updateFeedVisibility(String visibility) {
+        Long userId = CurrentUser.getId();
+        User user = userMapper.selectById(userId);
+        if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        String v = visibility != null ? visibility.trim().toUpperCase() : "ALL";
+        if (!"ALL".equals(v) && !"FOLLOWERS".equals(v) && !"SELF".equals(v)) {
+            v = "ALL";
+        }
+        user.setFeedVisibility(v);
         userMapper.updateById(user);
         return toProfileResponse(user, true);
     }
@@ -135,6 +166,7 @@ public class UserService {
                 .bio(user.getBio())
                 .interests(user.getInterests())
                 .profileComplete(user.getProfileComplete())
+                .feedVisibility(user.getFeedVisibility() != null ? user.getFeedVisibility() : "ALL")
                 .build();
     }
 }

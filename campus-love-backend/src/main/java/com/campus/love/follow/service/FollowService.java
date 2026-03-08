@@ -96,6 +96,16 @@ public class FollowService {
         return Boolean.TRUE.equals(follow.getIsMutual()) ? FollowStatusEnum.MUTUAL : FollowStatusEnum.ONE_WAY;
     }
 
+    /** 判断 followerId 是否关注了 followingId */
+    public boolean isFollowed(Long followingId, Long followerId) {
+        if (followingId == null || followerId == null) return false;
+        Long count = followMapper.selectCount(
+                new LambdaQueryWrapper<Follow>()
+                        .eq(Follow::getFollowerId, followerId)
+                        .eq(Follow::getFollowingId, followingId));
+        return count != null && count > 0;
+    }
+
     public boolean isMutual(Long userId1, Long userId2) {
         Follow follow = followMapper.selectOne(
                 new LambdaQueryWrapper<Follow>()

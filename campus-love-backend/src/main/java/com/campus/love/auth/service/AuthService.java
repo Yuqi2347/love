@@ -20,12 +20,21 @@ public class AuthService {
     private final UserMapper userMapper;
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
-
-    private static final String CAMPUS_EMAIL_SUFFIX = ".edu.cn";
+    private final com.campus.love.auth.service.EmailVerifyService emailVerifyService;
+    private final com.campus.love.auth.service.SchoolService schoolService;
 
     public AuthResponse register(RegisterRequest request) {
-        if (!request.getEmail().endsWith(CAMPUS_EMAIL_SUFFIX)) {
+        String email = request.getEmail();
+        if (email == null || !email.contains("@")) {
             throw new BusinessException(ResultCode.INVALID_CAMPUS_EMAIL);
+        }
+        String domain = email.substring(email.indexOf("@") + 1);
+        if (!schoolService.isSupportedDomain(domain)) {
+            throw new BusinessException(ResultCode.INVALID_CAMPUS_EMAIL);
+        }
+
+        if (!emailVerifyService.verifyCode(email, request.getVerifyCode())) {
+            throw new BusinessException(ResultCode.VERIFY_CODE_INVALID);
         }
 
         Long existCount = userMapper.selectCount(

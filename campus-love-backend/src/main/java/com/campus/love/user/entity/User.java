@@ -64,6 +64,9 @@ public class User {
     /** 上次查看邀约活动时间（我的邀约有人加入/发言、等待邀约匹配成功） */
     private LocalDateTime lastInviteActivityViewedAt;
 
+    /** 朋友圈展示设置：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见 */
+    private String feedVisibility;
+
     /** 信用分默认值 100，用于邀约等模块 */
     public static final int DEFAULT_CREDIT_SCORE = 100;
 

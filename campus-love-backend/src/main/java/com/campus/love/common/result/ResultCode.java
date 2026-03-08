@@ -17,8 +17,10 @@ public enum ResultCode {
     // 用户模块 1xxx
     USER_NOT_FOUND(1001, "用户不存在"),
     USER_ALREADY_EXISTS(1002, "用户已注册"),
-    INVALID_CAMPUS_EMAIL(1003, "请使用校园邮箱注册(.edu.cn)"),
+    INVALID_CAMPUS_EMAIL(1003, "请使用支持的学校邮箱注册"),
     INVALID_CREDENTIALS(1004, "邮箱或密码错误"),
+    VERIFY_CODE_INVALID(1006, "验证码错误或已过期"),
+    VERIFY_CODE_COOLDOWN(1007, "请60秒后再发送验证码"),
     PROFILE_INCOMPLETE(1005, "请先完善个人资料"),
 
     // 关注模块 2xxx

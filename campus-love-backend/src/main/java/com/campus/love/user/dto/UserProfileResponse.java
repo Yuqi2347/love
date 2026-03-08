@@ -30,4 +30,6 @@ public class UserProfileResponse {
     private String bio;
     private String interests;
     private Boolean profileComplete;
+    /** 朋友圈展示设置：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见 */
+    private String feedVisibility;
 }

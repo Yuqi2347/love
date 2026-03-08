@@ -38,13 +38,19 @@
      增量脚本只负责在已有结构上做“补充/升级”，不会重复创建基础表。（V10 为邀约拒绝记录表，用于一对一邀约“拒绝”后不再出现在待处理列表。）
 5. **Redis** — Windows: [下载](https://github.com/tporadowski/redis/releases)，默认端口 6379
 
-## 数据库配置
+## 数据库与邮件配置
 
 默认连接信息在 `campus-love-backend/src/main/resources/application.yml`：
 - MySQL: `localhost:3306/campus_love`，用户名 `root`，密码 `campus123`
 - Redis: `localhost:6379`
 
-根据本地环境修改即可。
+**注册验证码邮件**：需配置 SMTP 才能发送验证码。在 `application.yml` 或环境变量中设置：
+- `MAIL_HOST`（默认 smtp.qq.com）
+- `MAIL_PORT`（默认 465）
+- `MAIL_USERNAME`（发件邮箱）
+- `MAIL_PASSWORD`（邮箱授权码，非登录密码）
+
+QQ 邮箱：设置 → 账户 → POP3/IMAP 服务 → 开启并获取授权码。
 
 ## 启动后端
 
@@ -67,7 +73,7 @@ npm run dev
 
 ## 功能模块
 
-- **认证**: 校园邮箱(.edu.cn)注册、JWT 登录
+- **认证**: 学校邮箱注册（当前支持深圳大学 @mails.szu.edu.cn）、邮箱验证码、JWT 登录
 - **个人主页**: 基础信息、MBTI、星座(自动计算)、八字、兴趣标签、头像上传
 - **匹配推荐**: 六维度加权评分(兴趣30% + MBTI25% + 星座15% + 八字15% + 专业10% + 年龄5%)，卡片滑动UI
 - **关注系统**: 单向/互相关注，权限分级

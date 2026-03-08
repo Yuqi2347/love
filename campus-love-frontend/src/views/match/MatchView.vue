@@ -380,6 +380,7 @@ function handleViewProfile(userId: number) {
 </script>
 
 <style lang="scss" scoped>
+@use 'sass:color';
 .match-page {
   padding: 0;
   display: flex;
@@ -621,6 +622,6 @@ function handleViewProfile(userId: number) {
   cursor: pointer;
   font-size: 14px;
   transition: background 0.2s;
-  &:hover { background: darken($primary, 10%); }
+  &:hover { background: color.adjust($primary, $lightness: -10%); }
 }
 </style>

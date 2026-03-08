@@ -2,6 +2,23 @@
   <div class="feed-page">
     <div class="page-header">
       <h2 class="page-title">朋友圈</h2>
+      <div class="header-right">
+        <el-popover placement="bottom-end" :width="200" trigger="click">
+          <template #reference>
+            <button class="settings-btn" title="朋友圈展示设置">
+              <el-icon><Setting /></el-icon>
+            </button>
+          </template>
+          <div class="feed-visibility-popover">
+            <div class="popover-title">谁可以看我的朋友圈</div>
+            <el-radio-group v-model="feedVisibility" class="visibility-options" @change="saveFeedVisibility">
+              <el-radio label="ALL">所有人可见</el-radio>
+              <el-radio label="FOLLOWERS">粉丝可见</el-radio>
+              <el-radio label="SELF">仅自己可见</el-radio>
+            </el-radio-group>
+          </div>
+        </el-popover>
+      </div>
     </div>
 
     <div v-if="posts.length" class="feed-list">
@@ -78,11 +95,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, onMounted, watch } from 'vue'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { getTimeline, likePost, unlikePost, addComment, deletePost, type FeedPost } from '@/api/feedApi'
+import { updateFeedVisibility } from '@/api/userApi'
 import { ElMessage, ElMessageBox } from 'element-plus'
+import { Setting } from '@element-plus/icons-vue'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect fill="%23f0f2f5" width="44" height="44" rx="22"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="20">👤</text></svg>'
 const userStore = useUserStore()
@@ -91,8 +110,28 @@ const posts = ref<FeedPost[]>([])
 const commentingPostId = ref<number | null>(null)
 const commentText = ref('')
 
+const feedVisibility = ref<string>((userStore.user?.feedVisibility as string) || 'ALL')
+
+async function saveFeedVisibility() {
+  try {
+    const res = await updateFeedVisibility(feedVisibility.value)
+    if (userStore.user && res.data.data) {
+      userStore.user.feedVisibility = res.data.data.feedVisibility
+    }
+    ElMessage.success('设置已保存')
+  } catch {
+    ElMessage.error('设置失败')
+  }
+}
+
+watch(() => userStore.user?.feedVisibility, (v) => {
+  if (v) feedVisibility.value = v
+}, { immediate: true })
+
 onMounted(async () => {
   badgeStore.markFeedActivityViewed()
+  await userStore.fetchProfile()
+  if (userStore.user?.feedVisibility) feedVisibility.value = userStore.user.feedVisibility
   try {
     const res = await getTimeline(0, 20)
     posts.value = res.data.data || []
@@ -170,9 +209,13 @@ function getDomain(url: string) {
 </script>
 
 <style lang="scss" scoped>
+@use 'sass:color';
 .feed-page { padding: 0; }
 
 .page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   padding: 20px 24px;
   border-bottom: 1px solid $border-light;
   position: sticky;
@@ -180,7 +223,46 @@ function getDomain(url: string) {
   background: rgba($bg-primary, 0.9);
   backdrop-filter: blur(12px);
   z-index: 10;
+
   .page-title { font-size: 20px; font-weight: 700; }
+}
+
+.header-right { display: flex; align-items: center; gap: 8px; }
+
+.settings-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  background: transparent;
+  color: $text-secondary;
+  border-radius: $radius-full;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    background: $bg-tertiary;
+    color: $primary;
+  }
+
+  .el-icon { font-size: 20px; }
+}
+
+.feed-visibility-popover {
+  .popover-title {
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-primary;
+    margin-bottom: 12px;
+  }
+
+  .visibility-options {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
 }
 
 .feed-list { display: flex; flex-direction: column; }
@@ -258,7 +340,7 @@ function getDomain(url: string) {
   transition: all $transition-fast;
 
   &:hover {
-    background: darken($bg-tertiary, 5%);
+    background: color.adjust($bg-tertiary, $lightness: -5%);
   }
 }
 

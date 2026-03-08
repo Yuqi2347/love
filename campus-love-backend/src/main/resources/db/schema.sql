@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS t_user (
     last_follower_viewed_at       DATETIME DEFAULT NULL COMMENT '上次查看粉丝列表时间',
     last_feed_activity_viewed_at  DATETIME DEFAULT NULL COMMENT '上次查看朋友圈动态活动时间',
     last_invite_activity_viewed_at DATETIME DEFAULT NULL COMMENT '上次查看邀约活动时间',
+    feed_visibility               VARCHAR(16) DEFAULT 'ALL' COMMENT '朋友圈可见性：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见（V15）',
     moment_photo_url              VARCHAR(256) DEFAULT NULL COMMENT '心动一刻照片URL（V13）',
     moment_self_score             TINYINT      DEFAULT NULL COMMENT '自评颜值分1-10（V13）',
     moment_banned                 TINYINT(1)   DEFAULT 0   COMMENT '是否被禁止参加心动一刻（V13）',

@@ -1,8 +1,14 @@
 import request from './request'
 import type { ApiResult } from './request'
 
+export interface SchoolItem {
+  name: string
+  domain: string
+}
+
 export interface RegisterParams {
   email: string
+  verifyCode: string
   password: string
   nickname: string
 }
@@ -20,6 +26,14 @@ export interface AuthResponse {
   profileComplete: boolean
   accessToken: string
   refreshToken: string
+}
+
+export function searchSchools(keyword?: string) {
+  return request.get<ApiResult<SchoolItem[]>>('/auth/schools', { params: { keyword } })
+}
+
+export function sendVerifyCode(email: string) {
+  return request.post<ApiResult<void>>('/auth/send-verify-code', null, { params: { email } })
 }
 
 export function register(data: RegisterParams) {

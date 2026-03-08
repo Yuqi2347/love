@@ -24,6 +24,8 @@ export interface UserProfile {
   bio: string | null
   interests: string | null
   profileComplete: boolean
+  /** 朋友圈可见性：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见 */
+  feedVisibility?: string
 }
 
 export interface UpdateProfileParams {
@@ -37,6 +39,8 @@ export interface UpdateProfileParams {
   mbti?: string
   bio?: string
   interests?: string
+  /** 朋友圈可见性：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见 */
+  feedVisibility?: string
 }
 
 export function getMyProfile() {
@@ -61,6 +65,14 @@ export function searchUsers(keyword: string, limit = 10) {
 
 export function updateProfile(data: UpdateProfileParams) {
   return request.put<ApiResult<UserProfile>>('/user/profile', data)
+}
+
+export function updateNickname(nickname: string) {
+  return request.patch<ApiResult<UserProfile>>('/user/nickname', null, { params: { nickname } })
+}
+
+export function updateFeedVisibility(visibility: string) {
+  return request.patch<ApiResult<UserProfile>>('/user/feed-visibility', null, { params: { visibility } })
 }
 
 export function uploadAvatar(file: File) {

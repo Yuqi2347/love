@@ -52,6 +52,18 @@ public class UserController {
         return Result.success(userService.updateProfile(request));
     }
 
+    @Operation(summary = "更新昵称")
+    @PatchMapping("/nickname")
+    public Result<UserProfileResponse> updateNickname(@RequestParam @jakarta.validation.constraints.NotBlank(message = "昵称不能为空") String nickname) {
+        return Result.success(userService.updateNickname(nickname));
+    }
+
+    @Operation(summary = "更新朋友圈展示设置")
+    @PatchMapping("/feed-visibility")
+    public Result<UserProfileResponse> updateFeedVisibility(@RequestParam String visibility) {
+        return Result.success(userService.updateFeedVisibility(visibility));
+    }
+
     @Operation(summary = "上传头像")
     @PostMapping("/avatar")
     public Result<String> uploadAvatar(@RequestParam("file") MultipartFile file) {
