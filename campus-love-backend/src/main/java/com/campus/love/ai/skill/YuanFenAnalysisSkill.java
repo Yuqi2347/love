@@ -1,6 +1,9 @@
 package com.campus.love.ai.skill;
 
+import com.campus.love.ai.dto.AiChatResult;
 import com.campus.love.ai.dto.YuanFenAnalysisResponse;
+import com.campus.love.ai.dto.YuanFenAnalysisResult;
+import com.campus.love.ai.prompt.YuanFenPromptTemplates;
 import com.campus.love.ai.service.AiService;
 import com.campus.love.match.dto.MatchResultResponse;
 import com.campus.love.user.entity.User;
@@ -21,74 +24,6 @@ public class YuanFenAnalysisSkill {
 
     private final AiService aiService;
     private final ObjectMapper objectMapper;
-
-    /** 系统 Prompt（异性） */
-    private static final String SYSTEM_PROMPT_OPPOSITE = """
-            你是 Campus Love 的「AI缘分解析师」，擅长从多维度分析人与人之间的情感关系。
-
-            你的知识背景包括：
-            - MBTI 性格理论
-            - 星座性格与恋爱模式
-            - 中国传统命理中的缘分观
-            - 现代心理学中的亲密关系理论（依恋理论、沟通模式、关系发展阶段）
-
-            你的分析风格：
-            像一位真正了解两个人的朋友在认真分析他们的关系。
-            语气温暖、有趣、真实，有洞察力。
-            不要使用玄学式断言，而是结合信息做合理推测。
-
-            你的目标：
-            生成一份 **有故事感、有代入感、同时有现实参考价值的「缘分解析报告」**。
-
-            要求：
-            - 分析要结合双方信息
-            - 内容要具体、自然、有人情味
-            - 可以适当举生活中的相处场景
-            - 语言要像朋友聊天，而不是论文
-            - 分析必须与系统评分大体一致（评分高就多肯定，评分低就更理性）
-
-            ⚠️ 输出必须严格为 JSON 格式
-            ⚠️ 不要输出 JSON 之外的任何文字
-            ⚠️ 不要使用 ```json 包裹
-            ⚠️ 所有字符串值必须且只能使用英文 ASCII 双引号 " 包裹，禁止使用中文引号或弯引号""";
-
-    /** 系统 Prompt（同性） */
-    private static final String SYSTEM_PROMPT_SAME = """
-            你是 Campus Love 的「关系洞察解析师」，擅长分析人与人之间的情感连接与关系潜力。
-
-            你的知识背景包括：
-            - MBTI 性格理论
-            - 星座性格与互动模式
-            - 现代心理学中的亲密关系研究
-            - 人际互动与关系发展理论
-
-            你的分析风格：
-            像一位真正了解两个人的朋友在认真分析他们之间的关系。
-            语气温暖、有趣、真实，有洞察力。
-            避免刻板判断，也不要做命运式断言。
-
-            你的目标：
-            生成一份 **有趣、真实、有洞察力的「关系缘分解析报告」**，
-            帮助用户理解两个人之间的互动方式、情感连接，以及未来可能的发展方向。
-
-            注意：
-            两位用户是 **同性关系**。
-            这种关系可能是：
-
-            - 朋友
-            - 知己
-            - 搭子
-            - 灵魂伙伴
-            - 或者潜在的浪漫关系
-
-            请保持 **中性与开放的视角**，
-            不要默认他们一定是恋爱关系，
-            而是分析 **他们之间的情感化学反应与关系潜力**。
-
-            ⚠️ 输出必须严格为 JSON 格式
-            ⚠️ 不要输出 JSON 之外的任何文字
-            ⚠️ 不要使用 ```json 包裹
-            ⚠️ 所有字符串值必须且只能使用英文 ASCII 双引号 " 包裹，禁止使用中文引号或弯引号""";
 
     /** 用户 Prompt 模板（异性） */
     private static final String PROMPT_TEMPLATE_OPPOSITE = """
@@ -158,7 +93,8 @@ public class YuanFenAnalysisSkill {
               "potentialChallenge": "（80字以内，指出一个现实中可能的摩擦点，但语气温柔，并给出一个简单建议）",
               "developmentPotential": "（120字以内，结合评分理性判断两人的发展潜力，不要做绝对化结论，而是给出鼓励式建议）",
               "exclusiveQuote": "（一句20字以内的浪漫金句，适合截图分享）"
-            }""";
+            }
+            """ + YuanFenPromptTemplates.JSON_EXAMPLE_OPPOSITE;
 
     /** 用户 Prompt 模板（同性） */
     private static final String PROMPT_TEMPLATE_SAME = """
@@ -241,23 +177,24 @@ public class YuanFenAnalysisSkill {
                 "互动建议3"
               ],
               "exclusiveQuote": "（一句20字以内的关系金句，可以偏友情，也可以带一点暧昧氛围，适合截图分享）"
-            }""";
+            }
+            """ + YuanFenPromptTemplates.JSON_EXAMPLE_SAME;
 
-    public YuanFenAnalysisResponse analyze(User userA, User userB, MatchResultResponse matchResult) {
+    public YuanFenAnalysisResult analyze(User userA, User userB, MatchResultResponse matchResult) {
         boolean sameGender = isSameGender(userA.getGender(), userB.getGender());
-        String systemPrompt = sameGender ? SYSTEM_PROMPT_SAME : SYSTEM_PROMPT_OPPOSITE;
+        String systemPrompt = sameGender ? YuanFenPromptTemplates.SYSTEM_SAME : YuanFenPromptTemplates.SYSTEM_OPPOSITE;
         String userPrompt = buildPrompt(userA, userB, matchResult, sameGender);
 
-        String aiResponse;
+        AiChatResult aiResult;
         try {
-            aiResponse = aiService.chatCompletion(systemPrompt, userPrompt);
+            aiResult = aiService.chatCompletion(systemPrompt, userPrompt);
         } catch (Exception e) {
             log.warn("YuanFen AI call FAILED: {} - {}", e.getClass().getSimpleName(), e.getMessage());
-            return buildFallbackResult(matchResult, sameGender);
+            return new YuanFenAnalysisResult(buildFallbackResult(matchResult, sameGender), 0);
         }
 
         // 清理可能的 markdown 代码块包裹
-        String json = aiResponse.trim();
+        String json = aiResult.getContent().trim();
         if (json.startsWith("```")) {
             json = json.replaceFirst("```(?:json)?\\s*", "").replaceFirst("\\s*```$", "");
         }
@@ -281,10 +218,12 @@ public class YuanFenAnalysisSkill {
             }
             result.setGeneratedAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
             result.setNextAvailableAt(LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME));
-            return result;
+            fillMissingFields(result, matchResult, sameGender);
+            int tokens = aiResult.getTokensUsed() != null ? aiResult.getTokensUsed() : 0;
+            return new YuanFenAnalysisResult(result, tokens);
         } catch (Exception e) {
             log.error("YuanFen JSON parse FAILED, len={}, preview={}", json.length(), json.length() > 200 ? json.substring(0, 200) + "..." : json, e);
-            return buildFallbackResult(matchResult, sameGender);
+            return new YuanFenAnalysisResult(buildFallbackResult(matchResult, sameGender), 0);
         }
     }
 
@@ -344,6 +283,40 @@ public class YuanFenAnalysisSkill {
 
     private String safe(String value) {
         return value == null || value.isBlank() ? "未填写" : value;
+    }
+
+    /** 填充 AI 可能遗漏的必填字段 */
+    private void fillMissingFields(YuanFenAnalysisResponse r, MatchResultResponse match, boolean sameGender) {
+        int score = match.getMatchScore() != null ? match.getMatchScore() : 50;
+        if (r.getYuanFenIndex() == null || r.getYuanFenIndex().isBlank()) {
+            r.setYuanFenIndex(sameGender
+                    ? (score >= 70 ? "同频的灵魂" : score >= 50 ? "默契搭子" : "有缘相识")
+                    : (score >= 70 ? "有缘千里" : score >= 50 ? "妙不可言" : "缘起缘落"));
+        }
+        if (r.getOverallInterpretation() == null || r.getOverallInterpretation().isBlank()) {
+            r.setOverallInterpretation("你们各有特点，在相处中可以互相欣赏、互相成长。");
+        }
+        if (r.getPersonalityAnalysis() == null || r.getPersonalityAnalysis().isBlank()) {
+            r.setPersonalityAnalysis("性格上各有互补，在相处中会互相吸引。");
+        }
+        if (r.getInterestChemistry() == null || r.getInterestChemistry().isBlank()) {
+            r.setInterestChemistry("兴趣有交集的话，一起活动会很自然。");
+        }
+        if (r.getCampusStoryScene() == null || r.getCampusStoryScene().isBlank()) {
+            r.setCampusStoryScene("图书馆、操场、咖啡店，校园里有很多相遇的可能。");
+        }
+        if (r.getRecommendActivities() == null || r.getRecommendActivities().isEmpty()) {
+            r.setRecommendActivities(java.util.List.of("一起去校园咖啡馆聊天", "参加社团活动", "周末一起探索校园周边"));
+        }
+        if (r.getPotentialChallenge() == null || r.getPotentialChallenge().isBlank()) {
+            r.setPotentialChallenge("多一些耐心倾听，少一些急于求成。");
+        }
+        if (r.getDevelopmentPotential() == null || r.getDevelopmentPotential().isBlank()) {
+            r.setDevelopmentPotential("保持真诚的交流，用心去了解对方。");
+        }
+        if (r.getExclusiveQuote() == null || r.getExclusiveQuote().isBlank()) {
+            r.setExclusiveQuote("缘分是两颗心恰好在同一个频率上跳动。");
+        }
     }
 
     /** AI 调用失败时的降级结果 */

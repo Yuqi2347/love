@@ -102,15 +102,17 @@ public class YuanFenService {
         MatchResultResponse matchResult = matchService.getMatchDetail(targetUserId);
 
         // 6. 调用 AI（失败时自动降级为本地生成结果）
-        YuanFenAnalysisResponse result = yuanFenSkill.analyze(userA, userB, matchResult);
+        var analysisResult = yuanFenSkill.analyze(userA, userB, matchResult);
+        YuanFenAnalysisResponse result = analysisResult.getResponse();
 
-        // 7. 保存日志（显式设置 createdAt，确保缓存查询能正确排序）
+        // 7. 保存日志（含 Token 消耗）
         try {
             YuanFenAnalysisLog logEntry = new YuanFenAnalysisLog();
             logEntry.setUserIdA(minId);
             logEntry.setUserIdB(maxId);
             logEntry.setTotalScore(matchResult.getMatchScore());
             logEntry.setAiResult(objectMapper.writeValueAsString(result));
+            logEntry.setTokensUsed(analysisResult.getTokensUsed());
             logEntry.setCreatedAt(LocalDateTime.now());
             logMapper.insert(logEntry);
         } catch (Exception e) {

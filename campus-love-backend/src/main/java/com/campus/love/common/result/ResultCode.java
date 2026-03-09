@@ -13,6 +13,7 @@ public enum ResultCode {
     FORBIDDEN(403, "无权限访问"),
     NOT_FOUND(404, "资源不存在"),
     CONFLICT(409, "资源冲突"),
+    TOO_MANY_REQUESTS(429, "请求过于频繁，请稍后再试"),
 
     // 用户模块 1xxx
     USER_NOT_FOUND(1001, "用户不存在"),

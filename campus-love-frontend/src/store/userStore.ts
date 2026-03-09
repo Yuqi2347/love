@@ -3,6 +3,7 @@ import { ref } from 'vue'
 import type { UserProfile } from '@/api/userApi'
 import { getMyProfile } from '@/api/userApi'
 import type { AuthResponse } from '@/api/authApi'
+import { useFollowStore } from './followStore'
 
 export const useUserStore = defineStore('user', () => {
   const user = ref<UserProfile | null>(null)
@@ -37,6 +38,7 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('refresh_token')
     isLoggedIn.value = false
     user.value = null
+    useFollowStore().clear()
   }
 
   return { user, isLoggedIn, setAuth, fetchProfile, logout }

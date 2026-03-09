@@ -40,6 +40,11 @@ const router = createRouter({
           name: 'Moment',
           component: () => import('@/views/MomentManageView.vue'),
         },
+        {
+          path: 'ai-token-stats',
+          name: 'AiTokenStats',
+          component: () => import('@/views/AiTokenStatsView.vue'),
+        },
       ],
     },
   ],

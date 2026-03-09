@@ -8,6 +8,8 @@ export interface UserProfile {
   gender: number
   birthDate: string | null
   birthTime: string | null
+  /** 年龄（仅他人资料返回，本人为 undefined） */
+  age?: number | null
   school: string | null
   major: string | null
   grade: string | null

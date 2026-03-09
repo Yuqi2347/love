@@ -30,6 +30,10 @@
           <el-icon><MagicStick /></el-icon>
           <span>心动时刻</span>
         </el-menu-item>
+        <el-menu-item index="/ai-token-stats">
+          <el-icon><TrendCharts /></el-icon>
+          <span>AI Token 统计</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -51,7 +55,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
-import { DataAnalysis, User, Calendar, Document, MagicStick } from '@element-plus/icons-vue'
+import { DataAnalysis, User, Calendar, Document, MagicStick, TrendCharts } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -64,6 +68,7 @@ const currentTitle = computed(() => {
     '/invites': '邀约管理',
     '/feeds': '帖子管理',
     '/moment': '心动时刻',
+    '/ai-token-stats': 'AI Token 统计',
   }
   return map[route.path] || '管理后台'
 })

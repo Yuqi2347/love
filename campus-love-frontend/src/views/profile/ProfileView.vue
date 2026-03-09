@@ -59,7 +59,7 @@
           <span v-if="profile.isAdmin" class="admin-badge">管理员</span>
         </div>
       </div>
-      <p class="profile-email">{{ profile.email }}</p>
+      <p v-if="isMe && profile.email" class="profile-email">{{ profile.email }}</p>
       <p v-if="profile.bio" class="profile-bio">{{ profile.bio }}</p>
 
       <!-- 等级进度条 -->
@@ -119,12 +119,13 @@
         <span v-if="profile.gender !== null && profile.gender !== undefined" class="meta-item gender" :class="profile.gender === 1 ? 'male' : 'female'">
           {{ profile.gender === 1 ? '♂ 男' : '♀ 女' }}
         </span>
+        <span v-if="displayAge != null" class="meta-item">👤 {{ displayAge }}岁</span>
         <span v-if="profile.school" class="meta-item">🎓 {{ profile.school }}</span>
         <span v-if="profile.major" class="meta-item">📚 {{ profile.major }}</span>
         <span v-if="profile.grade" class="meta-item">📅 {{ profile.grade }}</span>
         <span v-if="profile.zodiac" class="meta-item">⭐ {{ profile.zodiac }}</span>
         <span v-if="profile.mbti" class="meta-item mbti">🧠 {{ profile.mbti }}</span>
-        <span v-if="profile.bazi" class="meta-item">🔮 {{ profile.bazi }}</span>
+        <span v-if="isMe && profile.bazi" class="meta-item">🔮 {{ profile.bazi }}</span>
       </div>
 
       <div v-if="profile.interests" class="profile-interests">
@@ -320,6 +321,22 @@ const nicknameInputRef = ref<InstanceType<typeof import('element-plus').Input> |
 
 const followLabel = computed(() => FOLLOW_STATUS_LABELS[followStatus.value as FollowStatus] || '关注')
 const newFollowerCount = computed(() => badgeStore.badges.newFollowerCount)
+
+// 年龄展示：他人用 profile.age，本人用 birthDate 计算
+const displayAge = computed(() => {
+  const p = profile.value
+  if (!p) return null
+  if (p.age != null) return p.age
+  if (isMe.value && p.birthDate) {
+    const birth = new Date(p.birthDate)
+    const today = new Date()
+    let age = today.getFullYear() - birth.getFullYear()
+    const m = today.getMonth() - birth.getMonth()
+    if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) age--
+    return age >= 0 ? age : null
+  }
+  return null
+})
 
 // 判断是否可以删除帖子（管理员或帖子作者）
 function canDeletePost(post: FeedPost): boolean {

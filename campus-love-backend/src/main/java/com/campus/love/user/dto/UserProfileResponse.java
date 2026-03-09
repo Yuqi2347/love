@@ -13,6 +13,8 @@ public class UserProfileResponse {
     private Integer gender;
     private String birthDate;
     private String birthTime;
+    /** 年龄（仅他人资料返回，本人返回 null 使用 birthDate） */
+    private Integer age;
     private String school;
     private String major;
     private String grade;

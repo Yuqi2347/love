@@ -20,6 +20,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import java.io.IOException;
 import java.time.LocalDate;
 import java.time.LocalTime;
+import java.time.Period;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -143,13 +144,25 @@ public class UserService {
     }
 
     private UserProfileResponse toProfileResponse(User user, boolean isSelf) {
+        String birthDate = null;
+        String birthTime = null;
+        String bazi = null;
+        Integer age = null;
+        if (isSelf) {
+            birthDate = user.getBirthDate() != null ? user.getBirthDate().toString() : null;
+            birthTime = user.getBirthTime() != null ? user.getBirthTime().toString() : null;
+            bazi = user.getBazi();
+        } else if (user.getBirthDate() != null) {
+            age = Period.between(user.getBirthDate(), LocalDate.now()).getYears();
+        }
         return UserProfileResponse.builder()
                 .id(user.getId())
                 .email(isSelf ? user.getEmail() : null)
                 .nickname(user.getNickname())
                 .gender(user.getGender())
-                .birthDate(user.getBirthDate() != null ? user.getBirthDate().toString() : null)
-                .birthTime(user.getBirthTime() != null ? user.getBirthTime().toString() : null)
+                .birthDate(birthDate)
+                .birthTime(birthTime)
+                .age(age)
                 .school(user.getSchool())
                 .major(user.getMajor())
                 .grade(user.getGrade())
@@ -161,7 +174,7 @@ public class UserService {
                 .participateCount(user.getParticipateCount() != null ? user.getParticipateCount() : 0)
                 .mbti(user.getMbti())
                 .zodiac(user.getZodiac())
-                .bazi(user.getBazi())
+                .bazi(bazi)
                 .avatarUrl(user.getAvatarUrl())
                 .bio(user.getBio())
                 .interests(user.getInterests())

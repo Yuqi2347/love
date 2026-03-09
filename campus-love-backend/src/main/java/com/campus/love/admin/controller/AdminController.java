@@ -5,6 +5,7 @@ import com.campus.love.admin.dto.AdminFeedItem;
 import com.campus.love.admin.dto.AdminInviteItem;
 import com.campus.love.admin.dto.AdminUserItem;
 import com.campus.love.admin.service.AdminService;
+import com.campus.love.ai.service.AiTokenStatsService;
 import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.result.Result;
 import io.swagger.v3.oas.annotations.Operation;
@@ -26,6 +27,7 @@ import java.util.Map;
 public class AdminController {
 
     private final AdminService adminService;
+    private final AiTokenStatsService aiTokenStatsService;
 
     private void requireAdmin() {
         adminService.requireAdmin(CurrentUser.getId());
@@ -98,5 +100,13 @@ public class AdminController {
     public Result<AdminService.DashboardStats> dashboardStats() {
         requireAdmin();
         return Result.success(adminService.getDashboardStats());
+    }
+
+    @Operation(summary = "AI Token 消耗统计（缘分解析）")
+    @GetMapping("/ai/token-stats")
+    public Result<AiTokenStatsService.AiTokenStats> aiTokenStats(
+            @RequestParam(defaultValue = "week") String range) {
+        requireAdmin();
+        return Result.success(aiTokenStatsService.getStats(range));
     }
 }

@@ -10,6 +10,11 @@ public final class RedisKeyConstants {
     public static final String MATCH_RECOMMEND_PREFIX = "match:recommend:";
     public static final String FEED_TIMELINE_PREFIX = "feed:timeline:";
     public static final String EMAIL_VERIFY_CODE_PREFIX = "auth:email:verify:";
+    public static final String RATE_LIMIT_PREFIX = "ratelimit:";
+
+    public static String rateLimit(String type, String identifier) {
+        return RATE_LIMIT_PREFIX + type + ":" + identifier;
+    }
 
     public static String emailVerifyCode(String email) {
         return EMAIL_VERIFY_CODE_PREFIX + email;

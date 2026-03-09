@@ -70,10 +70,10 @@
             <img :src="u.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
             <span class="search-item-name text-ellipsis">{{ u.nickname }}</span>
             <button
-              :class="['btn-sm', searchFollowedIds.includes(u.id) ? 'btn-followed' : 'btn-outline']"
+              :class="['btn-sm', followStore.isFollowed(u.id) ? 'btn-followed' : 'btn-outline']"
               @click.stop="handleSearchFollow(u.id)"
             >
-              {{ searchFollowedIds.includes(u.id) ? '已关注' : '关注' }}
+              {{ followStore.isFollowed(u.id) ? '已关注' : '关注' }}
             </button>
           </div>
         </div>
@@ -94,10 +94,10 @@
               <div class="recommend-meta">匹配度 {{ m.matchScore }}%</div>
             </div>
             <button
-              :class="['btn-sm', recommendFollowedIds.includes(m.userId) ? 'btn-followed' : 'btn-outline']"
+              :class="['btn-sm', followStore.isFollowed(m.userId) ? 'btn-followed' : 'btn-outline']"
               @click.stop="handleRecommendFollow(m.userId)"
             >
-              {{ recommendFollowedIds.includes(m.userId) ? '已关注' : '关注' }}
+              {{ followStore.isFollowed(m.userId) ? '已关注' : '关注' }}
             </button>
           </div>
         </div>
@@ -207,8 +207,9 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
+import { useFollowStore } from '@/store/followStore'
 import { getRecommendations, type MatchResult } from '@/api/matchApi'
-import { followUser, unfollowUser, getFollowingList } from '@/api/followApi'
+import { followUser, unfollowUser } from '@/api/followApi'
 import { createPost, uploadImage, uploadVideo } from '@/api/feedApi'
 import { searchUsers, type UserSearchItem } from '@/api/userApi'
 import { ElMessage } from 'element-plus'
@@ -220,6 +221,7 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const badgeStore = useBadgeStore()
+const followStore = useFollowStore()
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f0f2f5" width="40" height="40" rx="20"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="18">👤</text></svg>'
 
@@ -239,7 +241,6 @@ const navItems = computed(() => {
 const isActive = (path: string) => route.path.startsWith(path)
 
 const topMatches = ref<MatchResult[]>([])
-const recommendFollowedIds = ref<number[]>([])
 const showPostDialog = ref(false)
 const postContent = ref('')
 
@@ -261,7 +262,6 @@ const boardLoading = ref(false)
 const searchBoxRef = ref<HTMLElement>()
 const searchKeyword = ref('')
 const searchResults = ref<UserSearchItem[]>([])
-const searchFollowedIds = ref<number[]>([])
 const searchLoading = ref(false)
 const showSearchDropdown = ref(false)
 let searchDebounceTimer: ReturnType<typeof setTimeout> | null = null
@@ -271,7 +271,6 @@ watch(searchKeyword, (val) => {
   if (!val?.trim()) {
     showSearchDropdown.value = false
     searchResults.value = []
-    searchFollowedIds.value = []
     return
   }
   showSearchDropdown.value = true
@@ -283,20 +282,17 @@ async function doSearch() {
   const kw = searchKeyword.value?.trim()
   if (!kw || kw.length < 2) {
     searchResults.value = []
-    searchFollowedIds.value = []
     return
   }
   searchLoading.value = true
   try {
-    const [searchRes, followRes] = await Promise.all([
-      searchUsers(kw, 10),
-      getFollowingList(),
-    ])
+    if (followStore.followedIds.length === 0) {
+      await followStore.loadFollowedIds()
+    }
+    const searchRes = await searchUsers(kw, 10)
     searchResults.value = searchRes.data.data || []
-    searchFollowedIds.value = (followRes.data.data || []).map(f => f.userId)
   } catch {
     searchResults.value = []
-    searchFollowedIds.value = []
   } finally {
     searchLoading.value = false
   }
@@ -304,7 +300,6 @@ async function doSearch() {
 
 function clearSearch() {
   searchResults.value = []
-  searchFollowedIds.value = []
   showSearchDropdown.value = false
 }
 
@@ -315,15 +310,15 @@ function goToProfile(userId: number) {
 }
 
 async function handleSearchFollow(userId: number) {
-  const isFollowing = searchFollowedIds.value.includes(userId)
+  const isFollowing = followStore.isFollowed(userId)
   try {
     if (isFollowing) {
       await unfollowUser(userId)
-      searchFollowedIds.value = searchFollowedIds.value.filter(id => id !== userId)
+      followStore.removeFollowed(userId)
       ElMessage.success('已取消关注')
     } else {
       await followUser(userId)
-      searchFollowedIds.value = [...searchFollowedIds.value, userId]
+      followStore.addFollowed(userId)
       ElMessage.success('关注成功')
     }
   } catch { /* handled by interceptor */ }
@@ -338,15 +333,13 @@ function onDocumentClick(e: MouseEvent) {
 let badgePollTimer: ReturnType<typeof setInterval> | null = null
 async function loadRecommendations() {
   try {
-    const [recRes, followRes] = await Promise.all([
+    const [recRes] = await Promise.all([
       getRecommendations(0, 5),
-      getFollowingList(),
+      followStore.loadFollowedIds(),
     ])
     topMatches.value = recRes.data.data || []
-    recommendFollowedIds.value = (followRes.data.data || []).map((f: { userId: number }) => f.userId)
   } catch {
     topMatches.value = []
-    recommendFollowedIds.value = []
   }
 }
 
@@ -379,15 +372,15 @@ onBeforeUnmount(() => {
 })
 
 async function handleRecommendFollow(userId: number) {
-  const isFollowed = recommendFollowedIds.value.includes(userId)
+  const isFollowed = followStore.isFollowed(userId)
   try {
     if (isFollowed) {
       await unfollowUser(userId)
-      recommendFollowedIds.value = recommendFollowedIds.value.filter(id => id !== userId)
+      followStore.removeFollowed(userId)
       ElMessage.success('已取消关注')
     } else {
       await followUser(userId)
-      recommendFollowedIds.value = [...recommendFollowedIds.value, userId]
+      followStore.addFollowed(userId)
       ElMessage.success('关注成功')
     }
   } catch { /* handled by interceptor */ }

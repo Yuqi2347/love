@@ -1,6 +1,7 @@
 package com.campus.love.ai.service;
 
 import com.campus.love.ai.config.AiConfig;
+import com.campus.love.ai.dto.AiChatResult;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -31,9 +32,9 @@ public class AiService {
             .build();
 
     /**
-     * 调用 chat/completions（OpenAI 兼容格式），返回 assistant 消息文本
+     * 调用 chat/completions（OpenAI 兼容格式），返回内容与 Token 消耗
      */
-    public String chatCompletion(String systemPrompt, String userMessage) {
+    public AiChatResult chatCompletion(String systemPrompt, String userMessage) {
         String url = aiConfig.getBaseUrl() + "/chat/completions";
 
         Map<String, Object> body = Map.of(
@@ -74,11 +75,32 @@ public class AiService {
 
             log.info("AI response OK <- {}ms, status={}", elapsed, response.statusCode());
             JsonNode root = objectMapper.readTree(bodyStr);
-            return root.path("choices").get(0).path("message").path("content").asText();
+            String content = root.path("choices").get(0).path("message").path("content").asText();
+            Integer tokensUsed = parseTokensUsed(root);
+            if (tokensUsed != null) {
+                log.info("AI tokens used: {}", tokensUsed);
+            }
+            return AiChatResult.of(content, tokensUsed);
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - start;
             log.error("AI API FAILED ({}ms): {} - {}", elapsed, e.getClass().getSimpleName(), e.getMessage(), e);
             throw new RuntimeException("AI 服务暂时不可用，请稍后重试", e);
+        }
+    }
+
+    /** 解析 usage.total_tokens（OpenAI/DashScope 兼容格式） */
+    private Integer parseTokensUsed(JsonNode root) {
+        try {
+            JsonNode usage = root.path("usage");
+            if (usage.isMissingNode()) return null;
+            JsonNode total = usage.path("total_tokens");
+            if (total.isNumber()) return total.asInt();
+            int prompt = usage.path("prompt_tokens").asInt(0);
+            int completion = usage.path("completion_tokens").asInt(0);
+            return prompt + completion > 0 ? prompt + completion : null;
+        } catch (Exception e) {
+            log.debug("Parse usage failed: {}", e.getMessage());
+            return null;
         }
     }
 }

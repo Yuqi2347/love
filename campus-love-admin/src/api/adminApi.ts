@@ -85,6 +85,24 @@ export function getDashboardStats() {
   return request.get<ApiResult<DashboardStats>>('/admin/stats')
 }
 
+// ==================== AI Token 统计 ====================
+
+export interface AiTokenDailyStat {
+  date: string
+  tokensUsed: number
+  callCount: number
+}
+
+export interface AiTokenStats {
+  totalTokens: number
+  callCount: number
+  dailyStats: AiTokenDailyStat[]
+}
+
+export function getAiTokenStats(range: 'day' | 'week' | 'month' = 'week') {
+  return request.get<ApiResult<AiTokenStats>>('/admin/ai/token-stats', { params: { range } })
+}
+
 // ==================== 心动时刻管理 ====================
 
 export interface MomentStatusInfo {

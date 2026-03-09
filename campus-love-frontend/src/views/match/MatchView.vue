@@ -86,11 +86,13 @@
 import { ref, computed, onMounted } from 'vue'
 import { getRecommendations, reportUserAction, type MatchResult } from '@/api/matchApi'
 import { followUser } from '@/api/followApi'
+import { useFollowStore } from '@/store/followStore'
 import { ElMessage } from 'element-plus'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
+const followStore = useFollowStore()
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500"><rect fill="%23f0f2f5" width="400" height="500" rx="24"/><text x="50%" y="45%" text-anchor="middle" fill="%23adb5bd" font-size="80">👤</text></svg>'
 const dimensionLabels = MATCH_DIMENSION_LABELS
@@ -323,8 +325,9 @@ async function handleLike() {
   // 立即标记为移除，触发动画
   removeCardById(targetUserId, 'right')
 
-  // 后台处理关注逻辑
+  // 后台处理关注逻辑，并同步到 followStore 供今日推荐等展示
   followUser(targetUserId).then(() => {
+    followStore.addFollowed(targetUserId)
     ElMessage.success(`已关注 ${targetNickname}`)
   }).catch(() => {})
 }
