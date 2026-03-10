@@ -133,8 +133,8 @@ export function createInvite(data: InviteCreateRequest) {
 /**
  * 获取邀约列表
  */
-export function getInviteList(type?: string, status?: string, timeRange?: string, keyword?: string, page = 1, size = 20) {
-  return service.get<ApiResult<{ records: Invite[]; total: number; current: number; size: number }>>('/invite/list', { params: { type, status, timeRange, keyword, page, size } })
+export function getInviteList(type?: string, status?: string, timeRange?: string, keyword?: string, publicOnly?: boolean, page = 1, size = 20) {
+  return service.get<ApiResult<{ records: Invite[]; total: number; current: number; size: number }>>('/invite/list', { params: { type, status, timeRange, keyword, publicOnly, page, size } })
 }
 
 /**

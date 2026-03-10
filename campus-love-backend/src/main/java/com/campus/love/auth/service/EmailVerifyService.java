@@ -25,7 +25,6 @@ public class EmailVerifyService {
 
     private final JavaMailSender mailSender;
     private final RedisTemplate<String, Object> redisTemplate;
-    private final SchoolService schoolService;
 
     @Value("${spring.mail.from:${spring.mail.username:}}")
     private String mailFrom;
@@ -36,13 +35,8 @@ public class EmailVerifyService {
      * 发送验证码到指定邮箱（使用 Redis 存储）
      */
     public void sendVerifyCode(String email) {
-        if (email == null || !email.contains("@")) {
+        if (email == null || !email.contains("@") || email.indexOf("@") >= email.length() - 1) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "邮箱格式不正确");
-        }
-
-        String domain = email.substring(email.indexOf("@") + 1);
-        if (!schoolService.isSupportedDomain(domain)) {
-            throw new BusinessException(ResultCode.INVALID_CAMPUS_EMAIL, "请使用支持的学校邮箱注册");
         }
 
         String cooldownKey = RedisKeyConstants.emailVerifyCode(email) + ":cooldown";

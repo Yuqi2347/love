@@ -2,8 +2,8 @@
   <div class="auth-page">
     <div class="auth-left">
       <div class="brand-area">
-        <div class="brand-icon">💕</div>
-        <h1 class="brand-title">Campus Love</h1>
+        <img src="/logo.png" alt="Campal" class="auth-logo" />
+        <h1 class="brand-title">Campal</h1>
         <p class="brand-subtitle">遇见TA，从校园开始</p>
         <div class="brand-features">
           <div class="feature-item">
@@ -103,17 +103,8 @@ async function handleLogin() {
     color: $text-inverse;
   }
 
-  .brand-icon {
-    font-size: 56px;
-    margin-bottom: 16px;
-  }
-
-  .brand-title {
-    font-size: 42px;
-    font-weight: 800;
-    letter-spacing: -1px;
-    margin-bottom: 8px;
-  }
+  .auth-logo { width: 64px; height: 64px; object-fit: contain; margin-bottom: 16px; }
+  .brand-title { font-size: 42px; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; }
 
   .brand-subtitle {
     font-size: 18px;

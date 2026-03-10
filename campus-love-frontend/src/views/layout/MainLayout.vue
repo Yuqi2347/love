@@ -4,8 +4,8 @@
     <aside class="sidebar">
       <div class="sidebar-inner">
         <router-link to="/" class="logo-link">
-          <span class="logo-icon">💕</span>
-          <span class="logo-text">CampusLove</span>
+          <img src="/logo.png" alt="Campal" class="logo-img" />
+          <span class="logo-text">Campal</span>
         </router-link>
 
         <nav class="nav-menu">
@@ -21,11 +21,6 @@
             <span v-if="item.showDot" class="nav-dot" />
           </router-link>
         </nav>
-
-        <button class="btn-primary post-btn" @click="showPostDialog = true">
-          <el-icon><EditPen /></el-icon>
-          发布动态
-        </button>
 
         <div v-if="userStore.user" class="sidebar-user" @click="$router.push('/profile')">
           <img :src="userStore.user.avatarUrl || defaultAvatar" class="avatar" width="40" height="40" />
@@ -233,7 +228,6 @@ const navItems = computed(() => {
     { path: '/moment', label: '心动时刻', icon: 'Aim', showDot: false },
     { path: '/invite', label: '邀约', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
     { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 },
-    { path: '/feed', label: '朋友圈', icon: 'Notebook', showDot: b.newFeedActivityCount > 0 },
     { path: '/profile', label: '我的', icon: 'User', showDot: b.newFollowerCount > 0 },
   ]
 })
@@ -576,7 +570,7 @@ onMounted(loadInviteBoard)
   padding: 8px 12px;
   margin-bottom: 24px;
 
-  .logo-icon { font-size: 28px; }
+  .logo-img { width: 32px; height: 32px; object-fit: contain; }
   .logo-text {
     font-size: 22px;
     font-weight: 800;
@@ -589,7 +583,7 @@ onMounted(loadInviteBoard)
 .nav-menu {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: 12px;
   flex: 1;
 }
 
@@ -597,7 +591,7 @@ onMounted(loadInviteBoard)
   display: flex;
   align-items: center;
   gap: 16px;
-  padding: 12px 16px;
+  padding: 14px 16px;
   border-radius: $radius-full;
   font-size: 18px;
   font-weight: 500;

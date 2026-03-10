@@ -1,7 +1,29 @@
 <template>
   <div class="profile-page">
     <div class="profile-header">
-      <div class="profile-cover"></div>
+      <div class="profile-cover">
+        <!-- Settings button in top right -->
+        <div v-if="isMe" class="profile-settings">
+          <el-dropdown trigger="click">
+            <button class="settings-btn">
+              <el-icon><Setting /></el-icon>
+            </button>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item @click="$router.push('/setup-profile')">
+                  <el-icon><Edit /></el-icon> 编辑资料
+                </el-dropdown-item>
+                <el-dropdown-item @click="showPrivacySettings = true">
+                  <el-icon><Lock /></el-icon> 隐私设置
+                </el-dropdown-item>
+                <el-dropdown-item divided @click="handleLogout" class="text-danger">
+                  <el-icon><SwitchButton /></el-icon> 退出登录
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
+        </div>
+      </div>
       <div class="profile-main">
         <div class="avatar-wrapper">
           <img :src="profile?.avatarUrl || defaultAvatar" class="profile-avatar avatar" width="100" height="100" />
@@ -10,6 +32,38 @@
             <el-icon><Camera /></el-icon>
           </button>
         </div>
+        
+        <!-- User Info moved to the right of avatar -->
+        <div v-if="profile" class="profile-info-header">
+          <div class="profile-name-row">
+            <h2
+              v-if="!editingNickname"
+              class="profile-name profile-name-clickable"
+              @click="isMe && startEditNickname()"
+            >
+              {{ profile.nickname }}
+            </h2>
+            <div v-else class="profile-name-edit">
+              <el-input
+                ref="nicknameInputRef"
+                v-model="editingNicknameValue"
+                size="small"
+                maxlength="20"
+                show-word-limit
+                @keyup.enter="saveNickname"
+              />
+              <button class="btn-save-nickname" @click="saveNickname">保存</button>
+              <button class="btn-cancel-nickname" @click="cancelEditNickname">取消</button>
+            </div>
+            <div class="level-display">
+              <span class="level-badge large">Lv{{ profile.userLevel }}</span>
+              <span v-if="profile.isAdmin" class="admin-badge">管理员</span>
+            </div>
+          </div>
+          <p v-if="isMe && profile.email" class="profile-email">{{ profile.email }}</p>
+          <p v-if="profile.bio" class="profile-bio">{{ profile.bio }}</p>
+        </div>
+
         <div v-if="!isMe" class="profile-actions">
           <button :class="['btn-primary', { 'btn-outline': followStatus !== 'NONE' }]" @click="handleFollowToggle">
             {{ followLabel }}
@@ -24,43 +78,25 @@
             {{ yuanfenCooldown > 0 ? yuanfenCooldownText : '缘分解析 ✨' }}
           </button>
         </div>
-        <div v-else class="profile-actions">
-          <button class="btn-outline" @click="$router.push('/setup-profile')">
-            <el-icon><Edit /></el-icon> 编辑资料
-          </button>
-          <button class="btn-outline" @click="handleLogout">退出登录</button>
-        </div>
       </div>
     </div>
 
     <div v-if="profile" class="profile-info">
-      <div class="profile-name-row">
-        <h2
-          v-if="!editingNickname"
-          class="profile-name profile-name-clickable"
-          @click="isMe && startEditNickname()"
-        >
-          {{ profile.nickname }}
-        </h2>
-        <div v-else class="profile-name-edit">
-          <el-input
-            ref="nicknameInputRef"
-            v-model="editingNicknameValue"
-            size="small"
-            maxlength="20"
-            show-word-limit
-            @keyup.enter="saveNickname"
-          />
-          <button class="btn-save-nickname" @click="saveNickname">保存</button>
-          <button class="btn-cancel-nickname" @click="cancelEditNickname">取消</button>
+      <div class="profile-stats">
+        <div class="stat-item" @click="handleOpenFollowing">
+          <span class="stat-num">{{ followingCount }}</span>
+          <span class="stat-label">我关注的</span>
         </div>
-        <div class="level-display">
-          <span class="level-badge large">Lv{{ profile.userLevel }}</span>
-          <span v-if="profile.isAdmin" class="admin-badge">管理员</span>
+        <div class="stat-item" @click="handleOpenFollowers">
+          <span class="stat-num">{{ followerCount }}</span>
+          <span v-if="isMe && newFollowerCount > 0" class="stat-new">+{{ newFollowerCount }}</span>
+          <span class="stat-label">关注我的</span>
+        </div>
+        <div class="stat-item" @click="handleOpenMutual">
+          <span class="stat-num">{{ mutualCount }}</span>
+          <span class="stat-label">朋友</span>
         </div>
       </div>
-      <p v-if="isMe && profile.email" class="profile-email">{{ profile.email }}</p>
-      <p v-if="profile.bio" class="profile-bio">{{ profile.bio }}</p>
 
       <!-- 等级进度条 -->
       <div v-if="isMe" class="level-progress-card">
@@ -132,18 +168,6 @@
         <span v-for="tag in profile.interests.split(',')" :key="tag" class="interest-tag">{{ tag }}</span>
       </div>
 
-      <div class="profile-stats">
-        <div class="stat-item" @click="handleOpenFollowing">
-          <span class="stat-num">{{ followingCount }}</span>
-          <span class="stat-label">关注</span>
-        </div>
-        <div class="stat-item" @click="handleOpenFollowers">
-          <span class="stat-num">{{ followerCount }}</span>
-          <span v-if="isMe && newFollowerCount > 0" class="stat-new">+{{ newFollowerCount }}</span>
-          <span class="stat-label">粉丝</span>
-        </div>
-      </div>
-
       <!-- Match detail if not me -->
       <div v-if="!isMe && matchResult" class="match-section card">
         <h3 class="section-title">匹配分析</h3>
@@ -164,18 +188,7 @@
     <!-- User's Posts -->
     <div class="profile-posts">
       <div class="posts-tabs">
-        <button
-          :class="['tab-btn', { active: postsTab === 'timeline' }]"
-          @click="postsTab = 'timeline'; loadPostsByType()"
-        >
-          朋友圈
-        </button>
-        <button
-          :class="['tab-btn', { active: postsTab === 'discovery' }]"
-          @click="postsTab = 'discovery'; loadPostsByType()"
-        >
-          发现动态
-        </button>
+        <button class="tab-btn active">动态</button>
       </div>
 
       <div v-for="post in posts" :key="post.id" class="feed-item">
@@ -196,13 +209,13 @@
         </button>
       </div>
       <div v-if="!posts.length" class="empty-hint">
-        {{ postsTab === 'timeline' ? '暂无朋友圈动态' : '暂无发现动态' }}
+        暂无动态
       </div>
     </div>
   </div>
 
   <!-- 关注列表弹窗 -->
-  <el-dialog :title="isMe ? '我的关注' : `${profile?.nickname || 'TA'}的关注`" width="500px" :model-value="showFollowing" @update:model-value="showFollowing = false">
+  <el-dialog :title="isMe ? '我关注的' : `${profile?.nickname || 'TA'}关注的`" width="500px" :model-value="showFollowing" @update:model-value="showFollowing = false">
     <div v-if="followingList.length" class="user-list">
       <div v-for="user in followingList" :key="user.userId" class="user-list-item" @click="goToUserProfile(user.userId)">
         <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
@@ -215,7 +228,7 @@
   </el-dialog>
 
   <!-- 粉丝列表弹窗 -->
-  <el-dialog :title="isMe ? '我的粉丝' : `${profile?.nickname || 'TA'}的粉丝`" width="500px" :model-value="showFollowers" @update:model-value="showFollowers = false">
+  <el-dialog :title="isMe ? '关注我的' : `关注${profile?.nickname || 'TA'}的`" width="500px" :model-value="showFollowers" @update:model-value="showFollowers = false">
     <div v-if="followerList.length" class="user-list">
       <div v-for="user in followerList" :key="user.userId" class="user-list-item" @click="goToUserProfile(user.userId)">
         <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
@@ -225,6 +238,19 @@
       </div>
     </div>
     <div v-else class="empty-hint">{{ isMe ? '暂无粉丝' : 'TA暂无粉丝' }}</div>
+  </el-dialog>
+
+  <!-- 朋友列表弹窗 -->
+  <el-dialog :title="isMe ? '我的朋友' : `${profile?.nickname || 'TA'}的朋友`" width="500px" :model-value="showMutual" @update:model-value="showMutual = false">
+    <div v-if="mutualList.length" class="user-list">
+      <div v-for="user in mutualList" :key="user.userId" class="user-list-item" @click="goToUserProfile(user.userId)">
+        <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
+        <div class="user-list-info">
+          <div class="user-list-name">{{ user.nickname }}</div>
+        </div>
+      </div>
+    </div>
+    <div v-else class="empty-hint">{{ isMe ? '暂无朋友' : 'TA暂无朋友' }}</div>
   </el-dialog>
 
   <!-- 缘分解析弹层 -->
@@ -237,6 +263,20 @@
     @close="showYuanFen = false"
     @analyzed="onYuanFenAnalyzed"
   />
+
+  <!-- 隐私设置弹窗 -->
+  <el-dialog title="隐私设置" width="400px" :model-value="showPrivacySettings" @update:model-value="showPrivacySettings = false">
+    <div class="privacy-settings-form">
+      <div class="setting-item">
+        <div class="setting-label">谁可以看我的动态</div>
+        <el-radio-group v-model="feedVisibility" @change="saveFeedVisibility">
+          <el-radio label="ALL">所有人可见</el-radio>
+          <el-radio label="FOLLOWERS">粉丝可见</el-radio>
+          <el-radio label="SELF">仅自己可见</el-radio>
+        </el-radio-group>
+      </div>
+    </div>
+  </el-dialog>
 </template>
 
 <script setup lang="ts">
@@ -244,13 +284,13 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
-import { getUserProfile, updateNickname, type UserProfile } from '@/api/userApi'
+import { getUserProfile, updateNickname, updateFeedVisibility, type UserProfile } from '@/api/userApi'
 import { getMatchDetail, type MatchResult } from '@/api/matchApi'
 import { getInviteStats, getUserInviteStats, type InviteStats } from '@/api/inviteApi'
 import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, type FollowUser } from '@/api/followApi'
 import { getUserTimelinePosts, getUserDiscoveryPosts, deletePost, type FeedPost } from '@/api/feedApi'
 import { ElMessage } from 'element-plus'
-import { Camera, ChatDotRound, Calendar } from '@element-plus/icons-vue'
+import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton } from '@element-plus/icons-vue'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { FOLLOW_STATUS_LABELS, FollowStatus } from '@/constants/followConst'
 import { uploadAvatar } from '@/api/userApi'
@@ -273,11 +313,12 @@ const followStatus = ref<string>(FollowStatus.NONE)
 const matchResult = ref<MatchResult | null>(null)
 const inviteStats = ref<InviteStats | null>(null)
 const posts = ref<FeedPost[]>([])
-const postsTab = ref<'timeline' | 'discovery'>('timeline')
 const followingCount = ref(0)
 const followerCount = ref(0)
+const mutualCount = ref(0)
 const showFollowing = ref(false)
 const showFollowers = ref(false)
+const showMutual = ref(false)
 
 // 缘分解析
 const showYuanFen = ref(false)
@@ -312,7 +353,28 @@ function startCooldownTimer(seconds: number) {
 }
 const followingList = ref<FollowUser[]>([])
 const followerList = ref<FollowUser[]>([])
+const mutualList = ref<FollowUser[]>([])
 const avatarInput = ref<HTMLInputElement | null>(null)
+
+// 隐私设置
+const showPrivacySettings = ref(false)
+const feedVisibility = ref<string>('ALL')
+
+async function saveFeedVisibility(val: string | number | boolean) {
+  try {
+    const res = await updateFeedVisibility(String(val))
+    if (userStore.user && res.data.data) {
+      userStore.user.feedVisibility = res.data.data.feedVisibility
+    }
+    ElMessage.success('隐私设置已保存')
+  } catch {
+    ElMessage.error('设置失败')
+  }
+}
+
+watch(() => userStore.user?.feedVisibility, (v) => {
+  if (v) feedVisibility.value = v
+}, { immediate: true })
 
 // 昵称编辑
 const editingNickname = ref(false)
@@ -366,6 +428,16 @@ function handleOpenFollowers() {
   showFollowers.value = true
 }
 
+// 打开朋友列表
+function handleOpenMutual() {
+  const isAdmin = userStore.user?.isAdmin || false
+  if (!isMe.value && !isAdmin) {
+    ElMessage.warning('只有管理员可以查看他人的朋友列表')
+    return
+  }
+  showMutual.value = true
+}
+
 async function loadProfile() {
   if (!profileId.value) return
   if (isMe.value) void badgeStore.fetchBadges()
@@ -409,32 +481,39 @@ async function loadProfile() {
   }
 }
 
-// 独立函数加载关注/粉丝数量
+// 独立函数加载关注/粉丝/朋友数量
 async function loadFollowCounts() {
   try {
     const [fing, fers] = await Promise.all([
       isMe.value ? getFollowingList() : getUserFollowing(profileId.value!),
       isMe.value ? getFollowerList() : getUserFollowers(profileId.value!)
     ])
-    followingCount.value = fing.data.data?.length || 0
-    followerCount.value = fers.data.data?.length || 0
+    const fingList = fing.data.data || []
+    const fersList = fers.data.data || []
+    followingCount.value = fingList.length
+    followerCount.value = fersList.length
+    // 朋友即互相关注的人
+    const fingIds = new Set(fingList.map(u => u.userId))
+    mutualCount.value = fersList.filter(u => fingIds.has(u.userId)).length
   } catch (err) {
     console.error('load follow/follower count error:', err)
     followingCount.value = 0
     followerCount.value = 0
+    mutualCount.value = 0
   }
 }
 
 async function loadPostsByType() {
   if (!profileId.value) return
   try {
-    let res
-    if (postsTab.value === 'timeline') {
-      res = await getUserTimelinePosts(profileId.value, 0, 20)
-    } else {
-      res = await getUserDiscoveryPosts(profileId.value, 0, 20)
-    }
-    posts.value = res.data.data || []
+    // 合并获取所有动态
+    const [timelineRes, discoveryRes] = await Promise.all([
+      getUserTimelinePosts(profileId.value, 0, 20),
+      getUserDiscoveryPosts(profileId.value, 0, 20)
+    ])
+    const allPosts = [...(timelineRes.data.data || []), ...(discoveryRes.data.data || [])]
+    // 按时间倒序
+    posts.value = allPosts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
   } catch { /* handled */ }
 }
 
@@ -464,6 +543,7 @@ function formatTime(timeStr: string): string {
 function goToUserProfile(userId: number) {
   showFollowing.value = false
   showFollowers.value = false
+  showMutual.value = false
   router.push(`/profile/${userId}`)
 }
 
@@ -488,6 +568,24 @@ watch(showFollowers, async (val) => {
     } catch (err) {
       console.error('load followers error:', err)
       ElMessage.error('加载粉丝列表失败')
+    }
+  }
+})
+
+watch(showMutual, async (val) => {
+  if (val) {
+    try {
+      const [fing, fers] = await Promise.all([
+        isMe.value ? getFollowingList() : getUserFollowing(profileId.value!),
+        isMe.value ? getFollowerList() : getUserFollowers(profileId.value!)
+      ])
+      const fingList = fing.data.data || []
+      const fersList = fers.data.data || []
+      const fingIds = new Set(fingList.map(u => u.userId))
+      mutualList.value = fersList.filter(u => fingIds.has(u.userId))
+    } catch (err) {
+      console.error('load mutual error:', err)
+      ElMessage.error('加载朋友列表失败')
     }
   }
 })
@@ -620,14 +718,53 @@ async function handleAvatarChange(event: Event) {
 .profile-cover {
   height: 160px;
   background: $primary-gradient;
+  position: relative;
+}
+
+.profile-settings {
+  position: absolute;
+  top: 16px;
+  right: 24px;
+}
+
+.settings-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.2);
+  color: white;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all $transition-fast;
+  backdrop-filter: blur(4px);
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.4);
+    transform: scale(1.05);
+  }
+
+  .el-icon {
+    font-size: 20px;
+  }
 }
 
 .profile-main {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   padding: 0 24px;
   margin-top: -50px;
+}
+
+.profile-info-header {
+  flex: 1;
+  margin-left: 20px;
+  padding-top: 60px; /* Push content down into the white area */
+  padding-bottom: 12px;
+  min-width: 0;
 }
 
 .avatar-wrapper {
@@ -678,10 +815,14 @@ async function handleAvatarChange(event: Event) {
 .profile-actions {
   display: flex;
   gap: 10px;
+  padding-top: 60px; /* Align with profile info */
   padding-bottom: 12px;
+  flex-shrink: 0;
 }
 
-.profile-info { padding: 16px 24px; }
+.profile-info { 
+  padding: 0 24px 0;
+}
 
 .profile-name-row {
   display: flex;
@@ -690,7 +831,7 @@ async function handleAvatarChange(event: Event) {
   margin-bottom: 4px;
 }
 
-.profile-name { font-size: 22px; font-weight: 800; }
+.profile-name { font-size: 24px; font-weight: 800; color: $text-primary; }
 .profile-name-clickable {
   cursor: pointer;
   &:hover { color: $primary; }
@@ -959,9 +1100,9 @@ async function handleAvatarChange(event: Event) {
 .profile-stats {
   display: flex;
   gap: 32px;
-  margin-top: 18px;
-  padding-top: 18px;
-  border-top: 1px solid $border-light;
+  margin-top: 8px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid $border-light;
 }
 
 .stat-item {
@@ -1002,7 +1143,7 @@ async function handleAvatarChange(event: Event) {
   .bar-val { width: 28px; font-size: 13px; font-weight: 700; color: $text-primary; text-align: right; }
 }
 
-.profile-posts { border-top: 1px solid $border-light; margin-top: 8px; }
+.profile-posts { margin-top: 8px; }
 
 .posts-tabs {
   display: flex;
@@ -1168,6 +1309,20 @@ async function handleAvatarChange(event: Event) {
     color: $text-muted;
     cursor: not-allowed;
     box-shadow: none;
+  }
+}
+.privacy-settings-form {
+  padding: 10px 0;
+}
+
+.setting-item {
+  margin-bottom: 20px;
+  
+  .setting-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-primary;
+    margin-bottom: 12px;
   }
 }
 </style>

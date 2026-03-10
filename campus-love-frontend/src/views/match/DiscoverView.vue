@@ -1,8 +1,8 @@
 <template>
   <div class="discover-page">
     <div class="page-header">
-      <!-- 顶部搜索框 -->
-      <div class="search-bar-wrapper">
+      <!-- 顶部搜索与发布 -->
+      <div class="top-bar">
         <el-input
           v-model="searchKeyword"
           placeholder="搜索邀约、帖子..."
@@ -14,7 +14,7 @@
             <el-icon><Search /></el-icon>
           </template>
         </el-input>
-        <button v-if="canPost" class="btn-primary post-btn" @click="showPostDialog = true">
+        <button class="btn-primary post-btn" @click="showPostDialog = true">
           <el-icon><Plus /></el-icon> 发布
         </button>
       </div>
@@ -38,6 +38,12 @@
           @click="switchTab('post')"
         >
           帖贴
+        </button>
+        <button
+          :class="['tab-btn', { active: activeTab === 'following' }]"
+          @click="switchTab('following')"
+        >
+          关注
         </button>
       </div>
     </div>
@@ -265,9 +271,6 @@
           </div>
         </div>
 
-        <div v-if="levelInfo && levelInfo.level < 3" class="post-tip">
-          当前等级 Lv{{ levelInfo.level }}，升级到 Lv3 可发布动态
-        </div>
       </el-form>
       <template #footer>
         <el-button @click="closePostDialog">取消</el-button>
@@ -279,9 +282,7 @@
 
     <div v-if="!timelineItems.length" class="empty-state">
       <div class="empty-icon">📭</div>
-      <p>暂无动态</p>
-      <p v-if="canPost" class="empty-hint">成为第一个发布动态的人吧！</p>
-      <p v-else class="empty-hint">达到 Lv3 等级即可发布动态</p>
+      <p>暂无内容</p>
     </div>
   </div>
 </template>
@@ -291,6 +292,7 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getDiscoveryPosts,
+  getTimeline,
   likePost,
   unlikePost,
   getLevelInfo,
@@ -324,9 +326,10 @@ const userStore = useUserStore()
 const inviteStore = useInviteStore()
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
 const posts = ref<FeedPost[]>([])
+const followingPosts = ref<FeedPost[]>([])
 const levelInfo = ref<UserLevelInfo | null>(null)
 const searchKeyword = ref('')
-const activeTab = ref<'recommend' | 'invite' | 'post'>('recommend')
+const activeTab = ref<'recommend' | 'invite' | 'post' | 'following'>('recommend')
 const showPostDialog = ref(false)
 const postContent = ref('')
 const posting = ref(false)
@@ -341,13 +344,6 @@ const linkUrlInput = ref('')
 const showLinkInput = ref(false)
 const imageInputRef = ref<HTMLInputElement>()
 const videoInputRef = ref<HTMLInputElement>()
-
-// 管理员或Lv3及以上可以发布
-const canPost = computed(() => {
-  const isAdmin = userStore.user?.isAdmin || false
-  const level = levelInfo.value?.level || 0
-  return isAdmin || level >= 3
-})
 
 function goPostDetail(postId: number) {
   router.push(`/feed/${postId}`)
@@ -366,7 +362,7 @@ function getInviteTypeFromRoute(): string | undefined {
   return typeof t === 'string' && t ? t : undefined
 }
 
-function switchTab(tab: 'recommend' | 'invite' | 'post') {
+function switchTab(tab: 'recommend' | 'invite' | 'post' | 'following') {
   activeTab.value = tab
   loadByTab()
 }
@@ -381,6 +377,8 @@ async function loadByTab() {
     await Promise.all([loadPosts(kw), loadInvites(kw)])
   } else if (activeTab.value === 'invite') {
     await loadInvites(kw)
+  } else if (activeTab.value === 'following') {
+    await loadFollowingPosts()
   } else {
     await loadPosts(kw)
   }
@@ -401,8 +399,8 @@ type TimelineItem =
   | { kind: 'post'; post: FeedPost; time: string; key: string }
 
 const timelineItems = computed<TimelineItem[]>(() => {
-  const invites = activeTab.value === 'post' ? [] : inviteStore.invites
-  const postList = activeTab.value === 'invite' ? [] : posts.value
+  const invites = (activeTab.value === 'post' || activeTab.value === 'following') ? [] : inviteStore.invites
+  const postList = activeTab.value === 'invite' ? [] : (activeTab.value === 'following' ? followingPosts.value : posts.value)
   const inviteItems: TimelineItem[] = invites
     // 只展示公开且进行中的邀约：过滤掉私密、一对一、已取消和已结束
     .filter(invite =>
@@ -453,10 +451,17 @@ async function loadPosts(keyword?: string) {
   } catch { /* empty */ }
 }
 
+async function loadFollowingPosts() {
+  try {
+    const res = await getTimeline(0, 20)
+    followingPosts.value = res.data.data || []
+  } catch { /* empty */ }
+}
+
 async function loadInvites(keyword?: string) {
   try {
     const type = getInviteTypeFromRoute()
-    await inviteStore.fetchInvites(type, undefined, 'month', keyword)
+    await inviteStore.fetchInvites(type, undefined, 'year', keyword, true)
   } catch {
     // ignore
   }
@@ -699,25 +704,27 @@ async function handleDeletePost(postId: number) {
 .discover-page { padding: 0; }
 
 .page-header {
-  padding: 16px 24px;
+  padding: 16px 24px 0;
   border-bottom: 1px solid $border-light;
   position: sticky;
   top: 0;
   background: rgba($bg-primary, 0.9);
   backdrop-filter: blur(12px);
   z-index: 10;
+  display: flex;
+  flex-direction: column;
 }
 
-.search-bar-wrapper {
+.top-bar {
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: space-between;
   margin-bottom: 16px;
+  width: 100%;
 }
 
 .search-input {
-  flex: 1;
-  max-width: 400px;
+  width: 280px;
 
   :deep(.el-input__wrapper) {
     border-radius: $radius-full;
@@ -725,9 +732,21 @@ async function handleDeletePost(postId: number) {
   }
 }
 
+.post-btn {
+  padding: 8px 20px;
+  border-radius: $radius-full;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
 .discover-tabs {
   display: flex;
   gap: 8px;
+  padding-bottom: 12px;
+  width: 100%;
 }
 
 .tab-btn {
@@ -740,6 +759,7 @@ async function handleDeletePost(postId: number) {
   cursor: pointer;
   border-radius: $radius-full;
   transition: all $transition-fast;
+  white-space: nowrap;
 
   &:hover {
     background: rgba($primary, 0.08);

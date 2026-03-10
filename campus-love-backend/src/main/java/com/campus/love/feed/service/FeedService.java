@@ -59,7 +59,7 @@ public class FeedService {
         post.setLinkImage(request.getLinkImage());
         // 默认发到朋友圈
         post.setPostType(request.getPostType() != null ? request.getPostType() : PostTypeConstants.TIMELINE);
-        post.setRequiredLevel(UserLevelConstants.POST_FEED_MIN_LEVEL);
+        post.setRequiredLevel(1); // 降低到最低等级
         post.setLikeCount(0);
         post.setCommentCount(0);
         feedPostMapper.insert(post);
@@ -71,15 +71,10 @@ public class FeedService {
     }
 
     /**
-     * 创建发现模块帖子（需要权限检查）
+     * 创建发现模块帖子（无等级限制）
      */
     public FeedPostResponse createDiscoveryPost(FeedPostRequest request) {
         Long userId = CurrentUser.getId();
-
-        // 检查用户是否有发布权限
-        if (!activityService.canPostFeed(userId)) {
-            throw new BusinessException(ResultCode.INSUFFICIENT_LEVEL);
-        }
 
         FeedPost post = new FeedPost();
         post.setUserId(userId);
@@ -90,7 +85,7 @@ public class FeedService {
         post.setLinkTitle(request.getLinkTitle());
         post.setLinkImage(request.getLinkImage());
         post.setPostType(PostTypeConstants.DISCOVERY);
-        post.setRequiredLevel(UserLevelConstants.POST_FEED_MIN_LEVEL);
+        post.setRequiredLevel(1); // 降低到最低等级
         post.setLikeCount(0);
         post.setCommentCount(0);
         feedPostMapper.insert(post);

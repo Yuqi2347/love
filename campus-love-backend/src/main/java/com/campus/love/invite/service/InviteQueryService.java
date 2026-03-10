@@ -83,12 +83,15 @@ public class InviteQueryService {
     }
 
     @Transactional(readOnly = true)
-    public IPage<InviteResponse> getInviteList(String type, String status, String timeRange, String keyword, Integer page, Integer size) {
+    public IPage<InviteResponse> getInviteList(String type, String status, String timeRange, String keyword, Boolean publicOnly, Integer page, Integer size) {
         int current = (page == null || page < 1) ? 1 : page;
         int pageSize = (size == null || size < 1) ? 20 : Math.min(size, 100);
 
         LambdaQueryWrapper<Invite> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(Invite::getDeleted, false);
+        if (Boolean.TRUE.equals(publicOnly)) {
+            wrapper.eq(Invite::getInviteMode, InviteModeEnum.PUBLIC.name());
+        }
         if (type != null && !type.isEmpty()) {
             wrapper.eq(Invite::getInviteType, type);
         }
@@ -104,7 +107,9 @@ public class InviteQueryService {
         }
         LocalDateTime now = LocalDateTime.now();
         String range = (timeRange != null && !timeRange.isEmpty()) ? timeRange.toUpperCase() : "WEEK";
-        if ("WEEK".equals(range)) {
+        if ("ALL".equals(range)) {
+            // 不限制时间，展示所有
+        } else if ("WEEK".equals(range)) {
             wrapper.ge(Invite::getInviteTime, now.minusDays(7));
         } else if ("MONTH".equals(range)) {
             wrapper.ge(Invite::getInviteTime, now.minusDays(30));

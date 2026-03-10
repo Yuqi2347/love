@@ -21,16 +21,11 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final com.campus.love.auth.service.EmailVerifyService emailVerifyService;
-    private final com.campus.love.auth.service.SchoolService schoolService;
 
     public AuthResponse register(RegisterRequest request) {
         String email = request.getEmail();
-        if (email == null || !email.contains("@")) {
-            throw new BusinessException(ResultCode.INVALID_CAMPUS_EMAIL);
-        }
-        String domain = email.substring(email.indexOf("@") + 1);
-        if (!schoolService.isSupportedDomain(domain)) {
-            throw new BusinessException(ResultCode.INVALID_CAMPUS_EMAIL);
+        if (email == null || !email.contains("@") || email.indexOf("@") >= email.length() - 1) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "邮箱格式不正确");
         }
 
         if (!emailVerifyService.verifyCode(email, request.getVerifyCode())) {

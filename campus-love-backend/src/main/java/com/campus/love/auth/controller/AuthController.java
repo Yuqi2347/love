@@ -44,7 +44,7 @@ public class AuthController {
         return Result.success();
     }
 
-    @Operation(summary = "用户注册", description = "使用学校邮箱注册，需先发送验证码")
+    @Operation(summary = "用户注册", description = "使用邮箱注册（不限制后缀），需先发送验证码")
     @PostMapping("/register")
     public Result<AuthResponse> register(@Valid @RequestBody RegisterRequest request) {
         return Result.success(authService.register(request));
