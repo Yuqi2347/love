@@ -752,18 +752,18 @@ async function handleAvatarChange(event: Event) {
 
 .level-progress-card {
   margin-top: 12px;
-  padding: 16px;
-  background: rgba($primary, 0.06);
-  border-radius: $radius-lg;
-  border: 1px solid rgba($primary, 0.15);
+  padding: 20px;
+  background: rgba($primary, 0.04);
+  border-radius: $radius-xl;
+  border: none;
 }
 
 .invite-stats-card {
   margin-top: 12px;
-  padding: 16px;
-  background: linear-gradient(135deg, rgba($primary, 0.08), rgba($primary, 0.02));
-  border-radius: $radius-lg;
-  border: 1px solid rgba($primary, 0.2);
+  padding: 20px;
+  background: linear-gradient(135deg, rgba($primary, 0.06), rgba($primary, 0.02));
+  border-radius: $radius-xl;
+  border: none;
   display: flex;
   flex-direction: column;
   gap: 12px;
@@ -1008,7 +1008,7 @@ async function handleAvatarChange(event: Event) {
   display: flex;
   gap: 8px;
   padding: 16px 24px;
-  border-bottom: 1px solid $border-light;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .tab-btn {
@@ -1017,7 +1017,7 @@ async function handleAvatarChange(event: Event) {
   background: transparent;
   color: $text-secondary;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   border-radius: $radius-full;
   transition: all $transition-fast;
@@ -1030,6 +1030,7 @@ async function handleAvatarChange(event: Event) {
   &.active {
     background: $primary;
     color: white;
+    box-shadow: 0 4px 12px rgba($primary, 0.3);
   }
 }
 

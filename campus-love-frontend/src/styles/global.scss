@@ -11,7 +11,7 @@ html, body, #app {
   height: 100%;
   font-family: $font-family;
   color: $text-primary;
-  background: $bg-secondary;
+  background: $bg-body;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -44,16 +44,17 @@ img {
 // 滚动条美化
 ::-webkit-scrollbar {
   width: 6px;
+  height: 6px;
 }
 ::-webkit-scrollbar-track {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: $text-muted;
+  background: rgba($text-muted, 0.4);
   border-radius: $radius-full;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: $text-secondary;
+  background: $text-muted;
 }
 
 // 主题按钮
@@ -71,11 +72,16 @@ img {
   transition: all $transition-base;
   border: none;
   cursor: pointer;
+  box-shadow: 0 4px 12px rgba(255, 107, 129, 0.2); // 常态就有轻微发光
 
   &:hover {
-    opacity: 0.9;
+    opacity: 0.95;
     box-shadow: $shadow-glow;
-    transform: translateY(-1px);
+    transform: translateY(-2px);
+  }
+
+  &:active {
+    transform: translateY(0);
   }
 
   &:disabled {
@@ -94,7 +100,7 @@ img {
   padding: 8px 20px;
   background: transparent;
   color: $primary;
-  border: 1.5px solid $primary;
+  border: 1.5px solid rgba($primary, 0.6);
   border-radius: $radius-full;
   font-weight: 600;
   font-size: 14px;
@@ -103,18 +109,40 @@ img {
 
   &:hover {
     background: rgba($primary, 0.08);
+    border-color: $primary;
+    transform: translateY(-1px);
   }
 }
 
-// 卡片基础
+// 卡片基础 (去边框，加圆角，加弥散阴影)
 .card {
   background: $bg-primary;
-  border-radius: $radius-lg;
-  border: 1px solid $border-light;
-  transition: box-shadow $transition-base;
+  border-radius: $radius-xl;
+  border: none;
+  box-shadow: $shadow-sm;
+  transition: transform $transition-base, box-shadow $transition-base;
 
   &:hover {
     box-shadow: $shadow-md;
+  }
+}
+
+// 页面通用头
+.page-header {
+  padding: 24px 0;
+  position: sticky;
+  top: 0;
+  background: $glass-bg;
+  backdrop-filter: $glass-blur;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+
+  .page-title {
+    font-size: 22px;
+    font-weight: 800;
+    letter-spacing: -0.5px;
   }
 }
 
@@ -123,6 +151,7 @@ img {
   border-radius: $radius-full;
   object-fit: cover;
   background: $bg-tertiary;
+  box-shadow: inset 0 0 0 1px rgba(0,0,0,0.05); // 给头像加一层细微内发光，显得更精致
 }
 
 // 文字省略
@@ -132,8 +161,28 @@ img {
   white-space: nowrap;
 }
 
-// Element Plus 覆盖
+// Element Plus 深度覆盖
 .el-button--primary {
   background: $primary-gradient !important;
   border: none !important;
+  border-radius: $radius-full !important;
+}
+
+.el-input__wrapper, .el-textarea__inner {
+  border-radius: $radius-lg !important;
+  background-color: $bg-secondary !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+  transition: all $transition-fast !important;
+
+  &:hover, &:focus, &.is-focus {
+    background-color: $bg-primary !important;
+    border-color: rgba($primary, 0.3) !important;
+    box-shadow: 0 0 0 3px rgba($primary, 0.1) !important;
+  }
+}
+
+.el-dialog {
+  border-radius: $radius-xl !important;
+  overflow: hidden;
 }

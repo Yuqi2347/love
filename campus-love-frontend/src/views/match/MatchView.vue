@@ -451,18 +451,18 @@ function handleViewProfile(userId: number) {
   height: 480px;
   margin-left: -170px;
   margin-top: -240px;
-  background: white;
-  border-radius: 20px;
+  background: $bg-primary;
+  border-radius: $radius-xl;
   overflow: hidden;
-  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  box-shadow: $shadow-md;
   user-select: none;
-  border: 1px solid rgba(0,0,0,0.05);
-  transition: transform 0.3s ease, opacity 0.3s ease, box-shadow 0.3s ease;
+  border: none;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, box-shadow 0.3s ease;
 
   &.is-current {
     z-index: 10;
-    box-shadow: 0 12px 40px rgba(0,0,0,0.2);
-    border: 2px solid rgba(255,105,180,0.3);
+    box-shadow: $shadow-lg;
+    border: 2px solid rgba($primary, 0.3);
   }
 }
 
@@ -583,17 +583,17 @@ function handleViewProfile(userId: number) {
 .action-btn {
   width: 64px;
   height: 64px;
-  border-radius: 50%;
+  border-radius: $radius-full;
   display: flex;
   align-items: center;
   justify-content: center;
-  border: 2px solid;
-  transition: all 0.2s;
+  border: none;
+  transition: all $transition-fast;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  box-shadow: $shadow-md;
 
-  &.skip { border-color: #f44336; color: #f44336; background: white; &:hover { background: #f44336; color: white; transform: scale(1.05); } }
-  &.like { border-color: #4CAF50; color: #4CAF50; background: white; &:hover { background: #4CAF50; color: white; transform: scale(1.05); } }
+  &.skip { color: #f44336; background: white; &:hover { background: #f44336; color: white; transform: scale(1.1); box-shadow: 0 8px 24px rgba(244,67,54,0.3); } }
+  &.like { color: #4CAF50; background: white; &:hover { background: #4CAF50; color: white; transform: scale(1.1); box-shadow: 0 8px 24px rgba(76,175,80,0.3); } }
 }
 
 .card-counter {

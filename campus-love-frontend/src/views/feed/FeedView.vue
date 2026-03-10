@@ -217,12 +217,12 @@ function getDomain(url: string) {
   align-items: center;
   justify-content: space-between;
   padding: 20px 24px;
-  border-bottom: 1px solid $border-light;
   position: sticky;
   top: 0;
-  background: rgba($bg-primary, 0.9);
-  backdrop-filter: blur(12px);
+  background: $glass-bg;
+  backdrop-filter: $glass-blur;
   z-index: 10;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 
   .page-title { font-size: 20px; font-weight: 700; }
 }
@@ -265,13 +265,25 @@ function getDomain(url: string) {
   }
 }
 
-.feed-list { display: flex; flex-direction: column; }
+.feed-list { 
+  display: flex; 
+  flex-direction: column; 
+  gap: 16px; 
+  padding: 16px; 
+  background: transparent;
+}
 
 .feed-item {
-  padding: 16px 24px;
-  border-bottom: 1px solid $border-light;
-  transition: background $transition-fast;
-  &:hover { background: rgba($bg-tertiary, 0.5); }
+  background: $bg-primary;
+  border-radius: $radius-xl;
+  padding: 20px;
+  box-shadow: $shadow-sm;
+  transition: transform $transition-fast, box-shadow $transition-fast;
+  
+  &:hover {
+    box-shadow: $shadow-md;
+    transform: translateY(-2px);
+  }
 }
 
 .feed-author {

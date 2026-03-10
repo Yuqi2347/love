@@ -804,16 +804,17 @@ async function handleDeletePost(postId: number) {
 }
 
 .invite-card {
-  background: linear-gradient(135deg, rgba(#ff6b9d, 0.12), rgba(#c44569, 0.08));
-  border: 1px solid rgba(#ff6b9d, 0.4);
-  border-radius: $radius-lg;
-  padding: 12px 14px;
+  background: $bg-primary;
+  border: none;
+  border-radius: $radius-xl;
+  padding: 16px;
   cursor: pointer;
-  transition: all $transition-fast;
+  box-shadow: $shadow-sm;
+  transition: transform $transition-fast, box-shadow $transition-fast;
 
   &:hover {
-    border-color: $primary;
     box-shadow: $shadow-md;
+    transform: translateY(-2px);
   }
 }
 
@@ -902,13 +903,23 @@ async function handleDeletePost(postId: number) {
 .feed-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   padding: 16px 24px;
 }
 
 .feed-card {
-  padding: 16px;
+  background: $bg-primary;
+  border-radius: $radius-xl;
+  padding: 20px;
   cursor: pointer;
+  border: none;
+  box-shadow: $shadow-sm;
+  transition: transform $transition-fast, box-shadow $transition-fast;
+
+  &:hover {
+    box-shadow: $shadow-md;
+    transform: translateY(-2px);
+  }
 }
 
 .feed-header {

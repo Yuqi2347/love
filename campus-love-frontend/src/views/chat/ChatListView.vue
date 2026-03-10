@@ -97,27 +97,38 @@ onMounted(() => { chatStore.fetchConversations() })
 
 .page-header {
   padding: 20px 24px;
-  border-bottom: 1px solid $border-light;
   position: sticky;
   top: 0;
-  background: rgba($bg-primary, 0.9);
-  backdrop-filter: blur(12px);
+  background: $glass-bg;
+  backdrop-filter: $glass-blur;
   z-index: 10;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 
   .page-title { font-size: 20px; font-weight: 700; }
 }
 
-.conversation-list { display: flex; flex-direction: column; }
+.conversation-list { 
+  display: flex; 
+  flex-direction: column;
+  padding: 16px;
+  gap: 12px;
+}
 
 .conversation-item {
   display: flex;
   align-items: center;
   gap: 14px;
-  padding: 14px 24px;
+  padding: 16px;
+  background: $bg-primary;
+  border-radius: $radius-xl;
+  box-shadow: $shadow-sm;
   cursor: pointer;
-  transition: background $transition-fast;
+  transition: transform $transition-fast, box-shadow $transition-fast;
 
-  &:hover { background: $bg-tertiary; }
+  &:hover { 
+    box-shadow: $shadow-md;
+    transform: translateY(-2px);
+  }
 }
 
 .conv-avatar-wrap {

@@ -517,13 +517,18 @@ onMounted(() => {
 </script>
 
 <style lang="scss" scoped>
-.invite-page { padding: 20px; }
+.invite-page { padding: 0 20px 20px 20px; }
 
 .page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  padding: 20px 0;
+  position: sticky;
+  top: 0;
+  background: $glass-bg;
+  backdrop-filter: $glass-blur;
+  z-index: 10;
 }
 
 .page-title {
@@ -539,7 +544,7 @@ onMounted(() => {
   gap: 8px;
   margin-bottom: 16px;
   padding-bottom: 16px;
-  border-bottom: 1px solid $border-light;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
 }
 
 .tab-btn {
@@ -548,7 +553,7 @@ onMounted(() => {
   background: transparent;
   color: $text-secondary;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   border-radius: $radius-full;
   transition: all $transition-fast;
@@ -561,6 +566,7 @@ onMounted(() => {
   &.active {
     background: $primary;
     color: white;
+    box-shadow: 0 4px 12px rgba($primary, 0.3);
   }
 }
 
@@ -591,22 +597,22 @@ onMounted(() => {
 }
 
 .invite-card {
-  background: linear-gradient(135deg, rgba(#ff6b9d, 0.12), rgba(#c44569, 0.08));
-  border: 1px solid rgba(#ff6b9d, 0.4);
-  border-radius: $radius-lg;
-  padding: 16px;
+  background: $bg-primary;
+  border: none;
+  border-radius: $radius-xl;
+  padding: 20px;
   cursor: pointer;
-  transition: all $transition-fast;
+  box-shadow: $shadow-sm;
+  transition: transform $transition-fast, box-shadow $transition-fast;
 
   &:hover {
-    border-color: $primary;
     box-shadow: $shadow-md;
+    transform: translateY(-2px);
   }
 
   &.invite-card-1v1 {
+    background: linear-gradient(135deg, $bg-primary, rgba(#9c27b0, 0.03));
     border-left: 4px solid #9c27b0;
-    background: linear-gradient(135deg, rgba(#9c27b0, 0.08), rgba(#e1bee7, 0.06));
-    border-color: rgba(#9c27b0, 0.35);
   }
 }
 
