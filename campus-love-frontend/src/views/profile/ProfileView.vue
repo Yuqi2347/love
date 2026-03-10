@@ -74,8 +74,8 @@
           <button v-if="followStatus === 'MUTUAL'" class="btn-primary" @click="handleInviteUser">
             <el-icon><Calendar /></el-icon> 约TA一下
           </button>
-          <button v-if="followStatus === 'MUTUAL'" class="btn-yuanfen" @click="openYuanFen" :disabled="yuanfenCooldown > 0">
-            {{ yuanfenCooldown > 0 ? yuanfenCooldownText : '缘分解析 ✨' }}
+          <button v-if="followStatus === 'MUTUAL'" class="btn-yuanfen" @click="openYuanFen">
+            缘分解析 ✨
           </button>
         </div>
       </div>
@@ -327,11 +327,11 @@ let cooldownTimer: ReturnType<typeof setInterval> | null = null
 
 const yuanfenCooldownText = computed(() => {
   const m = Math.ceil(yuanfenCooldown.value / 60)
-  return `${m}分钟后可解析`
+  return `${m}分钟后可再次解析`
 })
 
 function openYuanFen() {
-  if (yuanfenCooldown.value > 0) return
+  // 冷却期间仍允许打开弹窗查看上次解析结果；是否重新调用 AI 由后端+冷却策略控制
   showYuanFen.value = true
 }
 

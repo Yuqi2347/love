@@ -32,7 +32,7 @@ public class RateLimitService {
         /** 匹配行为：100 次/小时/用户 */
         MATCH_ACTION_USER(100, 1, TimeUnit.HOURS),
         /** 缘分解析：10 次/天/用户 */
-        YUANFEN_USER(10, 1, TimeUnit.DAYS);
+        YUANFEN_USER(100, 1, TimeUnit.DAYS);
 
         private final int limit;
         private final long window;
