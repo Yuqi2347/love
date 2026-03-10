@@ -1,5 +1,6 @@
 server:
   port: 8080
+  address: 0.0.0.0   # 监听所有网卡，支持局域网/外网访问（默认仅 localhost）
   servlet:
     context-path: /api
 

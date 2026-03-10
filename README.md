@@ -71,6 +71,32 @@ npm run dev
 
 前端启动在 `http://localhost:5173`，已配置代理到后端 8080 端口。
 
+## 局域网 / 外网访问
+
+当前配置已支持**局域网**和**外网**访问：
+
+| 配置项 | 说明 |
+|--------|------|
+| 后端 `server.address: 0.0.0.0` | 监听所有网卡，非本机设备可访问 |
+| 前端 `host: true` | Vite 监听 0.0.0.0，启动时会显示 `Network: http://192.168.x.x:5173` |
+| CORS / WebSocket | 已允许 `*` 及常见内网网段 |
+
+**局域网使用**：同一 WiFi/校园网下，手机或他人电脑访问 `http://你的IP:5173`（如 `http://192.168.1.100:5173`）。
+
+**外网使用**（无需公网 IP）：
+
+**方式一：ngrok**
+1. 注册：打开 https://ngrok.com → Sign up（可用 Google/GitHub 登录）
+2. 登录后 Dashboard → Your Authtoken → 复制
+3. 配置 token（仅首次）：`npx -y ngrok config add-authtoken <你的token>`
+4. 启动：`npm run dev:public`，终端输出 `https://xxx.ngrok-free.app`
+
+**方式二：localtunnel（需密码）**
+```bash
+npm run dev && npm run tunnel  # 分两个终端
+```
+访问时需输入隧道密码，密码获取：在运行隧道的电脑上打开 https://loca.lt/mytunnelpassword
+
 ## 功能模块
 
 - **认证**: 学校邮箱注册（当前支持深圳大学 @mails.szu.edu.cn）、邮箱验证码、JWT 登录

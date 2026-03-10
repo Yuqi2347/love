@@ -60,9 +60,18 @@
         <el-table-column prop="createdAt" label="注册时间" width="170">
           <template #default="{ row }">{{ formatTime(row.createdAt) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="80" fixed="right">
+        <el-table-column label="操作" width="160" fixed="right">
           <template #default="{ row }">
             <el-button type="primary" link size="small" @click="saveStats(row)">保存</el-button>
+            <el-button
+              v-if="!row.isAdmin"
+              type="danger"
+              link
+              size="small"
+              @click="handleDelete(row)"
+            >
+              删除
+            </el-button>
           </template>
         </el-table-column>
       </el-table>
@@ -82,8 +91,8 @@
 
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
-import { ElMessage } from 'element-plus'
-import { getAdminUsers, updateUserStats, type AdminUserItem } from '@/api/adminApi'
+import { ElMessage, ElMessageBox } from 'element-plus'
+import { getAdminUsers, updateUserStats, deleteAdminUser, type AdminUserItem } from '@/api/adminApi'
 
 const loading = ref(false)
 const keyword = ref('')
@@ -119,6 +128,26 @@ async function saveStats(row: AdminUserItem) {
     ElMessage.success('已保存')
   } catch {
     ElMessage.error('保存失败')
+  }
+}
+
+async function handleDelete(row: AdminUserItem) {
+  try {
+    await ElMessageBox.confirm(
+      `确定要彻底删除用户「${row.nickname}」（${row.email}）及其全部相关数据吗？此操作不可恢复。`,
+      '删除用户',
+      {
+        confirmButtonText: '确定删除',
+        cancelButtonText: '取消',
+        type: 'warning',
+      }
+    )
+    await deleteAdminUser(row.id)
+    ElMessage.success('已删除')
+    load()
+  } catch (e) {
+    // 用户取消不提示；其他错误由 request 拦截器已展示
+    if (e === 'cancel') return
   }
 }
 

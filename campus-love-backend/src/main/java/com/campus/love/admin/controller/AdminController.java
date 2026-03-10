@@ -79,6 +79,14 @@ public class AdminController {
         return Result.success();
     }
 
+    @Operation(summary = "彻底删除用户及其全部相关数据")
+    @DeleteMapping("/user/{id}")
+    public Result<Void> deleteUser(@PathVariable Long id) {
+        requireAdmin();
+        adminService.deleteUserCompletely(id);
+        return Result.success();
+    }
+
     @Operation(summary = "修改用户信用分")
     @PutMapping("/user/{id}/credit")
     public Result<Void> updateUserCredit(@PathVariable Long id, @RequestBody Map<String, Integer> body) {

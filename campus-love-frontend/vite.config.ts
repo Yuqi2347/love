@@ -16,7 +16,8 @@ export default defineConfig({
       '/api': {
         target: 'http://localhost:8080',
         changeOrigin: true,
-        ws: true, // 同时代理 /api 下的 WebSocket，例如 /api/ws/chat
+        ws: true,
+        timeout: 60000, // 外网隧道延迟高，代理超时放宽
       },
       '/uploads': {
         target: 'http://localhost:8080',

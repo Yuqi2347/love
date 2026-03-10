@@ -55,3 +55,4 @@ pnpm-debug.log*
 .env.local
 .env.*.local
 *.pem
+frpc.toml

@@ -11,7 +11,7 @@ export interface ApiResult<T = unknown> {
 
 const service: AxiosInstance = axios.create({
   baseURL: '/api',
-  timeout: 15000,
+  timeout: 30000, // 外网/隧道访问延迟较高，适当放宽
 })
 
 service.interceptors.request.use(
@@ -40,7 +40,10 @@ service.interceptors.response.use(
     return response
   },
   (error) => {
-    const msg = error.response?.data?.message || error.message || '网络错误'
+    let msg = error.response?.data?.message || error.message || '网络错误'
+    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
+      msg = '请求超时，请检查网络或稍后重试（外网访问可能较慢）'
+    }
     ElMessage.error(msg)
     return Promise.reject(error)
   },

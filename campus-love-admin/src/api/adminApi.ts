@@ -81,6 +81,11 @@ export function updateUserStats(id: number, data: { creditScore?: number; activi
   return request.put<ApiResult<void>>(`/admin/user/${id}/stats`, data)
 }
 
+/** 彻底删除用户及其全部相关数据（不可恢复） */
+export function deleteAdminUser(id: number) {
+  return request.delete<ApiResult<void>>(`/admin/user/${id}`)
+}
+
 export function getDashboardStats() {
   return request.get<ApiResult<DashboardStats>>('/admin/stats')
 }

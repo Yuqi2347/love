@@ -67,8 +67,8 @@
             </div>
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
-          <!-- 图片消息（后端 msgType=2） -->
-          <template v-else-if="msg.msgType === 2">
+          <!-- 图片消息（msgType=2 或 3，且 content 为图片路径） -->
+          <template v-else-if="isImageMessage(msg)">
             <el-image
               :src="imageUrl(msg.content)"
               :preview-src-list="[imageUrl(msg.content)]"
@@ -219,6 +219,14 @@ function isInviteMessage(msg: { msgType?: number; content?: string }): boolean {
   return msg.msgType === 4 || !!(msg.content && String(msg.content).includes('INVITE#'))
 }
 
+/** 是否为图片消息：msgType 2/3 且 content 为图片路径 */
+function isImageMessage(msg: { msgType?: number; content?: string }): boolean {
+  if (msg.msgType !== 2 && msg.msgType !== 3) return false
+  const c = msg.content && String(msg.content).trim()
+  if (!c) return false
+  return c.startsWith('/uploads') || c.startsWith('/api/uploads') || c.startsWith('http')
+}
+
 /** 解析邀约消息 content：邀约邀请：标题｜时间 xx:xx｜INVITE#id */
 function parsedInvite(content: string): { title: string; timeStr: string; inviteId: number } | null {
   const match = content.match(/INVITE#(\d+)/)
@@ -271,8 +279,8 @@ function goToInvite(content: string) {
 
 function imageUrl(url: string) {
   if (!url) return ''
-  if (url.startsWith('http')) return url
-  return url.startsWith('/') ? url : '/' + url
+  if (url.startsWith('http') || url.startsWith('/api')) return url
+  return '/api' + (url.startsWith('/') ? url : '/' + url)
 }
 
 function triggerImageInput() {
