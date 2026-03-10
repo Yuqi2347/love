@@ -16,6 +16,12 @@ public class Follow {
     private Long followingId;
     private Boolean isMutual;
 
+    /**
+     * 备注名 - 用户为关注的用户设置的备注
+     * 优先展示备注名，点击个人主页时显示原始昵称
+     */
+    private String remark;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

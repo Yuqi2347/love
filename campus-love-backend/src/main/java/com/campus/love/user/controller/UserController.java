@@ -1,6 +1,7 @@
 package com.campus.love.user.controller;
 
 import com.campus.love.auth.security.CurrentUser;
+import com.campus.love.auth.service.EmailVerifyService;
 import com.campus.love.common.result.Result;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.user.dto.UserProfileRequest;
@@ -25,6 +26,7 @@ import org.springframework.web.multipart.MultipartFile;
 public class UserController {
 
     private final UserService userService;
+    private final EmailVerifyService emailVerifyService;
 
     @Operation(summary = "获取当前用户信息")
     @GetMapping("/me")
@@ -73,5 +75,35 @@ public class UserController {
             log.warn("头像上传失败: {}", e.getMessage());
             return Result.error(ResultCode.INTERNAL_ERROR, "头像上传失败，请稍后重试");
         }
+    }
+
+    @Operation(summary = "发送密码修改验证码到邮箱")
+    @PostMapping("/password/send-code")
+    public Result<Void> sendPasswordCode() {
+        Long userId = CurrentUser.getId();
+        String email = userService.getUserEmail(userId);
+        if (email == null || email.isEmpty()) {
+            return Result.error(ResultCode.BAD_REQUEST, "未绑定邮箱，无法修改密码");
+        }
+        emailVerifyService.sendVerifyCode(email);
+        return Result.success();
+    }
+
+    @Operation(summary = "通过邮箱验证码修改密码")
+    @PostMapping("/password/reset")
+    public Result<Void> resetPassword(
+            @RequestParam @jakarta.validation.constraints.NotBlank(message = "验证码不能为空") String code,
+            @RequestParam @jakarta.validation.constraints.Size(min = 6, max = 20, message = "密码长度6-20位") String newPassword
+    ) {
+        Long userId = CurrentUser.getId();
+        String email = userService.getUserEmail(userId);
+        if (email == null || email.isEmpty()) {
+            return Result.error(ResultCode.BAD_REQUEST, "未绑定邮箱");
+        }
+        if (!emailVerifyService.verifyCode(email, code)) {
+            return Result.error(ResultCode.BAD_REQUEST, "验证码错误或已过期");
+        }
+        userService.updatePassword(userId, newPassword);
+        return Result.success();
     }
 }

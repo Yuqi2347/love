@@ -6,6 +6,7 @@ export interface FollowUser {
   nickname: string
   avatarUrl: string | null
   isMutual: boolean
+  remark?: string // 备注名
 }
 
 export function followUser(targetUserId: number) {
@@ -34,4 +35,17 @@ export function getUserFollowing(userId: number) {
 
 export function getUserFollowers(userId: number) {
   return request.get<ApiResult<FollowUser[]>>(`/follow/user/${userId}/followers`)
+}
+
+// 设置关注用户的备注名
+export function setUserRemark(targetUserId: number, remark: string) {
+  return request.put<ApiResult<void>>(`/follow/${targetUserId}/remark`, null, {
+    params: { remark }
+  })
+}
+
+// 获取用户的显示名称（优先显示备注，其次昵称）
+export function getUserDisplayName(user: FollowUser | null | undefined): string {
+  if (!user) return ''
+  return user.remark && user.remark.trim() ? user.remark : user.nickname
 }

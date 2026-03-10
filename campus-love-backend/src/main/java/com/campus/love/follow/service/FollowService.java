@@ -118,15 +118,25 @@ public class FollowService {
     public List<FollowResponse> getFollowingList(Long userId) {
         List<Follow> follows = followMapper.selectList(
                 new LambdaQueryWrapper<Follow>().eq(Follow::getFollowerId, userId));
-        return follows.stream().map(f -> buildFollowResponse(f.getFollowingId(), f.getIsMutual()))
+        return follows.stream().map(f -> buildFollowResponse(f.getFollowingId(), f.getIsMutual(), f.getRemark()))
                 .collect(Collectors.toList());
     }
 
     public List<FollowResponse> getFollowerList(Long userId) {
         List<Follow> followers = followMapper.selectList(
                 new LambdaQueryWrapper<Follow>().eq(Follow::getFollowingId, userId));
-        return followers.stream().map(f -> buildFollowResponse(f.getFollowerId(), f.getIsMutual()))
-                .collect(Collectors.toList());
+        return followers.stream().map(f -> {
+            // 获取当前用户对粉丝的备注（如果关注了的话）
+            String remark = null;
+            Follow reverse = followMapper.selectOne(
+                    new LambdaQueryWrapper<Follow>()
+                            .eq(Follow::getFollowerId, userId)
+                            .eq(Follow::getFollowingId, f.getFollowerId()));
+            if (reverse != null) {
+                remark = reverse.getRemark();
+            }
+            return buildFollowResponse(f.getFollowerId(), f.getIsMutual(), remark);
+        }).collect(Collectors.toList());
     }
 
     public List<Long> getMutualFollowIds(Long userId) {
@@ -162,7 +172,22 @@ public class FollowService {
         userMapper.updateById(user);
     }
 
-    private FollowResponse buildFollowResponse(Long userId, Boolean isMutual) {
+    /** 设置关注用户的备注名 */
+    @Transactional
+    public void setRemark(Long targetUserId, String remark) {
+        Long currentUserId = CurrentUser.getId();
+        Follow follow = followMapper.selectOne(
+                new LambdaQueryWrapper<Follow>()
+                        .eq(Follow::getFollowerId, currentUserId)
+                        .eq(Follow::getFollowingId, targetUserId));
+        if (follow == null) {
+            throw new BusinessException(ResultCode.NOT_FOLLOWED);
+        }
+        follow.setRemark(remark);
+        followMapper.updateById(follow);
+    }
+
+    private FollowResponse buildFollowResponse(Long userId, Boolean isMutual, String remark) {
         User user = userMapper.selectById(userId);
         if (user == null) return null;
         return FollowResponse.builder()
@@ -170,6 +195,7 @@ public class FollowService {
                 .nickname(user.getNickname())
                 .avatarUrl(user.getAvatarUrl())
                 .isMutual(isMutual)
+                .remark(remark)
                 .build();
     }
 }

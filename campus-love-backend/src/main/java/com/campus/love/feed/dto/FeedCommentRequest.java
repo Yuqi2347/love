@@ -13,5 +13,9 @@ public class FeedCommentRequest {
     @NotBlank(message = "评论内容不能为空")
     private String content;
 
+    /** 父评论ID（用于回复评论，null表示直接评论动态） */
     private Long parentId;
+
+    /** 被回复的用户ID（用于显示"回复 @用户名"） */
+    private Long repliedUserId;
 }

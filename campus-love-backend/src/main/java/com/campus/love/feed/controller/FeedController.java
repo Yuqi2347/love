@@ -164,4 +164,10 @@ public class FeedController {
             return Result.error(ResultCode.INTERNAL_ERROR, "文件上传失败，请稍后重试");
         }
     }
+
+    @Operation(summary = "获取社交通知（赞/评论/@）")
+    @GetMapping("/social-notifications")
+    public Result<List<java.util.Map<String, Object>>> getSocialNotifications() {
+        return Result.success(feedService.getSocialNotifications(CurrentUser.getId()));
+    }
 }

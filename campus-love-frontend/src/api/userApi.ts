@@ -84,3 +84,15 @@ export function uploadAvatar(file: File) {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+
+// 发送密码修改验证码
+export function sendPasswordCode() {
+  return request.post<ApiResult<void>>('/user/password/send-code')
+}
+
+// 通过验证码修改密码
+export function resetPassword(code: string, newPassword: string) {
+  return request.post<ApiResult<void>>('/user/password/reset', null, {
+    params: { code, newPassword }
+  })
+}

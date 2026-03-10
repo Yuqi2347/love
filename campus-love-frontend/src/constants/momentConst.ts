@@ -51,7 +51,7 @@ export const Q6_APPEARANCE: QuestionOption[] = [
 export const Q7_PARTNER_PERSONALITY: QuestionOption[] = [
   { value: 'A', label: '活泼开朗，能带你走出舒适区', emoji: '🌟' },
   { value: 'B', label: '温柔安静，能成为你的港湾', emoji: '🌙' },
-  { value: 'C', label: '和自己性格相近就好', emoji: '🤝' },
+  { value: 'C', label: '两者都行，看心情切换', emoji: '🔄' },
 ]
 
 export const Q8_MAJOR_PREF: QuestionOption[] = [

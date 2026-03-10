@@ -6,7 +6,7 @@
       </button>
       <img :src="otherUser?.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
       <div class="header-info">
-        <div class="header-name">{{ otherUser?.nickname || '加载中...' }}</div>
+        <div class="header-name">{{ otherUser ? followStore.getDisplayName(otherUser.id, otherUser.nickname) : '加载中...' }}</div>
         <div class="header-status">{{ chatStore.connected ? '在线' : '离线' }}</div>
       </div>
       <button class="more-btn" @click="$router.push(`/profile/${otherUserId}`)">
@@ -118,6 +118,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useChatStore } from '@/store/chatStore'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
+import { useFollowStore } from '@/store/followStore'
 import { getChatHistory, markAsRead, uploadChatImage } from '@/api/chatApi'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { joinInvite, declineInvite } from '@/api/inviteApi'
@@ -133,6 +134,7 @@ const router = useRouter()
 const chatStore = useChatStore()
 const userStore = useUserStore()
 const badgeStore = useBadgeStore()
+const followStore = useFollowStore()
 const { currentMessages } = storeToRefs(chatStore)
 
 const otherUserId = computed(() => Number(route.params.userId))

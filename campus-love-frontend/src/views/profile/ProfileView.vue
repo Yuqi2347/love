@@ -16,6 +16,9 @@
                 <el-dropdown-item @click="showPrivacySettings = true">
                   <el-icon><Lock /></el-icon> 隐私设置
                 </el-dropdown-item>
+                <el-dropdown-item @click="showAccountSecurity = true">
+                  <el-icon><Lock /></el-icon> 账号安全
+                </el-dropdown-item>
                 <el-dropdown-item divided @click="handleLogout" class="text-danger">
                   <el-icon><SwitchButton /></el-icon> 退出登录
                 </el-dropdown-item>
@@ -32,52 +35,44 @@
             <el-icon><Camera /></el-icon>
           </button>
         </div>
-        
+
         <!-- User Info moved to the right of avatar -->
         <div v-if="profile" class="profile-info-header">
           <div class="profile-name-row">
-            <h2
-              v-if="!editingNickname"
-              class="profile-name profile-name-clickable"
-              @click="isMe && startEditNickname()"
-            >
-              {{ profile.nickname }}
+            <h2 class="profile-name">
+              {{ !isMe && followStore.getRemarkByUserId(profileId!) ? followStore.getRemarkByUserId(profileId!) : profile.nickname }}
             </h2>
-            <div v-else class="profile-name-edit">
-              <el-input
-                ref="nicknameInputRef"
-                v-model="editingNicknameValue"
-                size="small"
-                maxlength="20"
-                show-word-limit
-                @keyup.enter="saveNickname"
-              />
-              <button class="btn-save-nickname" @click="saveNickname">保存</button>
-              <button class="btn-cancel-nickname" @click="cancelEditNickname">取消</button>
-            </div>
+            <span v-if="!isMe && followStore.getRemarkByUserId(profileId!)" class="profile-original-nickname">
+              昵称: {{ profile.nickname }}
+            </span>
             <div class="level-display">
               <span class="level-badge large">Lv{{ profile.userLevel }}</span>
               <span v-if="profile.isAdmin" class="admin-badge">管理员</span>
             </div>
           </div>
           <p v-if="isMe && profile.email" class="profile-email">{{ profile.email }}</p>
-          <p v-if="profile.bio" class="profile-bio">{{ profile.bio }}</p>
         </div>
+      </div>
 
-        <div v-if="!isMe" class="profile-actions">
-          <button :class="['btn-primary', { 'btn-outline': followStatus !== 'NONE' }]" @click="handleFollowToggle">
-            {{ followLabel }}
-          </button>
-          <button class="btn-outline" @click="$router.push(`/chat/${profileId}`)">
-            <el-icon><ChatDotRound /></el-icon> 聊天
-          </button>
-          <button v-if="followStatus === 'MUTUAL'" class="btn-primary" @click="handleInviteUser">
-            <el-icon><Calendar /></el-icon> 约TA一下
-          </button>
-          <button v-if="followStatus === 'MUTUAL'" class="btn-yuanfen" @click="openYuanFen">
-            缘分解析 ✨
-          </button>
-        </div>
+      <!-- 个人简介独立一行 -->
+      <div v-if="profile?.bio" class="profile-bio-row">
+        <p class="profile-bio">{{ profile.bio }}</p>
+      </div>
+
+      <!-- 操作按钮独立一行 -->
+      <div v-if="!isMe && profile" class="profile-actions-row">
+        <button :class="['btn-action', { 'btn-primary': followStatus === 'NONE', 'btn-outline': followStatus !== 'NONE' }]" @click="handleFollowToggle">
+          {{ followLabel }}
+        </button>
+        <button class="btn-action btn-outline" @click="$router.push(`/chat/${profileId}`)">
+          <el-icon><ChatDotRound /></el-icon> 聊天
+        </button>
+        <button v-if="followStatus === 'MUTUAL'" class="btn-action btn-primary" @click="handleInviteUser">
+          <el-icon><Calendar /></el-icon> 约TA
+        </button>
+        <button v-if="followStatus === 'MUTUAL'" class="btn-action btn-yuanfen" @click="openYuanFen">
+          缘分 ✨
+        </button>
       </div>
     </div>
 
@@ -217,11 +212,24 @@
   <!-- 关注列表弹窗 -->
   <el-dialog :title="isMe ? '我关注的' : `${profile?.nickname || 'TA'}关注的`" width="500px" :model-value="showFollowing" @update:model-value="showFollowing = false">
     <div v-if="followingList.length" class="user-list">
-      <div v-for="user in followingList" :key="user.userId" class="user-list-item" @click="goToUserProfile(user.userId)">
+      <div
+        v-for="user in followingList"
+        :key="user.userId"
+        class="user-list-item-with-action"
+        @click="goToUserProfile(user.userId)"
+      >
         <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
         <div class="user-list-info">
-          <div class="user-list-name">{{ user.nickname }}</div>
+          <div class="user-list-name">{{ user.remark || user.nickname }}</div>
+          <div v-if="user.remark" class="user-list-original-name">昵称: {{ user.nickname }}</div>
         </div>
+        <button
+          v-if="isMe"
+          class="user-list-action-btn unfollow-btn"
+          @click.stop="handleListFollowToggle(user.userId, false)"
+        >
+          取消关注
+        </button>
       </div>
     </div>
     <div v-else class="empty-hint">{{ isMe ? '暂无关注' : 'TA暂无关注' }}</div>
@@ -230,11 +238,24 @@
   <!-- 粉丝列表弹窗 -->
   <el-dialog :title="isMe ? '关注我的' : `关注${profile?.nickname || 'TA'}的`" width="500px" :model-value="showFollowers" @update:model-value="showFollowers = false">
     <div v-if="followerList.length" class="user-list">
-      <div v-for="user in followerList" :key="user.userId" class="user-list-item" @click="goToUserProfile(user.userId)">
+      <div
+        v-for="user in followerList"
+        :key="user.userId"
+        class="user-list-item-with-action"
+        @click="goToUserProfile(user.userId)"
+      >
         <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
         <div class="user-list-info">
           <div class="user-list-name">{{ user.nickname }}</div>
+          <div v-if="user.isMutual" class="user-list-relation">互相关注</div>
         </div>
+        <button
+          v-if="isMe"
+          :class="['user-list-action-btn', user.isMutual ? 'unfollow-btn' : 'follow-btn']"
+          @click.stop="handleListFollowToggle(user.userId, !user.isMutual)"
+        >
+          {{ user.isMutual ? '取消关注' : '关注' }}
+        </button>
       </div>
     </div>
     <div v-else class="empty-hint">{{ isMe ? '暂无粉丝' : 'TA暂无粉丝' }}</div>
@@ -243,14 +264,37 @@
   <!-- 朋友列表弹窗 -->
   <el-dialog :title="isMe ? '我的朋友' : `${profile?.nickname || 'TA'}的朋友`" width="500px" :model-value="showMutual" @update:model-value="showMutual = false">
     <div v-if="mutualList.length" class="user-list">
-      <div v-for="user in mutualList" :key="user.userId" class="user-list-item" @click="goToUserProfile(user.userId)">
+      <div v-for="user in mutualList" :key="user.userId" class="user-list-item-with-action" @click="goToUserProfile(user.userId)">
         <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
         <div class="user-list-info">
-          <div class="user-list-name">{{ user.nickname }}</div>
+          <div class="user-list-name">{{ user.remark || user.nickname }}</div>
+          <div v-if="user.remark" class="user-list-original-name">昵称: {{ user.nickname }}</div>
         </div>
+        <button
+          v-if="isMe"
+          class="user-list-action-btn remark-btn"
+          @click.stop="openRemarkEditor(user)"
+        >
+          {{ user.remark ? '改备注' : '设备注' }}
+        </button>
       </div>
     </div>
     <div v-else class="empty-hint">{{ isMe ? '暂无朋友' : 'TA暂无朋友' }}</div>
+  </el-dialog>
+
+  <!-- 备注编辑弹窗 -->
+  <el-dialog title="设置备注" width="360px" :model-value="showRemarkEditor" @update:model-value="showRemarkEditor = false">
+    <el-input
+      v-model="remarkInput"
+      placeholder="输入备注名（留空清除备注）"
+      maxlength="20"
+      show-word-limit
+      clearable
+    />
+    <template #footer>
+      <button class="btn-outline" @click="showRemarkEditor = false">取消</button>
+      <button class="btn-primary" style="margin-left: 8px" @click="saveRemark">保存</button>
+    </template>
   </el-dialog>
 
   <!-- 缘分解析弹层 -->
@@ -265,35 +309,110 @@
   />
 
   <!-- 隐私设置弹窗 -->
-  <el-dialog title="隐私设置" width="400px" :model-value="showPrivacySettings" @update:model-value="showPrivacySettings = false">
+  <el-dialog title="隐私设置" width="420px" :model-value="showPrivacySettings" @update:model-value="showPrivacySettings = false">
     <div class="privacy-settings-form">
       <div class="setting-item">
         <div class="setting-label">谁可以看我的动态</div>
-        <el-radio-group v-model="feedVisibility" @change="saveFeedVisibility">
+        <el-radio-group v-model="feedVisibility" @change="saveFeedVisibility" class="privacy-radio-group">
           <el-radio label="ALL">所有人可见</el-radio>
-          <el-radio label="FOLLOWERS">粉丝可见</el-radio>
+          <el-radio label="FOLLOWING">我关注的人可见</el-radio>
+          <el-radio label="FOLLOWERS">关注我的人可见</el-radio>
+          <el-radio label="FRIENDS">朋友可见（互相关注）</el-radio>
           <el-radio label="SELF">仅自己可见</el-radio>
         </el-radio-group>
+      </div>
+      <div class="privacy-hint">
+        <el-icon><InfoFilled /></el-icon>
+        <span>朋友表示与你互相关注的用户</span>
+      </div>
+    </div>
+  </el-dialog>
+
+  <!-- 账号安全弹窗 -->
+  <el-dialog title="账号安全" width="420px" :model-value="showAccountSecurity" @update:model-value="showAccountSecurity = false">
+    <div class="security-settings-form">
+      <div class="security-email-section">
+        <div class="setting-label">绑定邮箱</div>
+        <div class="email-display">{{ userStore.user?.email || '未绑定' }}</div>
+      </div>
+
+      <div class="security-password-section">
+        <div class="setting-label">修改密码</div>
+        <p class="security-hint">验证码将发送到绑定邮箱</p>
+
+        <div v-if="!showPasswordReset" class="password-init-section">
+          <button class="btn-primary" style="width: 100%" @click="handleSendPasswordCode">
+            发送验证码
+          </button>
+        </div>
+
+        <div v-else class="password-reset-form">
+          <div class="form-item">
+            <label>验证码</label>
+            <div class="code-input-row">
+              <el-input
+                v-model="passwordForm.code"
+                placeholder="输入6位验证码"
+                maxlength="6"
+                class="code-input"
+              />
+              <span v-if="codeCountdown > 0" class="countdown-text">{{ codeCountdown }}s</span>
+              <button v-else class="btn-resend" @click="handleSendPasswordCode">重新发送</button>
+            </div>
+          </div>
+
+          <div class="form-item">
+            <label>新密码</label>
+            <el-input
+              v-model="passwordForm.newPassword"
+              type="password"
+              placeholder="6-20位密码"
+              maxlength="20"
+              show-password
+            />
+          </div>
+
+          <div class="form-item">
+            <label>确认密码</label>
+            <el-input
+              v-model="passwordForm.confirmPassword"
+              type="password"
+              placeholder="再次输入新密码"
+              maxlength="20"
+              show-password
+            />
+          </div>
+
+          <button
+            class="btn-primary"
+            style="width: 100%"
+            :disabled="!passwordForm.code || !passwordForm.newPassword || passwordForm.newPassword !== passwordForm.confirmPassword"
+            @click="handleResetPassword"
+          >
+            {{ passwordResetSubmitting ? '提交中...' : '确认修改' }}
+          </button>
+        </div>
       </div>
     </div>
   </el-dialog>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
-import { getUserProfile, updateNickname, updateFeedVisibility, type UserProfile } from '@/api/userApi'
+import { useFollowStore } from '@/store/followStore'
+import { getUserProfile, updateFeedVisibility, type UserProfile } from '@/api/userApi'
 import { getMatchDetail, type MatchResult } from '@/api/matchApi'
 import { getInviteStats, getUserInviteStats, type InviteStats } from '@/api/inviteApi'
-import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, type FollowUser } from '@/api/followApi'
+import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, setUserRemark, type FollowUser } from '@/api/followApi'
 import { getUserTimelinePosts, getUserDiscoveryPosts, deletePost, type FeedPost } from '@/api/feedApi'
 import { ElMessage } from 'element-plus'
-import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton } from '@element-plus/icons-vue'
+import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton, InfoFilled } from '@element-plus/icons-vue'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { FOLLOW_STATUS_LABELS, FollowStatus } from '@/constants/followConst'
-import { uploadAvatar } from '@/api/userApi'
+import { uploadAvatar, sendPasswordCode, resetPassword as resetPasswordApi } from '@/api/userApi'
 import { getYuanFenCooldown } from '@/api/aiApi'
 import YuanFenAnalysisSheet from './components/YuanFenAnalysisSheet.vue'
 
@@ -304,6 +423,7 @@ const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const badgeStore = useBadgeStore()
+const followStore = useFollowStore()
 
 const profileId = computed(() => route.params.userId ? Number(route.params.userId) : userStore.user?.id)
 const isMe = computed(() => profileId.value === userStore.user?.id)
@@ -360,6 +480,22 @@ const avatarInput = ref<HTMLInputElement | null>(null)
 const showPrivacySettings = ref(false)
 const feedVisibility = ref<string>('ALL')
 
+// 备注编辑
+const showRemarkEditor = ref(false)
+const remarkInput = ref('')
+const remarkTargetUserId = ref<number>(0)
+
+// 账号安全
+const showAccountSecurity = ref(false)
+const showPasswordReset = ref(false)
+const codeCountdown = ref(0)
+const passwordResetSubmitting = ref(false)
+const passwordForm = reactive({
+  code: '',
+  newPassword: '',
+  confirmPassword: ''
+})
+
 async function saveFeedVisibility(val: string | number | boolean) {
   try {
     const res = await updateFeedVisibility(String(val))
@@ -368,7 +504,57 @@ async function saveFeedVisibility(val: string | number | boolean) {
     }
     ElMessage.success('隐私设置已保存')
   } catch {
-    ElMessage.error('设置失败')
+  }
+}
+
+// 账号安全 - 发送验证码
+async function handleSendPasswordCode() {
+  try {
+    await sendPasswordCode()
+    showPasswordReset.value = true
+    codeCountdown.value = 60
+    ElMessage.success('验证码已发送到邮箱')
+    const timer = setInterval(() => {
+      codeCountdown.value--
+      if (codeCountdown.value <= 0) {
+        clearInterval(timer)
+      }
+    }, 1000)
+  } catch {
+    ElMessage.error('发送失败，请稍后重试')
+  }
+}
+
+// 账号安全 - 修改密码
+async function handleResetPassword() {
+  if (!passwordForm.code || !passwordForm.newPassword) {
+    ElMessage.warning('请填写完整信息')
+    return
+  }
+  if (passwordForm.newPassword !== passwordForm.confirmPassword) {
+    ElMessage.warning('两次输入的密码不一致')
+    return
+  }
+  if (passwordForm.newPassword.length < 6 || passwordForm.newPassword.length > 20) {
+    ElMessage.warning('密码长度应为6-20位')
+    return
+  }
+
+  passwordResetSubmitting.value = true
+  try {
+    await resetPasswordApi(passwordForm.code, passwordForm.newPassword)
+    ElMessage.success('密码修改成功，请重新登录')
+    showAccountSecurity.value = false
+    showPasswordReset.value = false
+    passwordForm.code = ''
+    passwordForm.newPassword = ''
+    passwordForm.confirmPassword = ''
+    // 可选：自动登出
+    // await handleLogout()
+  } catch {
+    ElMessage.error('验证码错误或已过期')
+  } finally {
+    passwordResetSubmitting.value = false
   }
 }
 
@@ -377,9 +563,6 @@ watch(() => userStore.user?.feedVisibility, (v) => {
 }, { immediate: true })
 
 // 昵称编辑
-const editingNickname = ref(false)
-const editingNicknameValue = ref('')
-const nicknameInputRef = ref<InstanceType<typeof import('element-plus').Input> | null>(null)
 
 const followLabel = computed(() => FOLLOW_STATUS_LABELS[followStatus.value as FollowStatus] || '关注')
 const newFollowerCount = computed(() => badgeStore.badges.newFollowerCount)
@@ -439,8 +622,19 @@ function handleOpenMutual() {
 }
 
 async function loadProfile() {
-  if (!profileId.value) return
+  // 等待用户登录状态确定
+  if (!userStore.user) {
+    // 用户未登录，等待登录
+    return
+  }
+  if (!profileId.value) {
+    // 已登录但无法确定profileId，使用当前用户ID
+    profileId.value = userStore.user.id
+  }
+
   if (isMe.value) void badgeStore.fetchBadges()
+  // 确保关注列表已加载（用于显示备注名）
+  if (followStore.followedIds.length === 0) followStore.loadFollowedIds()
   try {
     const res = await getUserProfile(profileId.value)
     profile.value = res.data.data
@@ -592,6 +786,12 @@ watch(showMutual, async (val) => {
 
 onMounted(loadProfile)
 watch(() => route.params.userId, loadProfile)
+// 当用户登录状态变化时，重新加载profile
+watch(() => userStore.user, (user) => {
+  if (user && !profile.value) {
+    loadProfile()
+  }
+}, { immediate: true })
 
 async function handleFollowToggle() {
   if (!profileId.value) return
@@ -605,7 +805,58 @@ async function handleFollowToggle() {
       followStatus.value = FollowStatus.NONE
       ElMessage.success('已取消关注')
     }
-  } catch { /* handled */ }
+  } catch {
+    ElMessage.error('操作失败')
+  }
+}
+
+// 列表中的关注/取消关注操作
+async function handleListFollowToggle(targetUserId: number, isFollow: boolean) {
+  try {
+    if (isFollow) {
+      await followUser(targetUserId)
+      ElMessage.success('关注成功')
+    } else {
+      await unfollowUser(targetUserId)
+      ElMessage.success('已取消关注')
+    }
+    // 刷新当前打开的列表
+    if (showFollowing.value) {
+      const res = await getFollowingList()
+      followingList.value = res.data.data || []
+    }
+    if (showFollowers.value) {
+      const res = await getFollowerList()
+      followerList.value = res.data.data || []
+    }
+  } catch {
+    ElMessage.error('操作失败')
+  }
+}
+
+// 备注编辑
+function openRemarkEditor(user: FollowUser) {
+  remarkTargetUserId.value = user.userId
+  remarkInput.value = user.remark || ''
+  showRemarkEditor.value = true
+}
+
+async function saveRemark() {
+  try {
+    await setUserRemark(remarkTargetUserId.value, remarkInput.value.trim())
+    ElMessage.success(remarkInput.value.trim() ? '备注已设置' : '备注已清除')
+    showRemarkEditor.value = false
+    // 刷新朋友列表
+    if (showMutual.value) {
+      const [fing, fers] = await Promise.all([getFollowingList(), getFollowerList()])
+      const fingList = fing.data.data || []
+      const fersList = fers.data.data || []
+      const fingIds = new Set(fingList.map(u => u.userId))
+      mutualList.value = fersList.filter(u => fingIds.has(u.userId))
+    }
+  } catch {
+    ElMessage.error('设置备注失败')
+  }
 }
 
 function handleInviteUser() {
@@ -643,39 +894,6 @@ function getLevelByScore(score: number): number {
     if (score >= levelThresholds[i]!) return i + 1
   }
   return 1
-}
-
-function startEditNickname() {
-  if (!profile.value) return
-  editingNicknameValue.value = profile.value.nickname
-  editingNickname.value = true
-  setTimeout(() => nicknameInputRef.value?.focus(), 50)
-}
-
-function cancelEditNickname() {
-  editingNickname.value = false
-  editingNicknameValue.value = ''
-}
-
-async function saveNickname() {
-  const val = editingNicknameValue.value.trim()
-  if (!val) {
-    ElMessage.warning('昵称不能为空')
-    return
-  }
-  if (val === profile.value?.nickname) {
-    cancelEditNickname()
-    return
-  }
-  try {
-    const res = await updateNickname(val)
-    if (profile.value) profile.value.nickname = res.data.data?.nickname ?? val
-    await userStore.fetchProfile()
-    ElMessage.success('昵称已更新')
-    cancelEditNickname()
-  } catch {
-    ElMessage.error('昵称更新失败')
-  }
 }
 
 async function handleAvatarChange(event: Event) {
@@ -754,7 +972,6 @@ async function handleAvatarChange(event: Event) {
 .profile-main {
   display: flex;
   align-items: flex-start;
-  justify-content: space-between;
   padding: 0 24px;
   margin-top: -50px;
 }
@@ -762,9 +979,20 @@ async function handleAvatarChange(event: Event) {
 .profile-info-header {
   flex: 1;
   margin-left: 20px;
-  padding-top: 60px; /* Push content down into the white area */
+  padding-top: 60px;
   padding-bottom: 12px;
   min-width: 0;
+}
+
+.profile-bio-row {
+  padding: 0 24px;
+}
+
+.profile-actions-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 24px 0;
 }
 
 .avatar-wrapper {
@@ -812,15 +1040,21 @@ async function handleAvatarChange(event: Event) {
   .el-icon { font-size: 16px; }
 }
 
-.profile-actions {
-  display: flex;
-  gap: 10px;
-  padding-top: 60px; /* Align with profile info */
-  padding-bottom: 12px;
-  flex-shrink: 0;
+.btn-action {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px;
+  border-radius: $radius-full;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all $transition-base;
+  border: 1px solid transparent;
+  white-space: nowrap;
 }
 
-.profile-info { 
+.profile-info {
   padding: 0 24px 0;
 }
 
@@ -832,33 +1066,13 @@ async function handleAvatarChange(event: Event) {
 }
 
 .profile-name { font-size: 24px; font-weight: 800; color: $text-primary; }
-.profile-name-clickable {
-  cursor: pointer;
-  &:hover { color: $primary; }
-}
-.profile-name-edit {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  .el-input { width: 180px; }
-}
-.btn-save-nickname, .btn-cancel-nickname {
-  padding: 6px 14px;
-  border-radius: $radius-md;
+.profile-original-nickname {
   font-size: 13px;
-  cursor: pointer;
-  border: none;
+  color: $text-muted;
+  font-weight: 400;
+  margin-left: 4px;
 }
-.btn-save-nickname {
-  background: $primary;
-  color: white;
-  &:hover { opacity: 0.9; }
-}
-.btn-cancel-nickname {
-  background: $bg-tertiary;
-  color: $text-secondary;
-  &:hover { background: $border-light; }
-}
+
 
 .level-display {
   display: flex;
@@ -1059,8 +1273,22 @@ async function handleAvatarChange(event: Event) {
   font-size: 12px;
   color: $text-secondary;
 }
-.profile-email { font-size: 14px; color: $text-muted; margin-top: 2px; }
-.profile-bio { font-size: 15px; color: $text-primary; margin-top: 10px; line-height: 1.5; }
+.profile-email {
+  font-size: 14px;
+  color: $text-muted;
+  margin-top: 2px;
+}
+
+.profile-bio {
+  font-size: 15px;
+  color: $text-primary;
+  margin-top: 4px;
+  margin-bottom: 8px;
+  line-height: 1.6;
+  word-wrap: break-word;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
 
 .profile-meta {
   display: flex;
@@ -1242,6 +1470,60 @@ async function handleAvatarChange(event: Event) {
   }
 }
 
+.user-list-item-with-action {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: $radius-lg;
+  cursor: pointer;
+  transition: background $transition-fast;
+
+  &:hover {
+    background: $bg-secondary;
+  }
+}
+
+.user-list-action-btn {
+  padding: 6px 14px;
+  border-radius: $radius-full;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all $transition-fast;
+  border: 1px solid $border-color;
+  background: white;
+  color: $text-secondary;
+  flex-shrink: 0;
+
+  &:hover {
+    border-color: $primary;
+    color: $primary;
+  }
+}
+
+.follow-btn {
+  &:hover {
+    background: $primary;
+    color: white;
+    border-color: $primary;
+  }
+}
+
+.unfollow-btn {
+  &:hover {
+    background: $border-color;
+    color: $text-secondary;
+    border-color: $text-muted;
+  }
+}
+
+.user-list-relation {
+  font-size: 12px;
+  color: $primary;
+  margin-top: 2px;
+}
+
 .user-list-avatar {
   width: 48px;
   height: 48px;
@@ -1258,6 +1540,21 @@ async function handleAvatarChange(event: Event) {
   font-size: 15px;
   font-weight: 600;
   color: $text-primary;
+}
+
+.user-list-original-name {
+  font-size: 12px;
+  color: $text-muted;
+  margin-top: 2px;
+}
+
+.remark-btn {
+  font-size: 12px;
+  &:hover {
+    background: rgba($primary, 0.1);
+    color: $primary;
+    border-color: $primary;
+  }
 }
 
 .user-list-email {
@@ -1317,12 +1614,137 @@ async function handleAvatarChange(event: Event) {
 
 .setting-item {
   margin-bottom: 20px;
-  
+
   .setting-label {
     font-size: 14px;
     font-weight: 600;
     color: $text-primary;
     margin-bottom: 12px;
+  }
+}
+
+.privacy-radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  :deep(.el-radio) {
+    margin-right: 0;
+    display: flex;
+    align-items: center;
+    height: auto;
+    padding: 8px 12px;
+    border-radius: $radius-md;
+    transition: background $transition-fast;
+
+    &:hover {
+      background: $bg-secondary;
+    }
+
+    .el-radio__label {
+      font-size: 14px;
+      color: $text-primary;
+    }
+  }
+}
+
+.privacy-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 14px;
+  background: rgba($primary, 0.06);
+  border-radius: $radius-md;
+  font-size: 13px;
+  color: $text-secondary;
+
+  .el-icon {
+    color: $primary;
+    flex-shrink: 0;
+  }
+}
+
+// 账号安全样式
+.security-settings-form {
+  padding: 10px 0;
+}
+
+.security-email-section {
+  padding: 12px 16px;
+  background: $bg-secondary;
+  border-radius: $radius-lg;
+  margin-bottom: 20px;
+
+  .setting-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-primary;
+    margin-bottom: 6px;
+  }
+
+  .email-display {
+    font-size: 14px;
+    color: $text-secondary;
+    font-family: monospace;
+  }
+}
+
+.security-password-section {
+  .setting-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-primary;
+    margin-bottom: 8px;
+  }
+
+  .security-hint {
+    font-size: 13px;
+    color: $text-muted;
+    margin-bottom: 16px;
+  }
+}
+
+.password-reset-form {
+  .form-item {
+    margin-bottom: 16px;
+
+    label {
+      display: block;
+      font-size: 13px;
+      color: $text-secondary;
+      margin-bottom: 6px;
+    }
+  }
+
+  .code-input-row {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+  }
+
+  .code-input {
+    flex: 1;
+  }
+
+  .countdown-text {
+    font-size: 14px;
+    color: $text-muted;
+    min-width: 40px;
+  }
+
+  .btn-resend {
+    padding: 8px 16px;
+    font-size: 13px;
+    color: $primary;
+    background: transparent;
+    border: 1px solid $primary;
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: all $transition-fast;
+
+    &:hover {
+      background: rgba($primary, 0.1);
+    }
   }
 }
 </style>

@@ -25,19 +25,13 @@
           :class="['tab-btn', { active: activeTab === 'recommend' }]"
           @click="switchTab('recommend')"
         >
-          为你推荐
-        </button>
-        <button
-          :class="['tab-btn', { active: activeTab === 'invite' }]"
-          @click="switchTab('invite')"
-        >
-          邀约
+          推荐
         </button>
         <button
           :class="['tab-btn', { active: activeTab === 'post' }]"
           @click="switchTab('post')"
         >
-          帖贴
+          动态
         </button>
         <button
           :class="['tab-btn', { active: activeTab === 'following' }]"
@@ -48,53 +42,15 @@
       </div>
     </div>
 
-    <!-- 统一信息流：邀约 + 动态 -->
+    <!-- 统一信息流：动态 -->
     <div v-if="timelineItems.length" class="timeline-list">
       <div
         v-for="item in timelineItems"
         :key="item.key"
         class="timeline-item"
       >
-        <!-- 邀约信息：粉色卡片 -->
-        <div
-          v-if="item.kind === 'invite'"
-          class="invite-card"
-          @click="$router.push(`/invite/${item.invite.id}`)"
-        >
-          <div class="invite-header">
-            <div class="invite-type-badge" :style="{ background: getTypeColor(item.invite.inviteType) }">
-              {{ INVITE_TYPE_LABELS[item.invite.inviteType as InviteType] }}
-            </div>
-            <div class="invite-status-badge" :style="{ color: INVITE_STATUS_COLORS[item.invite.status as InviteStatus] }">
-              {{ INVITE_STATUS_LABELS[item.invite.status as InviteStatus] }}
-            </div>
-          </div>
-          <h3 class="invite-title">{{ item.invite.title }}</h3>
-          <p v-if="item.invite.content" class="invite-content">{{ item.invite.content }}</p>
-          <div class="invite-meta">
-            <span class="meta-item meta-item-clickable" @click.stop="$router.push(`/profile/${item.invite.creatorId}`)">
-              {{ item.invite.creator?.nickname || '未知' }}
-            </span>
-            <span class="meta-item">
-              {{ formatInviteTime(item.invite.inviteTime) }}
-            </span>
-            <span v-if="item.invite.location" class="meta-item">
-              {{ item.invite.location }}
-            </span>
-          </div>
-          <div class="invite-footer">
-            <span class="participants">
-              {{ item.invite.participantCount }}/{{ item.invite.inviteMode === 'PRIVATE' ? 1 : (item.invite.maxParticipants || '不限') }}人
-            </span>
-            <span v-if="item.invite.isUrgent" class="urgent-tag">急需</span>
-            <span v-if="item.invite.ratingCount" class="rating-info">
-              ⭐ {{ item.invite.socialRating?.toFixed(1) || '-' }} ({{ item.invite.ratingCount }})
-            </span>
-          </div>
-        </div>
-
         <!-- 社交动态：白色卡片 -->
-        <div v-else class="feed-card card" @click="goPostDetail(item.post.id)">
+        <div class="feed-card card" @click="goPostDetail(item.post.id)">
           <div class="feed-header" @click.stop>
             <img
               :src="item.post.avatarUrl || defaultAvatar"
@@ -159,32 +115,88 @@
             </button>
           </div>
 
-          <!-- 评论叠楼列表 -->
+          <!-- 评论叠楼列表（树形线程 + 折叠） -->
           <div v-if="item.post.comments && item.post.comments.length" class="comment-list" @click.stop>
             <div
-              v-for="c in item.post.comments"
-              :key="c.id"
-              class="comment-item"
+              v-for="thread in getDisplayedThreads(item.post.id, item.post.comments)"
+              :key="thread.comment.id"
+              class="comment-thread"
             >
-              <div class="comment-header">
-                <span
-                  class="comment-author"
-                  @click="$router.push(`/profile/${c.userId}`)"
-                >
-                  {{ c.nickname }}
-                </span>
-                <span class="comment-time">{{ formatTime(c.createdAt) }}</span>
+              <!-- 主评论 -->
+              <div class="comment-item">
+                <div class="comment-header">
+                  <span class="comment-author" @click.stop="$router.push(`/profile/${thread.comment.userId}`)">
+                    {{ thread.comment.nickname }}
+                  </span>
+                  <span class="comment-time">{{ formatTime(thread.comment.createdAt) }}</span>
+                  <button class="comment-reply-btn" @click.stop="handleReplyClick(item.post.id, thread.comment)">
+                    回复
+                  </button>
+                </div>
+                <div class="comment-text">{{ thread.comment.content }}</div>
               </div>
-              <div class="comment-text">
-                {{ c.content }}
+              <!-- 回复列表 -->
+              <div v-if="thread.replies.length" class="thread-replies">
+                <div
+                  v-for="reply in getDisplayedReplies(thread.comment.id, thread.replies)"
+                  :key="reply.id"
+                  class="comment-item is-reply"
+                >
+                  <div class="comment-header">
+                    <span class="comment-author" @click.stop="$router.push(`/profile/${reply.userId}`)">
+                      {{ reply.nickname }}
+                    </span>
+                    <span v-if="reply.repliedToName" class="reply-indicator">回复</span>
+                    <span v-if="reply.repliedToName" class="replied-name">@{{ reply.repliedToName }}</span>
+                    <span class="comment-time">{{ formatTime(reply.createdAt) }}</span>
+                    <button class="comment-reply-btn" @click.stop="handleReplyClick(item.post.id, reply)">
+                      回复
+                    </button>
+                  </div>
+                  <div class="comment-text">{{ reply.content }}</div>
+                </div>
+                <button
+                  v-if="thread.replies.length > MAX_REPLIES_PER_THREAD && !expandedReplyThreads.has(thread.comment.id)"
+                  class="expand-btn"
+                  @click.stop="toggleExpandReplies(thread.comment.id)"
+                >
+                  展开 {{ thread.replies.length - MAX_REPLIES_PER_THREAD }} 条回复
+                </button>
+                <button
+                  v-else-if="expandedReplyThreads.has(thread.comment.id) && thread.replies.length > MAX_REPLIES_PER_THREAD"
+                  class="expand-btn"
+                  @click.stop="toggleExpandReplies(thread.comment.id)"
+                >
+                  收起回复
+                </button>
               </div>
             </div>
+            <!-- 展开更多评论 -->
+            <button
+              v-if="getHiddenThreadCount(item.post.id, item.post.comments) > 0 && !expandedCommentPosts.has(item.post.id)"
+              class="expand-btn"
+              @click.stop="toggleExpandComments(item.post.id)"
+            >
+              展开 {{ getHiddenThreadCount(item.post.id, item.post.comments) }} 条评论
+            </button>
+            <button
+              v-else-if="expandedCommentPosts.has(item.post.id) && buildCommentThreads(item.post.comments).length > MAX_ROOT_COMMENTS"
+              class="expand-btn"
+              @click.stop="toggleExpandComments(item.post.id)"
+            >
+              收起评论
+            </button>
           </div>
 
           <div v-if="commentingPostId === item.post.id" class="comment-input" @click.stop>
+            <!-- 回复提示 -->
+            <div v-if="replyingTo && replyingTo.postId === item.post.id" class="replying-hint">
+              <span>回复 @{{ replyingTo.nickname }}</span>
+              <button class="reply-cancel" @click="cancelReply">✕</button>
+            </div>
             <el-input
               v-model="commentText"
-              placeholder="写评论..."
+              :placeholder="replyingTo && replyingTo.postId === item.post.id ? `回复 @${replyingTo.nickname}...` : '写评论...'"
               size="small"
               @keyup.enter="submitComment(item.post.id)"
             >
@@ -329,12 +341,77 @@ const posts = ref<FeedPost[]>([])
 const followingPosts = ref<FeedPost[]>([])
 const levelInfo = ref<UserLevelInfo | null>(null)
 const searchKeyword = ref('')
-const activeTab = ref<'recommend' | 'invite' | 'post' | 'following'>('recommend')
+const activeTab = ref<'recommend' | 'post' | 'following'>('recommend')
 const showPostDialog = ref(false)
 const postContent = ref('')
 const posting = ref(false)
 const commentingPostId = ref<number | null>(null)
 const commentText = ref('')
+const replyingTo = ref<{ postId: number; commentId: number; nickname: string } | null>(null)
+
+// 评论折叠状态：记录哪些帖子展开了全部评论
+const expandedCommentPosts = ref<Set<number>>(new Set())
+// 展开回复的线程 ID
+const expandedReplyThreads = ref<Set<number>>(new Set())
+
+// 最大显示数
+const MAX_ROOT_COMMENTS = 3
+const MAX_REPLIES_PER_THREAD = 2
+
+interface CommentThread {
+  comment: FeedComment
+  replies: FeedComment[]
+}
+
+function buildCommentThreads(comments: FeedComment[]): CommentThread[] {
+  if (!comments || !comments.length) return []
+  const roots: FeedComment[] = []
+  const replyMap = new Map<number, FeedComment[]>()
+  for (const c of comments) {
+    if (c.parentId) {
+      if (!replyMap.has(c.parentId)) replyMap.set(c.parentId, [])
+      replyMap.get(c.parentId)!.push(c)
+    } else {
+      roots.push(c)
+    }
+  }
+  return roots.map(c => ({
+    comment: c,
+    replies: replyMap.get(c.id) || [],
+  }))
+}
+
+function getDisplayedThreads(postId: number, comments: FeedComment[]) {
+  const threads = buildCommentThreads(comments)
+  const expanded = expandedCommentPosts.value.has(postId)
+  return expanded ? threads : threads.slice(0, MAX_ROOT_COMMENTS)
+}
+
+function getDisplayedReplies(threadId: number, replies: FeedComment[]) {
+  const expanded = expandedReplyThreads.value.has(threadId)
+  return expanded ? replies : replies.slice(0, MAX_REPLIES_PER_THREAD)
+}
+
+function getHiddenThreadCount(postId: number, comments: FeedComment[]) {
+  const total = buildCommentThreads(comments).length
+  return Math.max(0, total - MAX_ROOT_COMMENTS)
+}
+
+function toggleExpandComments(postId: number) {
+  if (expandedCommentPosts.value.has(postId)) {
+    expandedCommentPosts.value.delete(postId)
+  } else {
+    expandedCommentPosts.value.add(postId)
+  }
+}
+
+function toggleExpandReplies(threadId: number) {
+  if (expandedReplyThreads.value.has(threadId)) {
+    expandedReplyThreads.value.delete(threadId)
+  } else {
+    expandedReplyThreads.value.add(threadId)
+  }
+}
 
 // 多媒体上传状态
 const uploadedImages = ref<string[]>([])
@@ -362,7 +439,7 @@ function getInviteTypeFromRoute(): string | undefined {
   return typeof t === 'string' && t ? t : undefined
 }
 
-function switchTab(tab: 'recommend' | 'invite' | 'post' | 'following') {
+function switchTab(tab: 'recommend' | 'post' | 'following') {
   activeTab.value = tab
   loadByTab()
 }
@@ -374,9 +451,7 @@ function doSearch() {
 async function loadByTab() {
   const kw = searchKeyword.value.trim() || undefined
   if (activeTab.value === 'recommend') {
-    await Promise.all([loadPosts(kw), loadInvites(kw)])
-  } else if (activeTab.value === 'invite') {
-    await loadInvites(kw)
+    await loadPosts(kw)
   } else if (activeTab.value === 'following') {
     await loadFollowingPosts()
   } else {
@@ -399,25 +474,7 @@ type TimelineItem =
   | { kind: 'post'; post: FeedPost; time: string; key: string }
 
 const timelineItems = computed<TimelineItem[]>(() => {
-  const invites = (activeTab.value === 'post' || activeTab.value === 'following') ? [] : inviteStore.invites
-  const postList = activeTab.value === 'invite' ? [] : (activeTab.value === 'following' ? followingPosts.value : posts.value)
-  const inviteItems: TimelineItem[] = invites
-    // 只展示公开且进行中的邀约：过滤掉私密、一对一、已取消和已结束
-    .filter(invite =>
-      invite.inviteMode === InviteMode.PUBLIC &&
-      invite.status !== InviteStatus.CANCELLED &&
-      invite.status !== InviteStatus.ENDED
-    )
-    .map(invite => {
-      const time = invite.createdAt || invite.inviteTime
-      return {
-        kind: 'invite',
-        invite,
-        time: time || '',
-        key: `invite-${invite.id}`,
-      }
-    })
-
+  const postList = activeTab.value === 'following' ? followingPosts.value : posts.value
   const postItems: TimelineItem[] = postList.map(post => ({
     kind: 'post',
     post,
@@ -425,7 +482,7 @@ const timelineItems = computed<TimelineItem[]>(() => {
     key: `post-${post.id}`,
   }))
 
-  return [...inviteItems, ...postItems].sort((a, b) => {
+  return postItems.sort((a, b) => {
     const ta = a.time ? new Date(a.time).getTime() : 0
     const tb = b.time ? new Date(b.time).getTime() : 0
     return tb - ta
@@ -474,18 +531,24 @@ async function loadLevelInfo() {
   } catch { /* empty */ }
 }
 
+// 统一从当前 tab 对应的帖子数组中查找（解决关注tab下找不到帖子的bug）
+function findPostById(postId: number): FeedPost | undefined {
+  return posts.value.find(p => p.id === postId)
+    || followingPosts.value.find(p => p.id === postId)
+}
+
 async function handleLike(postId: number, liked: boolean) {
   try {
     if (liked) {
       await unlikePost(postId)
-      const post = posts.value.find(p => p.id === postId)
+      const post = findPostById(postId)
       if (post) {
         post.liked = false
         post.likeCount--
       }
     } else {
       await likePost(postId)
-      const post = posts.value.find(p => p.id === postId)
+      const post = findPostById(postId)
       if (post) {
         post.liked = true
         post.likeCount++
@@ -499,6 +562,25 @@ async function handleLike(postId: number, liked: boolean) {
 function openComment(post: FeedPost) {
   commentingPostId.value = commentingPostId.value === post.id ? null : post.id
   commentText.value = ''
+  // 如果切换到其他帖子，清除回复状态
+  if (replyingTo.value && replyingTo.value.postId !== post.id) {
+    replyingTo.value = null
+  }
+}
+
+function handleReplyClick(postId: number, comment: FeedComment) {
+  if (commentingPostId.value !== postId) {
+    commentingPostId.value = postId
+  }
+  replyingTo.value = { postId, commentId: comment.id, nickname: comment.nickname }
+  commentText.value = ''
+  // 聚焦到输入框
+  document.querySelector('.comment-input input')?.focus()
+}
+
+function cancelReply() {
+  replyingTo.value = null
+  commentText.value = ''
 }
 
 async function submitComment(postId: number) {
@@ -507,11 +589,19 @@ async function submitComment(postId: number) {
   }
   try {
     const content = commentText.value.trim()
-    await addComment({ postId, content })
-    const post = posts.value.find(p => p.id === postId)
+    const parentId = replyingTo.value ? replyingTo.value.commentId : null
+    // 获取被回复用户的ID
+    let repliedUserId = null
+    if (replyingTo.value) {
+      const parentComment = findPostById(postId)?.comments?.find(c => c.id === replyingTo.value.commentId)
+      repliedUserId = parentComment?.userId || null
+    }
+
+    await addComment({ postId, content, parentId, repliedUserId })
+    const post = findPostById(postId)
     if (post) {
       post.commentCount = (post.commentCount || 0) + 1
-      // 本地追加一条评论，用于“叠楼”即时展示
+      // 本地追加一条评论，用于”叠楼”即时展示
       if (!post.comments) {
         post.comments = []
       }
@@ -521,12 +611,14 @@ async function submitComment(postId: number) {
         nickname: userStore.user!.nickname,
         avatarUrl: userStore.user!.avatarUrl,
         content,
-        parentId: null,
+        parentId: parentId,
+        repliedToName: replyingTo.value?.nickname || null,
         createdAt: new Date().toISOString(),
       }
       post.comments.push(optimistic)
     }
     commentText.value = ''
+    replyingTo.value = null
     commentingPostId.value = null
     ElMessage.success('评论成功')
   } catch {
@@ -1042,7 +1134,39 @@ async function handleDeletePost(postId: number) {
   padding: 8px 0 4px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 8px;
+}
+
+.comment-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.thread-replies {
+  margin-left: 16px;
+  padding-left: 10px;
+  border-left: 2px solid rgba($primary, 0.15);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.expand-btn {
+  padding: 4px 10px;
+  font-size: 12px;
+  color: $primary;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font-weight: 500;
+  transition: color $transition-fast;
+
+  &:hover {
+    color: darken($primary, 10%);
+    text-decoration: underline;
+  }
 }
 
 .comment-item {
@@ -1052,10 +1176,14 @@ async function handleDeletePost(postId: number) {
   background: $bg-tertiary;
   border-radius: $radius-md;
 
+  &.is-reply {
+    background: rgba($bg-tertiary, 0.6);
+  }
+
   .comment-header {
     display: flex;
     align-items: center;
-    gap: 8px;
+    gap: 6px;
     margin-bottom: 2px;
   }
 
@@ -1065,9 +1193,35 @@ async function handleDeletePost(postId: number) {
     cursor: pointer;
   }
 
+  .reply-indicator {
+    font-size: 11px;
+    color: $text-muted;
+  }
+
+  .replied-name {
+    font-size: 12px;
+    color: $primary;
+    font-weight: 500;
+  }
+
   .comment-time {
     font-size: 12px;
     color: $text-muted;
+  }
+
+  .comment-reply-btn {
+    margin-left: auto;
+    padding: 1px 6px;
+    font-size: 11px;
+    color: $text-muted;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    transition: color $transition-fast;
+
+    &:hover {
+      color: $primary;
+    }
   }
 
   .comment-text {
@@ -1078,6 +1232,33 @@ async function handleDeletePost(postId: number) {
 
 .comment-input {
   margin-top: 8px;
+
+  .replying-hint {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 8px;
+    background: rgba($primary, 0.08);
+    border-radius: $radius-sm;
+    margin-bottom: 6px;
+    font-size: 12px;
+    color: $primary;
+  }
+
+  .reply-cancel {
+    margin-left: auto;
+    padding: 0 4px;
+    background: transparent;
+    border: none;
+    color: $text-muted;
+    cursor: pointer;
+    font-size: 13px;
+    line-height: 1;
+
+    &:hover {
+      color: $text-secondary;
+    }
+  }
 
   .comment-send {
     color: $primary;

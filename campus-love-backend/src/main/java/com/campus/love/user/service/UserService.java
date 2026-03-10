@@ -30,6 +30,7 @@ public class UserService {
 
     private final UserMapper userMapper;
     private final FileUploadService fileUploadService;
+    private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
 
     /**
      * 获取用户资料（本人或他人）。返回为公开资料，不含 password/email 等敏感字段；若需区分本人与他人展示，在 toProfileResponse 或 Controller 层处理。
@@ -80,7 +81,7 @@ public class UserService {
         user.setInterests(request.getInterests());
         if (request.getFeedVisibility() != null && !request.getFeedVisibility().isEmpty()) {
             String v = request.getFeedVisibility().toUpperCase();
-            if ("ALL".equals(v) || "FOLLOWERS".equals(v) || "SELF".equals(v)) {
+            if ("ALL".equals(v) || "FOLLOWING".equals(v) || "FOLLOWERS".equals(v) || "FRIENDS".equals(v) || "SELF".equals(v)) {
                 user.setFeedVisibility(v);
             }
         }
@@ -124,7 +125,7 @@ public class UserService {
         User user = userMapper.selectById(userId);
         if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
         String v = visibility != null ? visibility.trim().toUpperCase() : "ALL";
-        if (!"ALL".equals(v) && !"FOLLOWERS".equals(v) && !"SELF".equals(v)) {
+        if (!"ALL".equals(v) && !"FOLLOWING".equals(v) && !"FOLLOWERS".equals(v) && !"FRIENDS".equals(v) && !"SELF".equals(v)) {
             v = "ALL";
         }
         user.setFeedVisibility(v);
@@ -141,6 +142,26 @@ public class UserService {
         userMapper.updateById(user);
 
         return avatarUrl;
+    }
+
+    /**
+     * 获取用户邮箱（用于密码修改）
+     */
+    public String getUserEmail(Long userId) {
+        User user = userMapper.selectById(userId);
+        return user != null ? user.getEmail() : null;
+    }
+
+    /**
+     * 更新用户密码
+     */
+    public void updatePassword(Long userId, String newPassword) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        }
+        user.setPassword(passwordEncoder.encode(newPassword));
+        userMapper.updateById(user);
     }
 
     private UserProfileResponse toProfileResponse(User user, boolean isSelf) {

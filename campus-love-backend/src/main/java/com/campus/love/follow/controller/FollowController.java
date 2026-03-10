@@ -78,4 +78,14 @@ public class FollowController {
         followService.markFollowersViewed(CurrentUser.getId());
         return Result.success();
     }
+
+    @Operation(summary = "设置关注用户的备注名")
+    @PutMapping("/{targetUserId}/remark")
+    public Result<Void> setRemark(
+        @PathVariable Long targetUserId,
+        @RequestParam String remark
+    ) {
+        followService.setRemark(targetUserId, remark);
+        return Result.success();
+    }
 }

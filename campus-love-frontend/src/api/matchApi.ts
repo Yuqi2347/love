@@ -54,6 +54,11 @@ export function getWeightStats() {
   }>>('/match/weights/stats')
 }
 
+// 更新用户权重偏好 (high/medium/low)
+export function updateWeightPreferences(preferences: Record<string, 'high' | 'medium' | 'low'>) {
+  return request.post<ApiResult<void>>('/match/weights/preferences', preferences)
+}
+
 // 重置用户权重
 export function resetWeights() {
   return request.post<ApiResult<void>>('/match/weights/reset')

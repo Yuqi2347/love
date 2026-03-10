@@ -1,7 +1,7 @@
 <template>
   <div class="invite-page">
     <div class="page-header">
-      <h1 class="page-title">我的邀约</h1>
+      <h1 class="page-title">邀约</h1>
       <button class="btn-primary" @click="$router.push('/invite/create')">
         <el-icon><Plus /></el-icon> 发起邀约
       </button>
@@ -16,6 +16,14 @@
       >
         {{ tab.label }}
       </button>
+    </div>
+
+    <!-- 邀约来源选择器 (仅在"邀约"tab显示) -->
+    <div v-if="activeTab === 'list'" class="source-selector-row">
+      <el-radio-group v-model="inviteSource" @change="handleSourceChange">
+        <el-radio-button value="public">公共邀约</el-radio-button>
+        <el-radio-button value="mine">我创建的邀约</el-radio-button>
+      </el-radio-group>
     </div>
 
     <div v-if="activeTab === 'list'" class="filters-row">
@@ -313,6 +321,7 @@ const inviteStore = useInviteStore()
 const badgeStore = useBadgeStore()
 
 const activeTab = ref<string>('list')
+const inviteSource = ref<'public' | 'mine'>('public') // 新增：邀约来源
 const filterType = ref<string>()
 const filterStatus = ref<string>()
 const filterTimeRange = ref<string>('week')
@@ -323,8 +332,8 @@ const historyRange = ref<HistoryRange>('week')
 const historyType = ref<'created' | 'joined'>('created')
 
 const tabs = [
-  { label: '我的邀约', value: 'list' },
-  { label: '等待邀约', value: 'wait' },
+  { label: '邀约', value: 'list' },
+  { label: '等待被邀约', value: 'wait' },
   { label: '我的统计', value: 'history' },
 ]
 
@@ -336,7 +345,8 @@ const statusOptions = [
 
 // 过滤后的邀约列表（顺序由后端保证：状态优先级 + 同状态内按发布时间）
 const filteredInvites = computed(() => {
-  let list = inviteStore.myListInvites
+  // 根据来源选择数据：我创建的邀约用 myListInvites，公共邀约用 invites
+  let list = inviteSource.value === 'mine' ? inviteStore.myListInvites : inviteStore.invites
 
   if (filterType.value) {
     list = list.filter(i => i.inviteType === filterType.value)
@@ -478,7 +488,22 @@ function formatWaitPeriod(periodConfig: string | null): string {
 
 // 筛选变化（我的邀约列表用 my-list 接口，带时间范围）
 function handleFilterChange() {
-  inviteStore.fetchMyInvitesList(filterTimeRange.value)
+  loadInvitesBySource()
+}
+
+// 邀约来源切换
+function handleSourceChange() {
+  loadInvitesBySource()
+}
+
+// 根据来源加载邀约
+async function loadInvitesBySource() {
+  if (inviteSource.value === 'mine') {
+    await inviteStore.fetchMyInvitesList(filterTimeRange.value)
+  } else {
+    // 公共邀约：使用 discover 的邀约列表
+    await inviteStore.fetchInvites(undefined, undefined, 'week', undefined, false)
+  }
 }
 
 // 取消等待邀约
@@ -509,7 +534,7 @@ async function loadWaitList() {
 // 初始化（我的邀约用 my-list，进入页即标记活动已查看）
 onMounted(() => {
   badgeStore.markInviteActivityViewed()
-  inviteStore.fetchMyInvitesList(filterTimeRange.value)
+  loadInvitesBySource()
   inviteStore.fetchStats()
   loadWaitList()
   loadHistory()
@@ -545,6 +570,42 @@ onMounted(() => {
   margin-bottom: 16px;
   padding-bottom: 16px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+}
+
+.source-selector-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px 16px;
+  background: $bg-secondary;
+  border-radius: $radius-lg;
+
+  :deep(.el-radio-group) {
+    display: flex;
+    gap: 8px;
+  }
+
+  :deep(.el-radio-button__inner) {
+    padding: 8px 20px;
+    border-radius: $radius-md;
+    border: 1px solid $border-color;
+    background: white;
+    color: $text-secondary;
+    font-size: 14px;
+    font-weight: 500;
+
+    &:hover {
+      color: $primary;
+      border-color: $primary;
+    }
+  }
+
+  :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
+    background: $primary;
+    border-color: $primary;
+    color: white;
+    box-shadow: 0 2px 8px rgba($primary, 0.3);
+  }
 }
 
 .tab-btn {

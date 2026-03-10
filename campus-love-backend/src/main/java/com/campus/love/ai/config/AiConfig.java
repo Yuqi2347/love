@@ -22,6 +22,6 @@ public class AiConfig {
     /** 单次请求最大 token */
     private int maxTokens = 1000;
 
-    /** 缘分解析冷却：-1=永久缓存，0=每次调用AI，>0=冷却N小时 */
-    private long yuanfenCooldownHours = -1;
+    /** 缘分解析冷却：-1=永久缓存，0=每次调用AI，>0=冷却N小时（默认1小时） */
+    private long yuanfenCooldownHours = 1;
 }

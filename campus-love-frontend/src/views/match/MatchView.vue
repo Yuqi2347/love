@@ -7,8 +7,49 @@
         <button :class="['tab-btn', { active: genderFilter === 'all' }]" @click="setGenderFilter('all')">全部</button>
         <button :class="['tab-btn', { active: genderFilter === 'opposite' }]" @click="setGenderFilter('opposite')">异性</button>
         <button :class="['tab-btn', { active: genderFilter === 'same' }]" @click="setGenderFilter('same')">同性</button>
+        <button class="tab-btn settings-btn" @click="showWeightPanel = !showWeightPanel">
+          ⚙ 权重
+        </button>
       </div>
+
     </div>
+
+    <!-- 权重调整浮层 -->
+    <Transition name="weight-slide">
+      <div v-if="showWeightPanel" class="weight-overlay" @click.self="showWeightPanel = false">
+        <div class="weight-panel">
+          <div class="weight-panel-header">
+            <span class="weight-panel-title">匹配权重调整</span>
+            <button class="weight-close-btn" @click="showWeightPanel = false">✕</button>
+          </div>
+          <p class="weight-panel-desc">调整各维度权重影响推荐排序，设置后需点击"应用"生效</p>
+          <div class="weight-items">
+            <div v-for="dim in weightDimensions" :key="dim.key" class="weight-item">
+              <div class="weight-dim-info">
+                <span class="weight-dim-icon">{{ dim.icon }}</span>
+                <span class="weight-dim-label">{{ dim.label }}</span>
+              </div>
+              <div class="weight-level-btns">
+                <button
+                  v-for="level in ['low', 'medium', 'high'] as const"
+                  :key="level"
+                  :class="['weight-level-btn', level, { active: weightPreferences[dim.key] === level }]"
+                  @click="weightPreferences[dim.key] = level"
+                >
+                  {{ level === 'high' ? '高' : level === 'medium' ? '中' : '低' }}
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="weight-panel-footer">
+            <button class="weight-reset-btn" @click="handleResetWeights">恢复默认</button>
+            <button class="weight-apply-btn" :disabled="weightSaving" @click="handleSaveWeights">
+              {{ weightSaving ? '保存中...' : '应用权重' }}
+            </button>
+          </div>
+        </div>
+      </div>
+    </Transition>
 
     <div v-if="sortedCards.length" class="card-container">
       <!-- 竖直卡片列表 -->
@@ -83,8 +124,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { getRecommendations, reportUserAction, type MatchResult } from '@/api/matchApi'
+import { ref, computed, onMounted, reactive } from 'vue'
+import { getRecommendations, reportUserAction, updateWeightPreferences, resetWeights, type MatchResult } from '@/api/matchApi'
 import { followUser } from '@/api/followApi'
 import { useFollowStore } from '@/store/followStore'
 import { ElMessage } from 'element-plus'
@@ -96,6 +137,56 @@ const followStore = useFollowStore()
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500"><rect fill="%23f0f2f5" width="400" height="500" rx="24"/><text x="50%" y="45%" text-anchor="middle" fill="%23adb5bd" font-size="80">👤</text></svg>'
 const dimensionLabels = MATCH_DIMENSION_LABELS
+
+// 权重调整
+const showWeightPanel = ref(false)
+const weightSaving = ref(false)
+const weightDimensions = [
+  { key: 'interest', label: '兴趣匹配', icon: '🎯' },
+  { key: 'mbti', label: 'MBTI性格', icon: '🧠' },
+  { key: 'zodiac', label: '星座匹配', icon: '⭐' },
+  { key: 'bazi', label: '八字合婚', icon: '🔮' },
+  { key: 'major', label: '专业匹配', icon: '📚' },
+  { key: 'age', label: '年龄匹配', icon: '👤' },
+]
+const weightPreferences = reactive<Record<string, 'high' | 'medium' | 'low'>>({
+  interest: 'high',
+  mbti: 'medium',
+  zodiac: 'medium',
+  bazi: 'medium',
+  major: 'low',
+  age: 'low',
+})
+
+async function handleSaveWeights() {
+  weightSaving.value = true
+  try {
+    await updateWeightPreferences(weightPreferences)
+    ElMessage.success('权重已更新')
+    showWeightPanel.value = false
+    await loadCards()
+  } catch {
+    ElMessage.error('保存权重失败')
+  } finally {
+    weightSaving.value = false
+  }
+}
+
+async function handleResetWeights() {
+  try {
+    await resetWeights()
+    weightPreferences.interest = 'high'
+    weightPreferences.mbti = 'medium'
+    weightPreferences.zodiac = 'medium'
+    weightPreferences.bazi = 'medium'
+    weightPreferences.major = 'low'
+    weightPreferences.age = 'low'
+    ElMessage.success('已恢复默认权重')
+    await loadCards()
+  } catch {
+    ElMessage.error('重置失败')
+  }
+}
 
 interface CardWithState extends MatchResult {
   globalIndex: number
@@ -420,7 +511,175 @@ function handleViewProfile(userId: number) {
 
     &:hover { border-color: $primary; color: $primary; }
     &.active { background: $primary; border-color: $primary; color: white; }
+    &.settings-btn { margin-left: auto; }
   }
+}
+
+// 权重浮层
+.weight-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(4px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+
+.weight-panel {
+  width: 100%;
+  max-width: 420px;
+  background: $bg-primary;
+  border-radius: 20px;
+  padding: 24px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+}
+
+.weight-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+
+.weight-panel-title {
+  font-size: 18px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.weight-close-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: none;
+  background: $bg-tertiary;
+  color: $text-muted;
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.2s;
+  &:hover { background: $border-color; color: $text-primary; }
+}
+
+.weight-panel-desc {
+  font-size: 13px;
+  color: $text-muted;
+  margin-bottom: 20px;
+  line-height: 1.4;
+}
+
+.weight-items {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.weight-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: $bg-secondary;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  transition: border-color 0.2s;
+
+  &:hover { border-color: rgba($primary, 0.15); }
+}
+
+.weight-dim-info {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.weight-dim-icon {
+  font-size: 18px;
+  width: 28px;
+  text-align: center;
+}
+
+.weight-dim-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: $text-primary;
+}
+
+.weight-level-btns {
+  display: flex;
+  gap: 6px;
+}
+
+.weight-level-btn {
+  padding: 5px 14px;
+  border: 1px solid $border-light;
+  border-radius: $radius-full;
+  background: $bg-primary;
+  color: $text-muted;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  min-width: 40px;
+  text-align: center;
+
+  &:hover { border-color: $primary; color: $primary; }
+
+  &.active.low { background: #dbeafe; border-color: #93c5fd; color: #2563eb; }
+  &.active.medium { background: #fef3c7; border-color: #fcd34d; color: #d97706; }
+  &.active.high { background: #fce7f3; border-color: #f9a8d4; color: #db2777; }
+}
+
+.weight-panel-footer {
+  display: flex;
+  gap: 12px;
+}
+
+.weight-reset-btn {
+  flex: 1;
+  padding: 10px;
+  border: 1px solid $border-color;
+  border-radius: 12px;
+  background: $bg-primary;
+  color: $text-secondary;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  &:hover { color: $primary; border-color: $primary; }
+}
+
+.weight-apply-btn {
+  flex: 2;
+  padding: 10px;
+  background: $primary-gradient;
+  color: white;
+  border: none;
+  border-radius: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  &:hover:not(:disabled) { box-shadow: 0 4px 16px rgba($primary, 0.35); transform: translateY(-1px); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+
+// 浮层动画
+.weight-slide-enter-active,
+.weight-slide-leave-active {
+  transition: opacity 0.25s ease;
+  .weight-panel { transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.25s ease; }
+}
+.weight-slide-enter-from,
+.weight-slide-leave-to {
+  opacity: 0;
+  .weight-panel { transform: translateY(20px) scale(0.95); opacity: 0; }
 }
 
 .card-container {

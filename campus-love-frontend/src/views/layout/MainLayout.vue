@@ -76,9 +76,9 @@
 
       <div class="panel-card">
         <h3 class="panel-title">今日推荐</h3>
-        <div v-if="topMatches.length" class="recommend-list">
+        <div v-if="topNotFollowedMatches.length" class="recommend-list">
           <div
-            v-for="m in topMatches"
+            v-for="m in topNotFollowedMatches"
             :key="m.userId"
             class="recommend-item"
             @click="$router.push(`/profile/${m.userId}`)"
@@ -97,6 +97,28 @@
           </div>
         </div>
         <div v-else class="empty-hint">完善资料后查看推荐</div>
+      </div>
+
+      <div class="panel-card">
+        <h3 class="panel-title">已关注</h3>
+        <div v-if="topFollowedMatches.length" class="recommend-list">
+          <div
+            v-for="m in topFollowedMatches"
+            :key="m.userId"
+            class="recommend-item"
+            @click="$router.push(`/profile/${m.userId}`)"
+          >
+            <img :src="m.avatarUrl || defaultAvatar" class="avatar" width="40" height="40" />
+            <div class="recommend-info">
+              <div class="recommend-name text-ellipsis">{{ followStore.getDisplayName(m.userId, m.nickname) }}</div>
+              <div class="recommend-meta">匹配度 {{ m.matchScore }}%</div>
+            </div>
+            <button class="btn-sm btn-followed" @click.stop="$router.push(`/chat/${m.userId}`)">
+              聊天
+            </button>
+          </div>
+        </div>
+        <div v-else class="empty-hint">关注用户后在此显示</div>
       </div>
 
       <div class="panel-card board-card" @click="$router.push('/discover')">
@@ -203,8 +225,8 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { useFollowStore } from '@/store/followStore'
-import { getRecommendations, type MatchResult } from '@/api/matchApi'
-import { followUser, unfollowUser } from '@/api/followApi'
+import { getRecommendations, getMatchDetail, type MatchResult } from '@/api/matchApi'
+import { followUser, unfollowUser, getFollowingList } from '@/api/followApi'
 import { createPost, uploadImage, uploadVideo } from '@/api/feedApi'
 import { searchUsers, type UserSearchItem } from '@/api/userApi'
 import { ElMessage } from 'element-plus'
@@ -227,14 +249,26 @@ const navItems = computed(() => {
     { path: '/match', label: '匹配', icon: 'MagicStick', showDot: false },
     { path: '/moment', label: '心动时刻', icon: 'Aim', showDot: false },
     { path: '/invite', label: '邀约', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
-    { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 },
-    { path: '/profile', label: '我的', icon: 'User', showDot: b.newFollowerCount > 0 },
+    { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 },
   ]
 })
 
 const isActive = (path: string) => route.path.startsWith(path)
 
 const topMatches = ref<MatchResult[]>([])
+const followedMatches = ref<MatchResult[]>([])
+
+// 未关注的推荐用户（top-5）
+const topNotFollowedMatches = computed(() => {
+  return topMatches.value
+    .filter(m => !followStore.isFollowed(m.userId))
+    .slice(0, 5)
+})
+
+// 已关注的用户（top-5，独立加载）
+const topFollowedMatches = computed(() => {
+  return followedMatches.value.slice(0, 5)
+})
 const showPostDialog = ref(false)
 const postContent = ref('')
 
@@ -328,12 +362,57 @@ let badgePollTimer: ReturnType<typeof setInterval> | null = null
 async function loadRecommendations() {
   try {
     const [recRes] = await Promise.all([
-      getRecommendations(0, 5),
+      getRecommendations(0, 10),
       followStore.loadFollowedIds(),
     ])
     topMatches.value = recRes.data.data || []
   } catch {
     topMatches.value = []
+  }
+
+  // 独立加载已关注用户的匹配度
+  loadFollowedMatches()
+}
+
+async function loadFollowedMatches() {
+  try {
+    const res = await getFollowingList()
+    const followingUsers = res.data.data || []
+    if (!followingUsers.length) {
+      followedMatches.value = []
+      return
+    }
+    // 并行获取每个关注用户的匹配度（最多取前10个）
+    const top = followingUsers.slice(0, 10)
+    const details = await Promise.allSettled(
+      top.map(u => getMatchDetail(u.userId))
+    )
+    const results: MatchResult[] = []
+    details.forEach((d, i) => {
+      if (d.status === 'fulfilled' && d.value.data.data) {
+        results.push(d.value.data.data)
+      } else {
+        // 接口失败时用基本信息填充
+        results.push({
+          userId: top[i].userId,
+          nickname: top[i].nickname,
+          avatarUrl: top[i].avatarUrl,
+          gender: 0,
+          school: null,
+          major: null,
+          grade: null,
+          mbti: null,
+          zodiac: null,
+          bio: null,
+          interests: null,
+          matchScore: 0,
+          detail: { interestScore: 0, mbtiScore: 0, zodiacScore: 0, baziScore: 0, majorScore: 0, ageScore: 0 },
+        })
+      }
+    })
+    followedMatches.value = results.sort((a, b) => b.matchScore - a.matchScore)
+  } catch {
+    followedMatches.value = []
   }
 }
 

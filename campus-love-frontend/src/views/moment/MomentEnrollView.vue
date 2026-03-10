@@ -87,9 +87,10 @@
         </div>
       </div>
 
-      <!-- Q6-Q11 -->
+      <!-- Q6-Q10 (excluding age preference Q11 which will be shown as slider) -->
       <QuestionCard
-        v-for="q in STEP2_QUESTIONS" :key="q.key"
+        v-for="q in STEP2_QUESTIONS.filter(q => q.key !== 'ageRangePreference')"
+        :key="q.key"
         :question="q"
         :modelValue="(form as any)[q.key]"
         @update:modelValue="(v: string) => (form as any)[q.key] = v"
@@ -102,6 +103,22 @@
           </div>
         </template>
       </QuestionCard>
+
+      <!-- Q11 年龄偏好 - 改为滑块 -->
+      <div class="slider-section">
+        <div class="section-label">年龄偏好（相对于你的年龄）</div>
+        <div class="slider-wrap age-slider-wrap">
+          <span class="slider-age-label">大10岁</span>
+          <el-slider
+            v-model="form.agePreference"
+            :min="-10" :max="10" :step="1"
+            :marks="agePreferenceMarks"
+            show-stops
+          />
+          <span class="slider-age-label">小10岁</span>
+        </div>
+        <p class="slider-hint">中间表示同龄，左滑喜欢年长的，右滑喜欢年下的</p>
+      </div>
     </div>
 
     <!-- Step 3: 价值观 -->
@@ -183,6 +200,7 @@ const form = reactive<MomentEnrollRequest>({
   partnerPersonality: '',
   majorPreference: '',
   ageRangePreference: '',
+  agePreference: 0, // 新增：年龄偏好，-10到10
   dateStyle: '',
   intimacyPace: '',
   loyaltyValue: '',
@@ -192,6 +210,7 @@ const form = reactive<MomentEnrollRequest>({
 })
 
 const selfScoreMarks: Record<number, string> = { 1: '1', 5: '5', 10: '10' }
+const agePreferenceMarks: Record<number, string> = { '-10': '-10', '-5': '-5', 0: '0', 5: '+5', 10: '+10' }
 
 // 步骤校验
 const canProceed = computed(() => {
@@ -201,7 +220,8 @@ const canProceed = computed(() => {
   if (currentStep.value === 2) {
     return form.targetGender && form.appearanceRequirement &&
            form.partnerPersonality && form.majorPreference &&
-           form.ageRangePreference && form.dateStyle && form.intimacyPace
+           form.dateStyle && form.intimacyPace
+    // agePreference 有默认值0，不需要检查
   }
   return true
 })
@@ -291,6 +311,7 @@ onMounted(async () => {
       form.partnerPersonality = profile.partnerPersonality || ''
       form.majorPreference = profile.majorPreference || ''
       form.ageRangePreference = profile.ageRangePreference || ''
+      form.agePreference = (profile as any).agePreference || 0 // 新字段
       form.dateStyle = profile.dateStyle || ''
       form.intimacyPace = profile.intimacyPace || ''
       form.loyaltyValue = profile.loyaltyValue || ''
@@ -471,6 +492,25 @@ onMounted(async () => {
   margin-top: 8px;
   font-size: 12px;
   color: $text-muted;
+}
+
+.age-slider-wrap {
+  .el-slider { flex: 1; }
+  .slider-min, .slider-max {
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-muted;
+    flex-shrink: 0;
+  }
+}
+
+.slider-age-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: $text-secondary;
+  flex-shrink: 0;
+  width: 50px;
+  text-align: center;
 }
 
 // ==================== 目标性别选择 ====================

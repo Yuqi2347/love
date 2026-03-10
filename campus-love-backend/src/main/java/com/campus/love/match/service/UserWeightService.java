@@ -362,4 +362,37 @@ public class UserWeightService {
 
         return stats;
     }
+
+    /**
+     * 用户手动设置权重偏好（高/中/低）
+     * high=0.25, medium=0.15, low=0.05，然后归一化确保总和为1
+     */
+    public void setWeightPreferences(Long userId, Map<String, String> preferences) {
+        Map<String, Double> rawWeights = new HashMap<>();
+        for (String dim : GlobalWeights.getAllDimensions()) {
+            String level = preferences.getOrDefault(dim, "medium");
+            double w;
+            switch (level.toLowerCase()) {
+                case "high": w = 0.25; break;
+                case "low": w = 0.05; break;
+                default: w = 0.15; break;
+            }
+            rawWeights.put(dim, w);
+        }
+        // 归一化并裁剪到边界
+        Map<String, Double> normalized = GlobalWeights.normalizeWeights(rawWeights);
+        for (Map.Entry<String, Double> entry : normalized.entrySet()) {
+            entry.setValue(GlobalWeights.clipWeightToBounds(entry.getKey(), entry.getValue()));
+        }
+        normalized = GlobalWeights.normalizeWeights(normalized);
+
+        UserWeights weights = getUserWeights(userId);
+        weights.updateWeights(normalized);
+        try {
+            userWeightsMapper.updateById(weights);
+            log.info("Updated weight preferences for user {}: {}", userId, normalized);
+        } catch (Exception e) {
+            log.warn("Failed to save weight preferences to database for user: {}", userId, e);
+        }
+    }
 }

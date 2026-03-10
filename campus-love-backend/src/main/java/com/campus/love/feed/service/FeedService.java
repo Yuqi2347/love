@@ -156,6 +156,8 @@ public class FeedService {
         if (vis == null || "ALL".equals(vis)) return true;
         if ("SELF".equals(vis)) return false;
         if ("FOLLOWERS".equals(vis)) return followService.isFollowed(authorId, viewerId);
+        if ("FOLLOWING".equals(vis)) return followService.isFollowed(viewerId, authorId);
+        if ("FRIENDS".equals(vis)) return followService.isMutual(authorId, viewerId);
         return true;
     }
 
@@ -182,6 +184,12 @@ public class FeedService {
         String vis = author.getFeedVisibility() != null ? author.getFeedVisibility() : "ALL";
         if ("SELF".equals(vis) && !userId.equals(currentUserId)) return List.of();
         if ("FOLLOWERS".equals(vis) && !userId.equals(currentUserId) && !followService.isFollowed(userId, currentUserId)) {
+            return List.of();
+        }
+        if ("FOLLOWING".equals(vis) && !userId.equals(currentUserId) && !followService.isFollowed(currentUserId, userId)) {
+            return List.of();
+        }
+        if ("FRIENDS".equals(vis) && !userId.equals(currentUserId) && !followService.isMutual(userId, currentUserId)) {
             return List.of();
         }
         List<FeedPost> posts = feedPostMapper.selectList(
@@ -264,15 +272,29 @@ public class FeedService {
         FeedPost post = feedPostMapper.selectById(request.getPostId());
         if (post == null) throw new BusinessException(ResultCode.FEED_NOT_FOUND);
 
+        // 如果是回复评论，设置被回复的用户ID
+        Long repliedUserId = null;
+        if (request.getParentId() != null) {
+            FeedComment parentComment = feedCommentMapper.selectById(request.getParentId());
+            if (parentComment != null) {
+                repliedUserId = parentComment.getUserId();
+            }
+        }
+
         FeedComment comment = new FeedComment();
         comment.setPostId(request.getPostId());
         comment.setUserId(userId);
         comment.setContent(request.getContent());
         comment.setParentId(request.getParentId());
+        comment.setRepliedUserId(repliedUserId);
         feedCommentMapper.insert(comment);
 
         post.setCommentCount(post.getCommentCount() + 1);
         feedPostMapper.updateById(post);
+
+        // TODO: 创建通知功能
+        // 如果回复的是其他人的评论，通知被回复的用户
+        // 如果是直接评论动态，且不是自己的动态，通知动态作者
     }
 
     /**
@@ -329,6 +351,69 @@ public class FeedService {
         userMapper.updateById(user);
     }
 
+    /**
+     * 获取社交通知（点赞、评论、@提及）
+     */
+    public List<Map<String, Object>> getSocialNotifications(Long userId) {
+        List<Map<String, Object>> result = new ArrayList<>();
+
+        List<FeedPost> myPosts = feedPostMapper.selectList(
+                new LambdaQueryWrapper<FeedPost>().eq(FeedPost::getUserId, userId));
+        if (myPosts.isEmpty()) return result;
+
+        List<Long> myPostIds = myPosts.stream().map(FeedPost::getId).collect(Collectors.toList());
+
+        // 点赞通知
+        List<FeedLike> likes = feedLikeMapper.selectList(
+                new LambdaQueryWrapper<FeedLike>()
+                        .in(FeedLike::getPostId, myPostIds)
+                        .ne(FeedLike::getUserId, userId)
+                        .orderByDesc(FeedLike::getCreatedAt)
+                        .last("LIMIT 50"));
+        for (FeedLike like : likes) {
+            User sender = userMapper.selectById(like.getUserId());
+            if (sender == null) continue;
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", like.getId());
+            item.put("senderId", sender.getId());
+            item.put("senderNickname", sender.getNickname());
+            item.put("senderAvatarUrl", sender.getAvatarUrl());
+            item.put("type", "LIKE");
+            item.put("content", "赞了你的动态");
+            item.put("postId", like.getPostId());
+            item.put("createdAt", like.getCreatedAt() != null ? like.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "");
+            result.add(item);
+        }
+
+        // 评论通知（包括@回复）
+        List<FeedComment> comments = feedCommentMapper.selectList(
+                new LambdaQueryWrapper<FeedComment>()
+                        .and(w -> w.in(FeedComment::getPostId, myPostIds).or().eq(FeedComment::getRepliedUserId, userId))
+                        .ne(FeedComment::getUserId, userId)
+                        .orderByDesc(FeedComment::getCreatedAt)
+                        .last("LIMIT 50"));
+        for (FeedComment comment : comments) {
+            User sender = userMapper.selectById(comment.getUserId());
+            if (sender == null) continue;
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", comment.getId() + 100000);
+            item.put("senderId", sender.getId());
+            item.put("senderNickname", sender.getNickname());
+            item.put("senderAvatarUrl", sender.getAvatarUrl());
+            boolean isMention = comment.getRepliedUserId() != null && comment.getRepliedUserId().equals(userId);
+            item.put("type", isMention ? "MENTION" : "COMMENT");
+            String prefix = isMention ? "在评论中@了你: " : "评论了你的动态: ";
+            String content = comment.getContent();
+            item.put("content", prefix + (content != null && content.length() > 30 ? content.substring(0, 30) + "..." : content));
+            item.put("postId", comment.getPostId());
+            item.put("createdAt", comment.getCreatedAt() != null ? comment.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "");
+            result.add(item);
+        }
+
+        result.sort((a, b) -> String.valueOf(b.get("createdAt")).compareTo(String.valueOf(a.get("createdAt"))));
+        return result;
+    }
+
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId) {
         return toResponse(post, currentUserId, null, FeedConstants.LIST_COMMENT_LIMIT);
     }
@@ -356,6 +441,12 @@ public class FeedService {
         Map<Long, User> userCache = new HashMap<>();
         List<FeedPostResponse.CommentItem> commentItems = comments.stream().map(c -> {
             User u = userCache.computeIfAbsent(c.getUserId(), userMapper::selectById);
+            // 获取被回复用户的昵称
+            String repliedToName = null;
+            if (c.getRepliedUserId() != null) {
+                User repliedUser = userCache.computeIfAbsent(c.getRepliedUserId(), userMapper::selectById);
+                repliedToName = repliedUser != null ? repliedUser.getNickname() : null;
+            }
             return FeedPostResponse.CommentItem.builder()
                     .id(c.getId())
                     .userId(c.getUserId())
@@ -363,6 +454,7 @@ public class FeedService {
                     .avatarUrl(u != null ? u.getAvatarUrl() : "")
                     .content(c.getContent())
                     .parentId(c.getParentId())
+                    .repliedToName(repliedToName)
                     .createdAt(c.getCreatedAt() != null ? c.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                     .build();
         }).collect(Collectors.toList());

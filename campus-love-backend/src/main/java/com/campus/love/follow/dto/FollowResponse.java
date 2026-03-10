@@ -11,4 +11,5 @@ public class FollowResponse {
     private String nickname;
     private String avatarUrl;
     private Boolean isMutual;
+    private String remark; // 备注名
 }

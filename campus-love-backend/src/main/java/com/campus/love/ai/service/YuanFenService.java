@@ -49,11 +49,43 @@ public class YuanFenService {
             throw new BusinessException(ResultCode.YUANFEN_NOT_MUTUAL);
         }
 
-        // 3. 对称 Key：保证 (A,B) 和 (B,A) 共享冷却
+        // 3. 对称 Key：保证 (A,B) 和 (B,A) 共享缓存和冷却
         long minId = Math.min(userId, targetUserId);
         long maxId = Math.max(userId, targetUserId);
 
-        // 4. 检查缓存：-1=永久缓存，>0=冷却期内缓存，0=不缓存（每次调用AI）
+        // 4. 全局冷却检查：1小时内只能与一个用户分析
+        //    如果在冷却期内已经和其他用户分析过，则阻止（但允许查看与同一用户的缓存结果）
+        if (cooldownHours > 0) {
+            try {
+                LocalDateTime cooldownSince = LocalDateTime.now().minusHours(cooldownHours);
+                // 查找当前用户最近的分析记录（作为A或B）
+                YuanFenAnalysisLog recentLog = logMapper.selectOne(
+                        new LambdaQueryWrapper<YuanFenAnalysisLog>()
+                                .and(w -> w.eq(YuanFenAnalysisLog::getUserIdA, userId)
+                                        .or().eq(YuanFenAnalysisLog::getUserIdB, userId))
+                                .gt(YuanFenAnalysisLog::getCreatedAt, cooldownSince)
+                                .orderByDesc(YuanFenAnalysisLog::getCreatedAt)
+                                .last("LIMIT 1"));
+                if (recentLog != null) {
+                    // 如果最近分析的是不同的用户对，则阻止
+                    boolean isSamePair = (recentLog.getUserIdA() == minId && recentLog.getUserIdB() == maxId);
+                    if (!isSamePair) {
+                        long remaining = Duration.between(LocalDateTime.now(),
+                                recentLog.getCreatedAt().plusHours(cooldownHours)).getSeconds();
+                        if (remaining > 0) {
+                            throw new BusinessException(ResultCode.BAD_REQUEST,
+                                    String.format("冷却中，%d分钟后可与新用户缘分分析", (remaining + 59) / 60));
+                        }
+                    }
+                }
+            } catch (BusinessException e) {
+                throw e;
+            } catch (Exception e) {
+                log.warn("查询全局冷却失败，继续处理", e);
+            }
+        }
+
+        // 5. 检查缓存：-1=永久缓存，>0=冷却期内缓存，0=不缓存（每次调用AI）
         if (cooldownHours == 0) {
             log.info("YuanFen CACHE SKIP (cooldown=0, always call AI) userId={} targetUserId={}", userId, targetUserId);
         }
@@ -124,6 +156,7 @@ public class YuanFenService {
 
     /**
      * 获取冷却剩余秒数（用于前端倒计时展示）
+     * 检查全局冷却：1小时内只能与一个用户分析
      */
     public long getCooldownRemaining(Long targetUserId) {
         long cooldownHours = aiConfig.getYuanfenCooldownHours();
@@ -135,20 +168,30 @@ public class YuanFenService {
 
         try {
             LocalDateTime cooldownSince = LocalDateTime.now().minusHours(cooldownHours);
-            YuanFenAnalysisLog last = logMapper.selectOne(
+
+            // 查找当前用户最近的分析记录（全局冷却）
+            YuanFenAnalysisLog recentLog = logMapper.selectOne(
                     new LambdaQueryWrapper<YuanFenAnalysisLog>()
-                            .eq(YuanFenAnalysisLog::getUserIdA, minId)
-                            .eq(YuanFenAnalysisLog::getUserIdB, maxId)
+                            .and(w -> w.eq(YuanFenAnalysisLog::getUserIdA, userId)
+                                    .or().eq(YuanFenAnalysisLog::getUserIdB, userId))
                             .gt(YuanFenAnalysisLog::getCreatedAt, cooldownSince)
                             .orderByDesc(YuanFenAnalysisLog::getCreatedAt)
-                            .last("LIMIT 1")
-            );
+                            .last("LIMIT 1"));
 
-            if (last == null) return 0;
+            if (recentLog == null) return 0;
 
-            LocalDateTime nextAvailable = last.getCreatedAt().plusHours(cooldownHours);
+            // 如果最近分析的就是同一对用户，返回该对的冷却时间
+            boolean isSamePair = (recentLog.getUserIdA() == minId && recentLog.getUserIdB() == maxId);
+            LocalDateTime nextAvailable = recentLog.getCreatedAt().plusHours(cooldownHours);
             long remaining = Duration.between(LocalDateTime.now(), nextAvailable).getSeconds();
-            return Math.max(0, remaining);
+
+            if (isSamePair) {
+                // 同一对用户：返回缓存刷新剩余时间
+                return Math.max(0, remaining);
+            } else {
+                // 不同用户：返回全局冷却剩余时间
+                return Math.max(0, remaining);
+            }
         } catch (Exception e) {
             log.warn("查询冷却状态失败", e);
             return 0;

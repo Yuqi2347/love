@@ -17,6 +17,9 @@ public class FeedComment {
     private String content;
     private Long parentId;
 
+    /** 被回复的用户ID（用于显示"回复 @用户名"） */
+    private Long repliedUserId;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }
