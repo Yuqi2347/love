@@ -21,10 +21,10 @@ public class RateLimitService {
     private final StringRedisTemplate redisTemplate;
 
     public enum LimitType {
-        /** 注册：5 次/小时/IP */
-        REGISTER_IP(5, 1, TimeUnit.HOURS),
-        /** 验证码：10 次/小时/IP */
-        VERIFY_CODE_IP(10, 1, TimeUnit.HOURS),
+        /** 注册：5 次/小时/邮箱（校园网共享 IP 时按邮箱限流） */
+        REGISTER_EMAIL(5, 1, TimeUnit.HOURS),
+        /** 验证码：10 次/小时/邮箱（校园网共享 IP 时按邮箱限流） */
+        VERIFY_CODE_EMAIL(10, 1, TimeUnit.HOURS),
         /** 发帖：20 次/小时/用户 */
         POST_USER(20, 1, TimeUnit.HOURS),
         /** 评论：60 次/小时/用户 */

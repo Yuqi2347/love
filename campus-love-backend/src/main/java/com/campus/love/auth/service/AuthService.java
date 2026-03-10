@@ -6,6 +6,7 @@ import com.campus.love.auth.dto.LoginRequest;
 import com.campus.love.auth.dto.RegisterRequest;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
+import com.campus.love.common.service.RateLimitService;
 import com.campus.love.common.utils.JwtUtil;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
@@ -21,12 +22,16 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final com.campus.love.auth.service.EmailVerifyService emailVerifyService;
+    private final RateLimitService rateLimitService;
 
     public AuthResponse register(RegisterRequest request) {
         String email = request.getEmail();
         if (email == null || !email.contains("@") || email.indexOf("@") >= email.length() - 1) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "邮箱格式不正确");
         }
+        String normalizedEmail = email.trim().toLowerCase();
+
+        rateLimitService.checkAndIncrement(RateLimitService.LimitType.REGISTER_EMAIL, normalizedEmail);
 
         if (!emailVerifyService.verifyCode(email, request.getVerifyCode())) {
             throw new BusinessException(ResultCode.VERIFY_CODE_INVALID);

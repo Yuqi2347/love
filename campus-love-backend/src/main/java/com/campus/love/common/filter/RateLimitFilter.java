@@ -30,10 +30,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
         if (path == null) path = "";
 
         try {
-            if (path.contains("auth/register")) {
-                rateLimitService.checkAndIncrement(RateLimitService.LimitType.REGISTER_IP, getClientIp(request));
-            } else if (path.contains("auth/send-verify-code")) {
-                rateLimitService.checkAndIncrement(RateLimitService.LimitType.VERIFY_CODE_IP, getClientIp(request));
+            if (path.contains("auth/send-verify-code")) {
+                String email = request.getParameter("email");
+                if (email != null && !email.trim().isEmpty()) {
+                    rateLimitService.checkAndIncrement(RateLimitService.LimitType.VERIFY_CODE_EMAIL, email.trim().toLowerCase());
+                }
             } else if (path.contains("/feed") && "POST".equals(request.getMethod())) {
                 if (path.contains("/comment")) {
                     applyUserLimit(RateLimitService.LimitType.COMMENT_USER, request, filterChain, response);

@@ -22,13 +22,19 @@ public class SecurityConfig {
     private final Http401EntryPoint http401EntryPoint;
     private final RateLimitFilter rateLimitFilter;
 
+    // context-path=/api 时，部分环境 requestURI 含 /api 前缀，需同时匹配
     private static final String[] PUBLIC_PATHS = {
             "/auth/**",
+            "/api/auth/**",
             "/swagger-ui/**",
+            "/api/swagger-ui/**",
             "/swagger-ui.html",
             "/v3/api-docs/**",
+            "/api/v3/api-docs/**",
             "/uploads/**",
-            "/ws/**"
+            "/api/uploads/**",
+            "/ws/**",
+            "/api/ws/**"
     };
 
     @Bean
