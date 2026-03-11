@@ -34,8 +34,9 @@
      mysql -uroot -p campus_love < update_post_type.sql
      mysql -uroot -p campus_love < set_admin.sql
      mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V10__invite_decline.sql
+     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V16__follow_remark_comment_reply.sql
      ```
-     增量脚本只负责在已有结构上做“补充/升级”，不会重复创建基础表。（V10 为邀约拒绝记录表，用于一对一邀约“拒绝”后不再出现在待处理列表。）
+     增量脚本只负责在已有结构上做”补充/升级”，不会重复创建基础表。
 5. **Redis** — Windows: [下载](https://github.com/tporadowski/redis/releases)，默认端口 6379
 
 ## 数据库与邮件配置

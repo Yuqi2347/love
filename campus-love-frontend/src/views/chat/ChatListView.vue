@@ -28,7 +28,7 @@
           @click="$router.push(`/chat/${conv.userId}`)"
         >
           <div class="conv-avatar-wrap">
-            <img :src="conv.avatarUrl || defaultAvatar" class="avatar" width="48" height="48" alt="" />
+            <img :src="conv.avatarUrl || defaultAvatar" class="avatar conv-avatar-clickable" width="48" height="48" alt="" @click.stop="$router.push(`/profile/${conv.userId}`)" />
             <span v-if="conv.unreadCount" class="unread-dot">{{ conv.unreadCount > 99 ? '99+' : conv.unreadCount }}</span>
           </div>
           <div class="conv-content">
@@ -76,7 +76,7 @@
           :class="['notify-item', { 'is-read': readIds.has(item.id) }]"
           @click="handleNotifyClick(item, 'profile')"
         >
-          <img :src="item.senderAvatarUrl || defaultAvatar" class="avatar" width="40" height="40" />
+          <img :src="item.senderAvatarUrl || defaultAvatar" class="avatar" width="40" height="40" @click.stop="goToProfile(item.senderId)" />
           <div class="notify-body">
             <span class="notify-sender">{{ item.senderNickname }}</span>
             <span class="notify-text">关注了你</span>
@@ -426,6 +426,7 @@ async function loadFollowers() {
   flex-shrink: 0;
 
   .avatar { width: 48px; height: 48px; border-radius: $radius-full; object-fit: cover; }
+  .conv-avatar-clickable { cursor: pointer; }
 }
 
 .unread-dot {

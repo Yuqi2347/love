@@ -109,101 +109,10 @@
               <span class="action-icon">{{ item.post.liked ? '❤️' : '🤍' }}</span>
               <span>{{ item.post.likeCount }}</span>
             </button>
-            <button class="action-btn" @click="openComment(item.post)">
+            <button class="action-btn" @click="goPostDetail(item.post.id)">
               <span class="action-icon">💬</span>
               <span>{{ item.post.commentCount }}</span>
             </button>
-          </div>
-
-          <!-- 评论叠楼列表（树形线程 + 折叠） -->
-          <div v-if="item.post.comments && item.post.comments.length" class="comment-list" @click.stop>
-            <div
-              v-for="thread in getDisplayedThreads(item.post.id, item.post.comments)"
-              :key="thread.comment.id"
-              class="comment-thread"
-            >
-              <!-- 主评论 -->
-              <div class="comment-item">
-                <div class="comment-header">
-                  <span class="comment-author" @click.stop="$router.push(`/profile/${thread.comment.userId}`)">
-                    {{ thread.comment.nickname }}
-                  </span>
-                  <span class="comment-time">{{ formatTime(thread.comment.createdAt) }}</span>
-                  <button class="comment-reply-btn" @click.stop="handleReplyClick(item.post.id, thread.comment)">
-                    回复
-                  </button>
-                </div>
-                <div class="comment-text">{{ thread.comment.content }}</div>
-              </div>
-              <!-- 回复列表 -->
-              <div v-if="thread.replies.length" class="thread-replies">
-                <div
-                  v-for="reply in getDisplayedReplies(thread.comment.id, thread.replies)"
-                  :key="reply.id"
-                  class="comment-item is-reply"
-                >
-                  <div class="comment-header">
-                    <span class="comment-author" @click.stop="$router.push(`/profile/${reply.userId}`)">
-                      {{ reply.nickname }}
-                    </span>
-                    <span v-if="reply.repliedToName" class="reply-indicator">回复</span>
-                    <span v-if="reply.repliedToName" class="replied-name">@{{ reply.repliedToName }}</span>
-                    <span class="comment-time">{{ formatTime(reply.createdAt) }}</span>
-                    <button class="comment-reply-btn" @click.stop="handleReplyClick(item.post.id, reply)">
-                      回复
-                    </button>
-                  </div>
-                  <div class="comment-text">{{ reply.content }}</div>
-                </div>
-                <button
-                  v-if="thread.replies.length > MAX_REPLIES_PER_THREAD && !expandedReplyThreads.has(thread.comment.id)"
-                  class="expand-btn"
-                  @click.stop="toggleExpandReplies(thread.comment.id)"
-                >
-                  展开 {{ thread.replies.length - MAX_REPLIES_PER_THREAD }} 条回复
-                </button>
-                <button
-                  v-else-if="expandedReplyThreads.has(thread.comment.id) && thread.replies.length > MAX_REPLIES_PER_THREAD"
-                  class="expand-btn"
-                  @click.stop="toggleExpandReplies(thread.comment.id)"
-                >
-                  收起回复
-                </button>
-              </div>
-            </div>
-            <!-- 展开更多评论 -->
-            <button
-              v-if="getHiddenThreadCount(item.post.id, item.post.comments) > 0 && !expandedCommentPosts.has(item.post.id)"
-              class="expand-btn"
-              @click.stop="toggleExpandComments(item.post.id)"
-            >
-              展开 {{ getHiddenThreadCount(item.post.id, item.post.comments) }} 条评论
-            </button>
-            <button
-              v-else-if="expandedCommentPosts.has(item.post.id) && buildCommentThreads(item.post.comments).length > MAX_ROOT_COMMENTS"
-              class="expand-btn"
-              @click.stop="toggleExpandComments(item.post.id)"
-            >
-              收起评论
-            </button>
-          </div>
-
-          <div v-if="commentingPostId === item.post.id" class="comment-input" @click.stop>
-            <!-- 回复提示 -->
-            <div v-if="replyingTo && replyingTo.postId === item.post.id" class="replying-hint">
-              <span>回复 @{{ replyingTo.nickname }}</span>
-              <button class="reply-cancel" @click="cancelReply">✕</button>
-            </div>
-            <el-input
-              v-model="commentText"
-              :placeholder="replyingTo && replyingTo.postId === item.post.id ? `回复 @${replyingTo.nickname}...` : '写评论...'"
-              size="small"
-              @keyup.enter="submitComment(item.post.id)"
-            >
-              <template #append>
-                <button class="comment-send" @click="submitComment(item.post.id)">发送</button>
-              </template>
-            </el-input>
           </div>
         </div>
       </div>
@@ -310,11 +219,9 @@ import {
   getLevelInfo,
   createDiscoveryPost,
   deletePost,
-  addComment,
   uploadImage,
   uploadVideo,
   type FeedPost,
-  type FeedComment,
   type UserLevelInfo,
 } from '@/api/feedApi'
 import { useUserStore } from '@/store/userStore'
@@ -345,73 +252,6 @@ const activeTab = ref<'recommend' | 'post' | 'following'>('recommend')
 const showPostDialog = ref(false)
 const postContent = ref('')
 const posting = ref(false)
-const commentingPostId = ref<number | null>(null)
-const commentText = ref('')
-const replyingTo = ref<{ postId: number; commentId: number; nickname: string } | null>(null)
-
-// 评论折叠状态：记录哪些帖子展开了全部评论
-const expandedCommentPosts = ref<Set<number>>(new Set())
-// 展开回复的线程 ID
-const expandedReplyThreads = ref<Set<number>>(new Set())
-
-// 最大显示数
-const MAX_ROOT_COMMENTS = 3
-const MAX_REPLIES_PER_THREAD = 2
-
-interface CommentThread {
-  comment: FeedComment
-  replies: FeedComment[]
-}
-
-function buildCommentThreads(comments: FeedComment[]): CommentThread[] {
-  if (!comments || !comments.length) return []
-  const roots: FeedComment[] = []
-  const replyMap = new Map<number, FeedComment[]>()
-  for (const c of comments) {
-    if (c.parentId) {
-      if (!replyMap.has(c.parentId)) replyMap.set(c.parentId, [])
-      replyMap.get(c.parentId)!.push(c)
-    } else {
-      roots.push(c)
-    }
-  }
-  return roots.map(c => ({
-    comment: c,
-    replies: replyMap.get(c.id) || [],
-  }))
-}
-
-function getDisplayedThreads(postId: number, comments: FeedComment[]) {
-  const threads = buildCommentThreads(comments)
-  const expanded = expandedCommentPosts.value.has(postId)
-  return expanded ? threads : threads.slice(0, MAX_ROOT_COMMENTS)
-}
-
-function getDisplayedReplies(threadId: number, replies: FeedComment[]) {
-  const expanded = expandedReplyThreads.value.has(threadId)
-  return expanded ? replies : replies.slice(0, MAX_REPLIES_PER_THREAD)
-}
-
-function getHiddenThreadCount(postId: number, comments: FeedComment[]) {
-  const total = buildCommentThreads(comments).length
-  return Math.max(0, total - MAX_ROOT_COMMENTS)
-}
-
-function toggleExpandComments(postId: number) {
-  if (expandedCommentPosts.value.has(postId)) {
-    expandedCommentPosts.value.delete(postId)
-  } else {
-    expandedCommentPosts.value.add(postId)
-  }
-}
-
-function toggleExpandReplies(threadId: number) {
-  if (expandedReplyThreads.value.has(threadId)) {
-    expandedReplyThreads.value.delete(threadId)
-  } else {
-    expandedReplyThreads.value.add(threadId)
-  }
-}
 
 // 多媒体上传状态
 const uploadedImages = ref<string[]>([])
@@ -556,73 +396,6 @@ async function handleLike(postId: number, liked: boolean) {
     }
   } catch {
     ElMessage.error('操作失败')
-  }
-}
-
-function openComment(post: FeedPost) {
-  commentingPostId.value = commentingPostId.value === post.id ? null : post.id
-  commentText.value = ''
-  // 如果切换到其他帖子，清除回复状态
-  if (replyingTo.value && replyingTo.value.postId !== post.id) {
-    replyingTo.value = null
-  }
-}
-
-function handleReplyClick(postId: number, comment: FeedComment) {
-  if (commentingPostId.value !== postId) {
-    commentingPostId.value = postId
-  }
-  replyingTo.value = { postId, commentId: comment.id, nickname: comment.nickname }
-  commentText.value = ''
-  // 聚焦到输入框
-  document.querySelector('.comment-input input')?.focus()
-}
-
-function cancelReply() {
-  replyingTo.value = null
-  commentText.value = ''
-}
-
-async function submitComment(postId: number) {
-  if (!commentText.value.trim()) {
-    return
-  }
-  try {
-    const content = commentText.value.trim()
-    const parentId = replyingTo.value ? replyingTo.value.commentId : null
-    // 获取被回复用户的ID
-    let repliedUserId = null
-    if (replyingTo.value) {
-      const parentComment = findPostById(postId)?.comments?.find(c => c.id === replyingTo.value.commentId)
-      repliedUserId = parentComment?.userId || null
-    }
-
-    await addComment({ postId, content, parentId, repliedUserId })
-    const post = findPostById(postId)
-    if (post) {
-      post.commentCount = (post.commentCount || 0) + 1
-      // 本地追加一条评论，用于”叠楼”即时展示
-      if (!post.comments) {
-        post.comments = []
-      }
-      const optimistic: FeedComment = {
-        id: Date.now(),
-        userId: userStore.user!.id,
-        nickname: userStore.user!.nickname,
-        avatarUrl: userStore.user!.avatarUrl,
-        content,
-        parentId: parentId,
-        repliedToName: replyingTo.value?.nickname || null,
-        createdAt: new Date().toISOString(),
-      }
-      post.comments.push(optimistic)
-    }
-    commentText.value = ''
-    replyingTo.value = null
-    commentingPostId.value = null
-    ElMessage.success('评论成功')
-  } catch {
-    ElMessage.error('评论失败')
   }
 }
 
@@ -1129,144 +902,6 @@ async function handleDeletePost(postId: number) {
 }
 
 .action-icon { font-size: 18px; }
-
-.comment-list {
-  padding: 8px 0 4px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.comment-thread {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.thread-replies {
-  margin-left: 16px;
-  padding-left: 10px;
-  border-left: 2px solid rgba($primary, 0.15);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.expand-btn {
-  padding: 4px 10px;
-  font-size: 12px;
-  color: $primary;
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  text-align: left;
-  font-weight: 500;
-  transition: color $transition-fast;
-
-  &:hover {
-    color: darken($primary, 10%);
-    text-decoration: underline;
-  }
-}
-
-.comment-item {
-  font-size: 13px;
-  line-height: 1.5;
-  padding: 6px 10px;
-  background: $bg-tertiary;
-  border-radius: $radius-md;
-
-  &.is-reply {
-    background: rgba($bg-tertiary, 0.6);
-  }
-
-  .comment-header {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    margin-bottom: 2px;
-  }
-
-  .comment-author {
-    font-weight: 600;
-    color: $primary;
-    cursor: pointer;
-  }
-
-  .reply-indicator {
-    font-size: 11px;
-    color: $text-muted;
-  }
-
-  .replied-name {
-    font-size: 12px;
-    color: $primary;
-    font-weight: 500;
-  }
-
-  .comment-time {
-    font-size: 12px;
-    color: $text-muted;
-  }
-
-  .comment-reply-btn {
-    margin-left: auto;
-    padding: 1px 6px;
-    font-size: 11px;
-    color: $text-muted;
-    background: transparent;
-    border: none;
-    cursor: pointer;
-    transition: color $transition-fast;
-
-    &:hover {
-      color: $primary;
-    }
-  }
-
-  .comment-text {
-    color: $text-primary;
-    white-space: pre-wrap;
-  }
-}
-
-.comment-input {
-  margin-top: 8px;
-
-  .replying-hint {
-    display: flex;
-    align-items: center;
-    gap: 6px;
-    padding: 4px 8px;
-    background: rgba($primary, 0.08);
-    border-radius: $radius-sm;
-    margin-bottom: 6px;
-    font-size: 12px;
-    color: $primary;
-  }
-
-  .reply-cancel {
-    margin-left: auto;
-    padding: 0 4px;
-    background: transparent;
-    border: none;
-    color: $text-muted;
-    cursor: pointer;
-    font-size: 13px;
-    line-height: 1;
-
-    &:hover {
-      color: $text-secondary;
-    }
-  }
-
-  .comment-send {
-    color: $primary;
-    font-weight: 600;
-    font-size: 13px;
-    cursor: pointer;
-  }
-}
 
 .empty-state {
   display: flex;

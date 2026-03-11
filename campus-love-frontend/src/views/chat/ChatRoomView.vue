@@ -4,7 +4,7 @@
       <button class="back-btn" @click="$router.push('/chat')">
         <el-icon><ArrowLeft /></el-icon>
       </button>
-      <img :src="otherUser?.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
+      <img :src="otherUser?.avatarUrl || defaultAvatar" class="avatar clickable-avatar" width="36" height="36" @click="$router.push(`/profile/${otherUserId}`)" />
       <div class="header-info">
         <div class="header-name">{{ otherUser ? followStore.getDisplayName(otherUser.id, otherUser.nickname) : '加载中...' }}</div>
         <div class="header-status">{{ chatStore.connected ? '在线' : '离线' }}</div>
@@ -23,9 +23,10 @@
         <img
           v-if="msg.senderId !== myId"
           :src="msg.senderAvatar || defaultAvatar"
-          class="avatar msg-avatar"
+          class="avatar msg-avatar clickable-avatar"
           width="36"
           height="36"
+          @click="$router.push(`/profile/${msg.senderId}`)"
         />
         <div class="message-bubble">
           <!-- 邀约消息（msgType=4 或 content 含 INVITE#）：展示卡片可同意/拒绝，或跳转/提示去我的邀约 -->
@@ -397,6 +398,7 @@ async function handleImageSelect(e: Event) {
 }
 
 .msg-avatar { flex-shrink: 0; }
+.clickable-avatar { cursor: pointer; }
 
 .message-bubble {
   padding: 10px 14px;

@@ -272,9 +272,9 @@ public class FeedService {
         FeedPost post = feedPostMapper.selectById(request.getPostId());
         if (post == null) throw new BusinessException(ResultCode.FEED_NOT_FOUND);
 
-        // 如果是回复评论，设置被回复的用户ID
-        Long repliedUserId = null;
-        if (request.getParentId() != null) {
+        // 被回复用户ID：优先使用客户端传入的值（支持回复子回复场景），否则从parentId推导
+        Long repliedUserId = request.getRepliedUserId();
+        if (repliedUserId == null && request.getParentId() != null) {
             FeedComment parentComment = feedCommentMapper.selectById(request.getParentId());
             if (parentComment != null) {
                 repliedUserId = parentComment.getUserId();

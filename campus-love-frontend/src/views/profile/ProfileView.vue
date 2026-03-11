@@ -2,6 +2,10 @@
   <div class="profile-page">
     <div class="profile-header">
       <div class="profile-cover">
+        <!-- Back button for navigation -->
+        <button v-if="showBackButton" class="profile-back-btn" @click="goBack">
+          <el-icon><ArrowLeft /></el-icon>
+        </button>
         <!-- Settings button in top right -->
         <div v-if="isMe" class="profile-settings">
           <el-dropdown trigger="click">
@@ -409,7 +413,7 @@ import { getInviteStats, getUserInviteStats, type InviteStats } from '@/api/invi
 import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, setUserRemark, type FollowUser } from '@/api/followApi'
 import { getUserTimelinePosts, getUserDiscoveryPosts, deletePost, type FeedPost } from '@/api/feedApi'
 import { ElMessage } from 'element-plus'
-import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton, InfoFilled } from '@element-plus/icons-vue'
+import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton, InfoFilled, ArrowLeft } from '@element-plus/icons-vue'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { FOLLOW_STATUS_LABELS, FollowStatus } from '@/constants/followConst'
 import { uploadAvatar, sendPasswordCode, resetPassword as resetPasswordApi } from '@/api/userApi'
@@ -427,6 +431,13 @@ const followStore = useFollowStore()
 
 const profileId = computed(() => route.params.userId ? Number(route.params.userId) : userStore.user?.id)
 const isMe = computed(() => profileId.value === userStore.user?.id)
+
+// 当查看他人主页时显示返回按钮（通过路由参数判断非底部导航直接进入）
+const showBackButton = computed(() => !isMe.value || window.history.length > 1)
+
+function goBack() {
+  router.back()
+}
 
 const profile = ref<UserProfile | null>(null)
 const followStatus = ref<string>(FollowStatus.NONE)
@@ -937,6 +948,29 @@ async function handleAvatarChange(event: Event) {
   height: 160px;
   background: $primary-gradient;
   position: relative;
+}
+
+.profile-back-btn {
+  position: absolute;
+  top: 16px;
+  left: 16px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.3);
+  color: white;
+  border: none;
+  cursor: pointer;
+  font-size: 18px;
+  z-index: 2;
+  transition: background 0.2s;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.5);
+  }
 }
 
 .profile-settings {

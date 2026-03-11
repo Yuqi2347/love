@@ -3,7 +3,7 @@
 -- 新环境首次初始化时只需执行本脚本一次：
 --   mysql -uroot -p campus_love < schema.sql
 -- 或在客户端：SOURCE /绝对路径/schema.sql;
--- 已有数据库升级请使用增量脚本 V2～V14。
+-- 已有数据库升级请使用增量脚本 V2～V16。
 -- =============================================
 
 CREATE DATABASE IF NOT EXISTS campus_love
@@ -50,12 +50,13 @@ CREATE TABLE IF NOT EXISTS t_user (
     UNIQUE KEY uk_email (email)
 ) COMMENT '用户基础信息';
 
--- 关注关系表
+-- 关注关系表（含 V16 备注名）
 CREATE TABLE IF NOT EXISTS t_follow (
     id              BIGINT PRIMARY KEY AUTO_INCREMENT,
     follower_id     BIGINT          NOT NULL COMMENT '关注者',
     following_id    BIGINT          NOT NULL COMMENT '被关注者',
     is_mutual       TINYINT(1)      DEFAULT 0 COMMENT '是否互相关注',
+    remark          VARCHAR(50)     DEFAULT NULL COMMENT '备注名（V16）',
     created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_follow (follower_id, following_id),
     INDEX idx_following (following_id)
@@ -107,13 +108,14 @@ CREATE TABLE IF NOT EXISTS t_feed_like (
     UNIQUE KEY uk_like (post_id, user_id)
 ) COMMENT '朋友圈点赞';
 
--- 朋友圈评论表
+-- 朋友圈评论表（含 V16 被回复用户ID）
 CREATE TABLE IF NOT EXISTS t_feed_comment (
     id              BIGINT PRIMARY KEY AUTO_INCREMENT,
     post_id         BIGINT          NOT NULL,
     user_id         BIGINT          NOT NULL,
     content         VARCHAR(512)    NOT NULL,
     parent_id       BIGINT          DEFAULT NULL COMMENT '父评论ID，用于回复',
+    replied_user_id BIGINT          DEFAULT NULL COMMENT '被回复的用户ID（V16）',
     created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_post (post_id)
 ) COMMENT '朋友圈评论';
