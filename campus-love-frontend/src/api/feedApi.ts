@@ -11,6 +11,7 @@ export interface FeedComment {
   repliedToName?: string | null  // 被回复的用户昵称
   repliedUserId?: number | null  // 被回复的用户ID
   createdAt: string
+  deleted?: boolean
 }
 
 export interface FeedPost {
@@ -27,6 +28,7 @@ export interface FeedPost {
   likeCount: number
   commentCount: number
   liked: boolean
+  visibility?: string
   createdAt: string
   comments: FeedComment[]
 }
@@ -38,6 +40,7 @@ export function createPost(data: {
   linkUrl?: string
   linkTitle?: string
   linkImage?: string
+  visibility?: string
 }) {
   return request.post<ApiResult<FeedPost>>('/feed', data)
 }
@@ -49,6 +52,7 @@ export function createDiscoveryPost(data: {
   linkUrl?: string
   linkTitle?: string
   linkImage?: string
+  visibility?: string
 }) {
   return request.post<ApiResult<FeedPost>>('/feed/discovery', data)
 }
@@ -75,6 +79,10 @@ export function getTimeline(page = 0, size = 10) {
   return request.get<ApiResult<FeedPost[]>>('/feed/timeline', { params: { page, size } })
 }
 
+export function getUserPostsSummary(userId: number) {
+  return request.get<ApiResult<{ total: number; recentImageUrls: string[] }>>(`/feed/user/${userId}/summary`)
+}
+
 export function getUserPosts(userId: number, page = 0, size = 10) {
   return request.get<ApiResult<FeedPost[]>>(`/feed/user/${userId}`, { params: { page, size } })
 }
@@ -97,6 +105,10 @@ export function unlikePost(postId: number) {
 
 export function addComment(data: { postId: number; content: string; parentId?: number; repliedUserId?: number }) {
   return request.post<ApiResult<void>>('/feed/comment', data)
+}
+
+export function deleteComment(commentId: number) {
+  return request.delete<ApiResult<void>>(`/feed/comment/${commentId}`)
 }
 
 export function deletePost(postId: number) {

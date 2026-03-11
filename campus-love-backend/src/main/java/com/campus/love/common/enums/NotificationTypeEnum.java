@@ -51,7 +51,12 @@ public enum NotificationTypeEnum {
     /**
      * 有人申请再次加入邀约（发送给发起人，需同意后该用户才能重新加入）
      */
-    INVITE_REJOIN_REQUEST("申请再次加入邀约");
+    INVITE_REJOIN_REQUEST("申请再次加入邀约"),
+
+    /**
+     * 新举报（发送给管理员）
+     */
+    REPORT("新举报");
 
     private final String description;
 

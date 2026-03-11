@@ -3,6 +3,7 @@ package com.campus.love.moment.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.campus.love.moment.entity.MomentEnrollment;
+import com.campus.love.moment.enums.MomentPool;
 import com.campus.love.moment.entity.MomentMatchResult;
 import com.campus.love.moment.entity.MomentProfile;
 import com.campus.love.moment.mapper.MomentEnrollmentMapper;
@@ -107,11 +108,16 @@ public class MomentAdminService {
         int totalMatched = 0;
         int totalUnmatched = 0;
         String finalWeekTag = weekTag;
+        Set<Long> globalMatchedUserIds = new HashSet<>();
 
         for (Map.Entry<String, List<MomentMatcher.Candidate>> entry : poolCandidates.entrySet()) {
             String pool = entry.getKey();
             List<MomentMatcher.Candidate> candidates = entry.getValue();
-            boolean isMFPool = "MF".equals(pool);
+            // 排除已在其他池匹配成功的用户，避免重复匹配
+            candidates = candidates.stream()
+                    .filter(c -> !globalMatchedUserIds.contains(c.user().getId()))
+                    .toList();
+            boolean isMFPool = MomentPool.MF.getCode().equals(pool);
 
             List<MomentMatcher.MatchPair> pairs = matcher.match(candidates, isMFPool);
 
@@ -133,6 +139,7 @@ public class MomentAdminService {
                 matchedUserIds.add(pair.userIdA());
                 matchedUserIds.add(pair.userIdB());
             }
+            globalMatchedUserIds.addAll(matchedUserIds);
 
             for (MomentMatcher.Candidate c : candidates) {
                 Long uid = c.user().getId();

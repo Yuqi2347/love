@@ -12,7 +12,9 @@ import com.campus.love.chat.entity.ChatGroupMember;
 import com.campus.love.chat.entity.Message;
 import com.campus.love.chat.mapper.MessageMapper;
 import com.campus.love.chat.service.ChatGroupService;
+import com.campus.love.chat.websocket.ChatWebSocketHandler;
 import com.campus.love.chat.constants.ChatConstants;
+import com.campus.love.common.enums.MsgTypeEnum;
 import com.campus.love.common.constants.DateTimeConstants;
 import com.campus.love.common.constants.RedisKeyConstants;
 import com.campus.love.common.exception.BusinessException;
@@ -22,6 +24,8 @@ import com.campus.love.follow.service.FollowService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.ObjectProvider;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
@@ -36,11 +40,13 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ChatService {
 
     private final MessageMapper messageMapper;
+    private final ObjectProvider<ChatWebSocketHandler> chatWebSocketHandlerProvider;
     private final UserMapper userMapper;
     private final FollowService followService;
     private final RedisTemplate<String, Object> redisTemplate;
@@ -82,7 +88,7 @@ public class ChatService {
         message.setReceiverId(receiverId);
         message.setGroupId(null);
         message.setContent(content);
-        message.setMsgType(msgType != null ? msgType : 1);
+        message.setMsgType(msgType != null ? msgType : MsgTypeEnum.TEXT.getCode());
         message.setIsRead(false);
         // 确保数据库与 WebSocket 回执中都有一致的创建时间（使用北京时间）
         message.setCreatedAt(ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalDateTime());
@@ -106,7 +112,7 @@ public class ChatService {
     public List<ChatMessageResponse> getChatHistory(Long otherUserId, int page, int size) {
         Long currentUserId = CurrentUser.getId();
         int current = (page <= 0) ? 1 : page;
-        int pageSize = (size <= 0) ? 20 : Math.min(size, 100);
+        int pageSize = (size <= 0) ? 20 : Math.min(size, ChatConstants.MAX_PAGE_SIZE);
         Page<Message> pageReq = new Page<>(current, pageSize);
         LambdaQueryWrapper<Message> wrapper = new LambdaQueryWrapper<Message>()
                 .and(w -> w
@@ -126,15 +132,17 @@ public class ChatService {
                 .collect(Collectors.toMap(User::getId, u -> u, (a, b) -> a));
         return messages.stream().map(msg -> {
             User sender = userCache.get(msg.getSenderId());
+            boolean isDeleted = msg.getDeleted() != null && msg.getDeleted() == Message.DELETED;
             return ChatMessageResponse.builder()
                     .id(msg.getId())
                     .senderId(msg.getSenderId())
                     .receiverId(msg.getReceiverId())
                     .senderNickname(sender != null ? sender.getNickname() : "")
                     .senderAvatar(sender != null ? sender.getAvatarUrl() : "")
-                    .content(msg.getContent())
+                    .content(isDeleted ? "消息已撤回" : msg.getContent())
                     .msgType(msg.getMsgType())
                     .isRead(msg.getIsRead())
+                    .deleted(isDeleted)
                     .createdAt(msg.getCreatedAt() != null ? msg.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                     .build();
         }).collect(Collectors.toList());
@@ -173,7 +181,9 @@ public class ChatService {
             Message lastMsg = entry.getValue();
             User otherUser = userMap.get(otherUserId);
             int inviteMsgType = com.campus.love.common.enums.MsgTypeEnum.INVITE.getCode();
-            String lastMsgText = (lastMsg.getMsgType() != null && lastMsg.getMsgType().intValue() == inviteMsgType)
+            boolean lastDeleted = lastMsg.getDeleted() != null && lastMsg.getDeleted() == Message.DELETED;
+            String lastMsgText = lastDeleted ? "[消息已撤回]"
+                    : (lastMsg.getMsgType() != null && lastMsg.getMsgType().intValue() == inviteMsgType)
                     ? "[邀约邀请]" : (lastMsg.getContent() != null ? lastMsg.getContent() : "");
             return ConversationResponse.builder()
                     .userId(otherUserId)
@@ -197,6 +207,36 @@ public class ChatService {
         return count != null ? count.intValue() : 0;
     }
 
+    @org.springframework.transaction.annotation.Transactional
+    public void recallMessage(Long messageId) {
+        Long currentUserId = CurrentUser.getId();
+        Message msg = messageMapper.selectById(messageId);
+        if (msg == null) throw new BusinessException(ResultCode.NOT_FOUND);
+        if (!currentUserId.equals(msg.getSenderId())) throw new BusinessException(ResultCode.FORBIDDEN);
+        if (msg.getGroupId() != null) throw new BusinessException(ResultCode.BAD_REQUEST, "群聊消息暂不支持撤回");
+        if (msg.getDeleted() != null && msg.getDeleted() == Message.DELETED) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "消息已撤回");
+        }
+
+        LocalDateTime oneHourAgo = LocalDateTime.now().minusHours(ChatConstants.RECALL_WINDOW_HOURS);
+        if (msg.getCreatedAt() == null || msg.getCreatedAt().isBefore(oneHourAgo)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "仅支持撤回1小时内的消息");
+        }
+
+        msg.setDeleted(Message.DELETED);
+        messageMapper.updateById(msg);
+
+        Long receiverId = msg.getReceiverId();
+        if (receiverId != null) {
+            try {
+                String recallJson = String.format("{\"type\":\"RECALL\",\"messageId\":%d}", messageId);
+                chatWebSocketHandlerProvider.getObject().sendToUser(receiverId, recallJson);
+            } catch (Exception e) {
+                log.warn("推送撤回通知失败: receiverId={}", receiverId, e);
+            }
+        }
+    }
+
     public void markAsRead(Long otherUserId) {
         Long currentUserId = CurrentUser.getId();
         messageMapper.update(null,
@@ -218,7 +258,7 @@ public class ChatService {
         message.setReceiverId(ChatConstants.GROUP_RECEIVER_ID_NONE);
         message.setGroupId(groupId);
         message.setContent(content);
-        message.setMsgType(msgType != null ? msgType : 1);
+        message.setMsgType(msgType != null ? msgType : MsgTypeEnum.TEXT.getCode());
         message.setIsRead(false);
         // 确保群聊消息也有创建时间，供讨论区显示（使用北京时间）
         message.setCreatedAt(ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalDateTime());
@@ -304,7 +344,7 @@ public class ChatService {
             throw new BusinessException(ResultCode.FORBIDDEN, "仅群成员可查看群聊记录");
         }
         int current = (page <= 0) ? 1 : page;
-        int pageSize = (size <= 0) ? 20 : Math.min(size, 100);
+        int pageSize = (size <= 0) ? 20 : Math.min(size, ChatConstants.MAX_PAGE_SIZE);
         Page<Message> pageReq = new Page<>(current, pageSize);
         LambdaQueryWrapper<Message> wrapper = new LambdaQueryWrapper<Message>()
                 .eq(Message::getGroupId, groupId)

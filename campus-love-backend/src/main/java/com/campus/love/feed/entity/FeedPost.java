@@ -27,6 +27,9 @@ public class FeedPost {
     private Integer likeCount;
     private Integer commentCount;
 
+    /** 可见范围：ALL=所有人，FOLLOWERS=关注我的人，FRIENDS=朋友，SELF=仅自己 */
+    private String visibility;
+
     @TableLogic
     private Integer deleted;
 

@@ -50,6 +50,12 @@ public class FeedController {
         return Result.success(feedService.getTimeline(page, size));
     }
 
+    @Operation(summary = "用户动态摘要（总数+最近图片，用于个人主页入口卡片）")
+    @GetMapping("/user/{userId}/summary")
+    public Result<java.util.Map<String, Object>> getUserSummary(@PathVariable Long userId) {
+        return Result.success(feedService.getUserPostsSummary(userId));
+    }
+
     @Operation(summary = "获取用户动态列表")
     @GetMapping("/user/{userId}")
     public Result<List<FeedPostResponse>> getUserPosts(
@@ -95,6 +101,13 @@ public class FeedController {
     @PostMapping("/comment")
     public Result<Void> comment(@Valid @RequestBody FeedCommentRequest request) {
         feedService.addComment(request);
+        return Result.success();
+    }
+
+    @Operation(summary = "删除评论")
+    @DeleteMapping("/comment/{commentId}")
+    public Result<Void> deleteComment(@PathVariable Long commentId) {
+        feedService.deleteComment(commentId);
         return Result.success();
     }
 

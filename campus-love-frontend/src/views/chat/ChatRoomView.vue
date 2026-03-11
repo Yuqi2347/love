@@ -14,7 +14,8 @@
       </button>
     </div>
 
-    <div ref="messageListRef" class="message-list">
+    <div ref="messageListRef" class="message-list" @scroll="onMessageListScroll">
+      <div v-if="noMoreHistory && messages.length > 0" class="no-more-hint">没有更多消息</div>
       <div
         v-for="msg in messages"
         :key="msg.id"
@@ -30,7 +31,11 @@
         />
         <div class="message-bubble">
           <!-- 邀约消息（msgType=4 或 content 含 INVITE#）：展示卡片可同意/拒绝，或跳转/提示去我的邀约 -->
-          <template v-if="isInviteMessage(msg)">
+          <template v-if="msg.deleted">
+            <p class="msg-content msg-recalled">{{ msg.content }}</p>
+            <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
+          </template>
+          <template v-else-if="isInviteMessage(msg)">
             <div class="invite-card-in-chat" v-if="parsedInvite(msg.content)">
               <div class="invite-card-title">{{ parsedInvite(msg.content)?.title || '邀约邀请' }}</div>
               <div class="invite-card-meta" v-if="parsedInvite(msg.content)?.timeStr">
@@ -69,7 +74,7 @@
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
           <!-- 图片消息（msgType=2 或 3，且 content 为图片路径） -->
-          <template v-else-if="isImageMessage(msg)">
+          <template v-else-if="!msg.deleted && isImageMessage(msg)">
             <el-image
               :src="imageUrl(msg.content)"
               :preview-src-list="[imageUrl(msg.content)]"
@@ -79,11 +84,19 @@
             />
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
-          <!-- 普通文本消息 -->
+          <!-- 普通文本消息 / 已撤回 -->
           <template v-else>
-            <p class="msg-content">{{ msg.content }}</p>
+            <p class="msg-content" :class="{ 'msg-recalled': msg.deleted }">{{ msg.content }}</p>
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
+          <button
+            v-if="canRecall(msg)"
+            class="recall-btn"
+            title="撤回"
+            @click.stop="handleRecall(msg.id)"
+          >
+            撤回
+          </button>
         </div>
       </div>
     </div>
@@ -120,7 +133,7 @@ import { useChatStore } from '@/store/chatStore'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { useFollowStore } from '@/store/followStore'
-import { getChatHistory, markAsRead, uploadChatImage } from '@/api/chatApi'
+import { getChatHistory, markAsRead, uploadChatImage, recallMessage } from '@/api/chatApi'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { joinInvite, declineInvite } from '@/api/inviteApi'
 import { storeToRefs } from 'pinia'
@@ -143,6 +156,9 @@ const myId = computed(() => userStore.user?.id)
 const otherUser = ref<UserProfile | null>(null)
 const inputText = ref('')
 const messageListRef = ref<HTMLElement>()
+const historyPage = ref(1)
+const noMoreHistory = ref(false)
+const loadingHistory = ref(false)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const inputRef = ref<{ $el: HTMLElement } | null>(null)
 
@@ -162,11 +178,13 @@ const messages = computed(() => {
 })
 
 onMounted(async () => {
+  historyPage.value = 1
+  noMoreHistory.value = false
   chatStore.connectWebSocket()
   try {
     const [profileRes, historyRes] = await Promise.all([
       getUserProfile(otherUserId.value),
-      getChatHistory(otherUserId.value, 0, 50),
+      getChatHistory(otherUserId.value, 1, 30),
     ])
     otherUser.value = profileRes.data.data
     const loaded = historyRes.data.data?.reverse() || []
@@ -185,6 +203,44 @@ onMounted(async () => {
     scrollToBottom()
   } catch { /* handled */ }
 })
+
+function onMessageListScroll() {
+  const el = messageListRef.value
+  if (!el || loadingHistory.value || noMoreHistory.value) return
+  if (el.scrollTop < 50) {
+    loadMoreHistory()
+  }
+}
+
+async function loadMoreHistory() {
+  if (loadingHistory.value || noMoreHistory.value) return
+  loadingHistory.value = true
+  const el = messageListRef.value
+  const oldScrollHeight = el?.scrollHeight ?? 0
+  try {
+    const nextPage = historyPage.value + 1
+    const res = await getChatHistory(otherUserId.value, nextPage, 30)
+    const loaded = res.data.data?.reverse() || []
+    if (loaded.length === 0) {
+      noMoreHistory.value = true
+    } else {
+      historyPage.value = nextPage
+      const myIdNum = myId.value
+      const otherId = otherUserId.value
+      const belong = (m: { senderId: number; receiverId: number }) =>
+        (m.senderId === myIdNum && m.receiverId === otherId) ||
+        (m.senderId === otherId && m.receiverId === myIdNum)
+      chatStore.setMessagesMergedWithHistory(loaded, m => belong(m), [])
+    }
+  } finally {
+    loadingHistory.value = false
+    await nextTick()
+    if (el && oldScrollHeight > 0) {
+      const newScrollHeight = el.scrollHeight
+      el.scrollTop = newScrollHeight - oldScrollHeight
+    }
+  }
+}
 
 watch(messages, () => { nextTick(scrollToBottom) }, { deep: true })
 
@@ -286,6 +342,27 @@ function imageUrl(url: string) {
   return '/api' + (url.startsWith('/') ? url : '/' + url)
 }
 
+function canRecall(msg: { senderId?: number; id?: number; createdAt?: string; deleted?: boolean }) {
+  if (!msg || msg.senderId !== myId.value || msg.deleted) return false
+  if (msg.id && typeof msg.id === 'number' && msg.id < 0) return false
+  if (!msg.createdAt) return false
+  const created = new Date(msg.createdAt).getTime()
+  return Date.now() - created < 3600 * 1000
+}
+
+async function handleRecall(messageId: number) {
+  try {
+    await recallMessage(messageId)
+    const idx = messages.value.findIndex(m => m.id === messageId)
+    if (idx >= 0) {
+      chatStore.updateMessageRecall(messageId)
+    }
+    ElMessage.success('已撤回')
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '撤回失败')
+  }
+}
+
 function triggerImageInput() {
   imageInputRef.value?.click()
 }
@@ -378,6 +455,13 @@ async function handleImageSelect(e: Event) {
   gap: 12px;
 }
 
+.no-more-hint {
+  font-size: 12px;
+  color: var(--el-text-color-placeholder);
+  text-align: center;
+  padding: 8px 0;
+}
+
 .message-row {
   display: flex;
   align-items: flex-end;
@@ -401,13 +485,28 @@ async function handleImageSelect(e: Event) {
 .clickable-avatar { cursor: pointer; }
 
 .message-bubble {
+  position: relative;
   padding: 10px 14px;
   border-radius: $radius-lg;
   background: $bg-tertiary;
   max-width: 100%;
 
   .msg-content { font-size: 14px; line-height: 1.5; word-wrap: break-word; }
+  .msg-content.msg-recalled { color: var(--el-text-color-placeholder); font-style: italic; }
   .msg-time { font-size: 11px; color: $text-muted; display: block; text-align: right; margin-top: 4px; }
+  .recall-btn {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    font-size: 11px;
+    color: var(--el-color-danger);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    opacity: 0.8;
+  }
+  .recall-btn:hover { opacity: 1; }
 }
 
 .invite-link-btn {

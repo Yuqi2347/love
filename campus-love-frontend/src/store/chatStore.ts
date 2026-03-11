@@ -28,7 +28,15 @@ export const useChatStore = defineStore('chat', () => {
     ws.value.onopen = () => { connected.value = true }
 
     ws.value.onmessage = (event: MessageEvent) => {
-      const msg: ChatMessage = JSON.parse(event.data)
+      const data = JSON.parse(event.data)
+      if (data.type === 'RECALL' && typeof data.messageId === 'number') {
+        const mid = data.messageId
+        currentMessages.value = currentMessages.value.map(m =>
+          m.id === mid ? { ...m, deleted: true, content: '消息已撤回' } : m
+        )
+        return
+      }
+      const msg: ChatMessage = data
       removeOptimisticIfReplaced(msg)
       removePendingReplaced(msg)
       // 避免重复添加：若已存在同 id 消息则不再 push（防止 WebSocket 重复推送或竞态）
@@ -115,6 +123,12 @@ export const useChatStore = defineStore('chat', () => {
     connected.value = false
   }
 
+  function updateMessageRecall(messageId: number) {
+    currentMessages.value = currentMessages.value.map(m =>
+      m.id === messageId ? { ...m, deleted: true, content: '消息已撤回' } : m
+    )
+  }
+
   function updateConversation(msg: ChatMessage) {
     const otherId = msg.senderId === Number(localStorage.getItem('userId'))
       ? msg.receiverId : msg.senderId
@@ -136,6 +150,7 @@ export const useChatStore = defineStore('chat', () => {
     connected,
     fetchConversations,
     connectWebSocket,
+    updateMessageRecall,
     pushOptimisticMessage,
     removeOptimisticIfReplaced,
     removePendingReplaced,

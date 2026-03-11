@@ -23,6 +23,13 @@ public final class UserLevelConstants {
         3000    // Lv10: 3000分
     };
 
+    private static final int MIN_LEVEL = 1;
+
+    /** 发布帖子所需的最低等级（默认 1） */
+    public static int getMinLevel() {
+        return MIN_LEVEL;
+    }
+
     /**
      * 发布发现模块帖子所需的最低等级
      */

@@ -19,5 +19,6 @@ public class ChatMessageResponse {
     private String content;
     private Integer msgType;
     private Boolean isRead;
+    private Boolean deleted;
     private String createdAt;
 }

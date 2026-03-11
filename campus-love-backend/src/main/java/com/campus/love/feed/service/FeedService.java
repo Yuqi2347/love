@@ -6,6 +6,7 @@ import com.campus.love.common.constants.UserLevelConstants;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.feed.constants.PostTypeConstants;
+import com.campus.love.feed.constants.VisibilityConstants;
 import com.campus.love.feed.dto.FeedCommentRequest;
 import com.campus.love.feed.constants.FeedConstants;
 import com.campus.love.feed.dto.FeedPostRequest;
@@ -25,6 +26,8 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.campus.love.common.constants.DateTimeConstants;
+import com.campus.love.common.utils.StringUtils;
+import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.util.*;
@@ -32,6 +35,7 @@ import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toMap;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FeedService {
@@ -47,35 +51,18 @@ public class FeedService {
      * 创建朋友圈帖子
      */
     public FeedPostResponse createPost(FeedPostRequest request) {
-        Long userId = CurrentUser.getId();
-
-        FeedPost post = new FeedPost();
-        post.setUserId(userId);
-        post.setContent(request.getContent());
-        post.setImages(request.getImages());
-        post.setVideos(request.getVideos());
-        post.setLinkUrl(request.getLinkUrl());
-        post.setLinkTitle(request.getLinkTitle());
-        post.setLinkImage(request.getLinkImage());
-        // 默认发到朋友圈
-        post.setPostType(request.getPostType() != null ? request.getPostType() : PostTypeConstants.TIMELINE);
-        post.setRequiredLevel(1); // 降低到最低等级
-        post.setLikeCount(0);
-        post.setCommentCount(0);
-        feedPostMapper.insert(post);
-
-        // 记录发布活跃度
-        activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.POST, post.getId());
-
-        return toResponse(post, userId);
+        return createPostInternal(request, PostTypeConstants.TIMELINE);
     }
 
     /**
      * 创建发现模块帖子（无等级限制）
      */
     public FeedPostResponse createDiscoveryPost(FeedPostRequest request) {
-        Long userId = CurrentUser.getId();
+        return createPostInternal(request, PostTypeConstants.DISCOVERY);
+    }
 
+    private FeedPostResponse createPostInternal(FeedPostRequest request, String postType) {
+        Long userId = CurrentUser.getId();
         FeedPost post = new FeedPost();
         post.setUserId(userId);
         post.setContent(request.getContent());
@@ -84,15 +71,14 @@ public class FeedService {
         post.setLinkUrl(request.getLinkUrl());
         post.setLinkTitle(request.getLinkTitle());
         post.setLinkImage(request.getLinkImage());
-        post.setPostType(PostTypeConstants.DISCOVERY);
-        post.setRequiredLevel(1); // 降低到最低等级
+        post.setPostType(postType);
+        post.setVisibility(request.getVisibility() != null ? request.getVisibility() : VisibilityConstants.ALL);
+        post.setRequiredLevel(UserLevelConstants.getMinLevel());
         post.setLikeCount(0);
         post.setCommentCount(0);
         feedPostMapper.insert(post);
-
-        // 记录发布活跃度
         activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.POST, post.getId());
-
+        log.info("用户{}发布动态: postId={}, postType={}", userId, post.getId(), postType);
         return toResponse(post, userId);
     }
 
@@ -106,6 +92,7 @@ public class FeedService {
 
         LambdaQueryWrapper<FeedPost> wrapper = new LambdaQueryWrapper<FeedPost>()
                 .eq(FeedPost::getPostType, PostTypeConstants.DISCOVERY)
+                .and(w -> w.eq(FeedPost::getVisibility, VisibilityConstants.ALL).or().isNull(FeedPost::getVisibility))
                 .orderByDesc(FeedPost::getCreatedAt);
         if (keyword != null && !keyword.trim().isEmpty()) {
             wrapper.like(FeedPost::getContent, keyword.trim());
@@ -136,29 +123,57 @@ public class FeedService {
                         .in(FeedPost::getUserId, mutualIds)
                         .eq(FeedPost::getPostType, PostTypeConstants.TIMELINE)
                         .orderByDesc(FeedPost::getCreatedAt)
-                        .last("LIMIT " + Math.min(300, (page + 1) * size * 5))
+                        .last("LIMIT " + Math.min(300, (page + 1) * size * FeedConstants.TIMELINE_FETCH_MULTIPLIER))
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
         List<FeedPost> filtered = posts.stream()
-                .filter(p -> canSeeTimelinePost(p.getUserId(), currentUserId, authorMap))
+                .filter(p -> canSeePost(p, currentUserId, authorMap))
                 .skip((long) page * size)
                 .limit(size)
                 .collect(Collectors.toList());
         return filtered.stream().map(p -> toResponse(p, currentUserId, authorMap)).collect(Collectors.toList());
     }
 
-    private boolean canSeeTimelinePost(Long authorId, Long viewerId, Map<Long, User> authorMap) {
-        if (authorId == null || viewerId == null) return false;
+    /** 按帖子 visibility 判断当前用户是否可见（以帖子字段为准，兼容旧数据无 visibility 时视为 ALL） */
+    private boolean canSeePost(FeedPost post, Long viewerId, Map<Long, User> authorMap) {
+        if (post == null || viewerId == null) return false;
+        Long authorId = post.getUserId();
         if (authorId.equals(viewerId)) return true;
-        User author = authorMap.get(authorId);
-        if (author == null) return true;
-        String vis = author.getFeedVisibility();
-        if (vis == null || "ALL".equals(vis)) return true;
-        if ("SELF".equals(vis)) return false;
-        if ("FOLLOWERS".equals(vis)) return followService.isFollowed(authorId, viewerId);
-        if ("FOLLOWING".equals(vis)) return followService.isFollowed(viewerId, authorId);
-        if ("FRIENDS".equals(vis)) return followService.isMutual(authorId, viewerId);
+        String vis = post.getVisibility();
+        if (vis == null || vis.isEmpty()) vis = VisibilityConstants.ALL;
+        if (VisibilityConstants.ALL.equals(vis)) return true;
+        if (VisibilityConstants.SELF.equals(vis)) return false;
+        if (VisibilityConstants.FOLLOWERS.equals(vis)) return followService.isFollowed(authorId, viewerId);
+        if (VisibilityConstants.FOLLOWING.equals(vis)) return followService.isFollowed(viewerId, authorId);
+        if (VisibilityConstants.FRIENDS.equals(vis)) return followService.isMutual(authorId, viewerId);
         return true;
+    }
+
+    public Map<String, Object> getUserPostsSummary(Long userId) {
+        Long currentUserId = CurrentUser.getId();
+        List<FeedPost> all = feedPostMapper.selectList(
+                new LambdaQueryWrapper<FeedPost>()
+                        .eq(FeedPost::getUserId, userId)
+                        .orderByDesc(FeedPost::getCreatedAt)
+                        .last("LIMIT " + FeedConstants.USER_POSTS_SUMMARY_LIMIT));
+        Map<Long, User> authorMap = batchLoadAuthors(all);
+        List<FeedPost> visible = all.stream()
+                .filter(p -> canSeePost(p, currentUserId, authorMap))
+                .toList();
+        List<String> recentImageUrls = new ArrayList<>();
+        for (FeedPost p : visible) {
+            if (p.getImages() != null && !p.getImages().isEmpty()) {
+                for (String img : p.getImages().split(",")) {
+                    if (img != null && !img.trim().isEmpty() && recentImageUrls.size() < 3) {
+                        recentImageUrls.add(img.trim());
+                    }
+                }
+            }
+        }
+        return Map.of(
+                "total", (long) visible.size(),
+                "recentImageUrls", recentImageUrls
+        );
     }
 
     public List<FeedPostResponse> getUserPosts(Long userId, int page, int size) {
@@ -167,44 +182,42 @@ public class FeedService {
                 new LambdaQueryWrapper<FeedPost>()
                         .eq(FeedPost::getUserId, userId)
                         .orderByDesc(FeedPost::getCreatedAt)
-                        .last("LIMIT " + (page * size) + "," + size)
+                        .last("LIMIT " + ((page + 1) * size * FeedConstants.TIMELINE_FETCH_MULTIPLIER))
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
-        return posts.stream().map(p -> toResponse(p, currentUserId, authorMap)).collect(Collectors.toList());
+        return posts.stream()
+                .filter(p -> canSeePost(p, currentUserId, authorMap))
+                .skip((long) page * size)
+                .limit(size)
+                .map(p -> toResponse(p, currentUserId, authorMap))
+                .collect(Collectors.toList());
     }
 
     /**
      * 获取用户的朋友圈帖子（TIMELINE类型）
-     * 根据作者的 feed_visibility 过滤：SELF 仅本人可见，FOLLOWERS 仅粉丝可见，ALL 所有人可见
+     * 按每条帖子的 visibility 过滤：ALL/FOLLOWERS/FRIENDS/SELF
      */
     public List<FeedPostResponse> getUserTimelinePosts(Long userId, int page, int size) {
         Long currentUserId = CurrentUser.getId();
-        User author = userMapper.selectById(userId);
-        if (author == null) return List.of();
-        String vis = author.getFeedVisibility() != null ? author.getFeedVisibility() : "ALL";
-        if ("SELF".equals(vis) && !userId.equals(currentUserId)) return List.of();
-        if ("FOLLOWERS".equals(vis) && !userId.equals(currentUserId) && !followService.isFollowed(userId, currentUserId)) {
-            return List.of();
-        }
-        if ("FOLLOWING".equals(vis) && !userId.equals(currentUserId) && !followService.isFollowed(currentUserId, userId)) {
-            return List.of();
-        }
-        if ("FRIENDS".equals(vis) && !userId.equals(currentUserId) && !followService.isMutual(userId, currentUserId)) {
-            return List.of();
-        }
         List<FeedPost> posts = feedPostMapper.selectList(
                 new LambdaQueryWrapper<FeedPost>()
                         .eq(FeedPost::getUserId, userId)
                         .eq(FeedPost::getPostType, PostTypeConstants.TIMELINE)
                         .orderByDesc(FeedPost::getCreatedAt)
-                        .last("LIMIT " + (page * size) + "," + size)
+                        .last("LIMIT " + ((page + 1) * size * FeedConstants.TIMELINE_FETCH_MULTIPLIER))
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
-        return posts.stream().map(p -> toResponse(p, currentUserId, authorMap)).collect(Collectors.toList());
+        return posts.stream()
+                .filter(p -> canSeePost(p, currentUserId, authorMap))
+                .skip((long) page * size)
+                .limit(size)
+                .map(p -> toResponse(p, currentUserId, authorMap))
+                .collect(Collectors.toList());
     }
 
     /**
      * 获取用户的发现模块帖子（DISCOVERY类型）
+     * 按帖子 visibility 过滤，发现模块仅展示 visibility=ALL 的帖子
      */
     public List<FeedPostResponse> getUserDiscoveryPosts(Long userId, int page, int size) {
         Long currentUserId = CurrentUser.getId();
@@ -213,10 +226,15 @@ public class FeedService {
                         .eq(FeedPost::getUserId, userId)
                         .eq(FeedPost::getPostType, PostTypeConstants.DISCOVERY)
                         .orderByDesc(FeedPost::getCreatedAt)
-                        .last("LIMIT " + (page * size) + "," + size)
+                        .last("LIMIT " + ((page + 1) * size * FeedConstants.TIMELINE_FETCH_MULTIPLIER))
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
-        return posts.stream().map(p -> toResponse(p, currentUserId, authorMap)).collect(Collectors.toList());
+        return posts.stream()
+                .filter(p -> canSeePost(p, currentUserId, authorMap))
+                .skip((long) page * size)
+                .limit(size)
+                .map(p -> toResponse(p, currentUserId, authorMap))
+                .collect(Collectors.toList());
     }
 
     private Map<Long, User> batchLoadAuthors(List<FeedPost> posts) {
@@ -299,12 +317,60 @@ public class FeedService {
 
     /**
      * 获取单条帖子详情（含完整评论列表，按时间正序爬楼）
+     * 按帖子 visibility 校验可见性
      */
     public FeedPostResponse getPostDetail(Long postId) {
         Long currentUserId = CurrentUser.getId();
         FeedPost post = feedPostMapper.selectById(postId);
         if (post == null) throw new BusinessException(ResultCode.FEED_NOT_FOUND);
+        if (!canSeePost(post, currentUserId, batchLoadAuthors(List.of(post)))) {
+            throw new BusinessException(ResultCode.FORBIDDEN);
+        }
         return toResponse(post, currentUserId, null, FeedConstants.DETAIL_COMMENT_LIMIT);
+    }
+
+    @Transactional
+    public void deleteComment(Long commentId) {
+        Long currentUserId = CurrentUser.getId();
+        FeedComment comment = feedCommentMapper.selectById(commentId);
+        if (comment == null) throw new BusinessException(ResultCode.NOT_FOUND);
+
+        User currentUser = userMapper.selectById(currentUserId);
+        if (currentUser == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        boolean isAdmin = Boolean.TRUE.equals(currentUser.getIsAdmin());
+        boolean isOwner = comment.getUserId().equals(currentUserId);
+        if (!isAdmin && !isOwner) throw new BusinessException(ResultCode.FORBIDDEN);
+
+        FeedPost post = feedPostMapper.selectById(comment.getPostId());
+        if (post == null) return;
+
+        long subCount = feedCommentMapper.selectCount(
+                new LambdaQueryWrapper<FeedComment>().eq(FeedComment::getParentId, commentId));
+        int toDec = 1;
+        if (subCount > 0) {
+            comment.setDeleted(FeedComment.DELETED);
+            feedCommentMapper.updateById(comment);
+        } else {
+            feedCommentMapper.deleteById(commentId);
+            Long parentId = comment.getParentId();
+            if (parentId != null) {
+                FeedComment parent = feedCommentMapper.selectById(parentId);
+                if (parent != null && parent.getDeleted() != null && parent.getDeleted() == FeedComment.DELETED) {
+                    long otherReplies = feedCommentMapper.selectCount(
+                            new LambdaQueryWrapper<FeedComment>()
+                                    .eq(FeedComment::getParentId, parentId)
+                                    .ne(FeedComment::getId, commentId));
+                    if (otherReplies == 0) {
+                        feedCommentMapper.deleteById(parentId);
+                        toDec = 2;
+                    }
+                }
+            }
+        }
+        if (post.getCommentCount() != null && post.getCommentCount() >= toDec) {
+            post.setCommentCount(post.getCommentCount() - toDec);
+            feedPostMapper.updateById(post);
+        }
     }
 
     public void deletePost(Long postId) {
@@ -336,7 +402,10 @@ public class FeedService {
                 .stream().map(FeedPost::getId).collect(Collectors.toList());
         if (myPostIds.isEmpty()) return 0;
         LambdaQueryWrapper<FeedLike> likeW = new LambdaQueryWrapper<FeedLike>().in(FeedLike::getPostId, myPostIds).gt(FeedLike::getCreatedAt, since);
-        LambdaQueryWrapper<FeedComment> commentW = new LambdaQueryWrapper<FeedComment>().in(FeedComment::getPostId, myPostIds).gt(FeedComment::getCreatedAt, since);
+        LambdaQueryWrapper<FeedComment> commentW = new LambdaQueryWrapper<FeedComment>()
+                .in(FeedComment::getPostId, myPostIds)
+                .gt(FeedComment::getCreatedAt, since)
+                .and(w -> w.isNull(FeedComment::getDeleted).or().ne(FeedComment::getDeleted, FeedComment.DELETED));
         long likeCount = feedLikeMapper.selectCount(likeW);
         long commentCount = feedCommentMapper.selectCount(commentW);
         return (int) (likeCount + commentCount);
@@ -369,7 +438,7 @@ public class FeedService {
                         .in(FeedLike::getPostId, myPostIds)
                         .ne(FeedLike::getUserId, userId)
                         .orderByDesc(FeedLike::getCreatedAt)
-                        .last("LIMIT 50"));
+                        .last("LIMIT " + FeedConstants.SOCIAL_NOTIFICATION_LIMIT));
         for (FeedLike like : likes) {
             User sender = userMapper.selectById(like.getUserId());
             if (sender == null) continue;
@@ -385,13 +454,14 @@ public class FeedService {
             result.add(item);
         }
 
-        // 评论通知（包括@回复）
+        // 评论通知（包括@回复，排除已删除）
         List<FeedComment> comments = feedCommentMapper.selectList(
                 new LambdaQueryWrapper<FeedComment>()
                         .and(w -> w.in(FeedComment::getPostId, myPostIds).or().eq(FeedComment::getRepliedUserId, userId))
                         .ne(FeedComment::getUserId, userId)
+                        .and(w -> w.isNull(FeedComment::getDeleted).or().ne(FeedComment::getDeleted, FeedComment.DELETED))
                         .orderByDesc(FeedComment::getCreatedAt)
-                        .last("LIMIT 50"));
+                        .last("LIMIT " + FeedConstants.SOCIAL_NOTIFICATION_LIMIT));
         for (FeedComment comment : comments) {
             User sender = userMapper.selectById(comment.getUserId());
             if (sender == null) continue;
@@ -403,8 +473,8 @@ public class FeedService {
             boolean isMention = comment.getRepliedUserId() != null && comment.getRepliedUserId().equals(userId);
             item.put("type", isMention ? "MENTION" : "COMMENT");
             String prefix = isMention ? "在评论中@了你: " : "评论了你的动态: ";
-            String content = comment.getContent();
-            item.put("content", prefix + (content != null && content.length() > 30 ? content.substring(0, 30) + "..." : content));
+            String content = StringUtils.truncate(comment.getContent(), FeedConstants.NOTIFICATION_CONTENT_PREVIEW_LEN);
+            item.put("content", prefix + content);
             item.put("postId", comment.getPostId());
             item.put("createdAt", comment.getCreatedAt() != null ? comment.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "");
             result.add(item);
@@ -447,15 +517,17 @@ public class FeedService {
                 User repliedUser = userCache.computeIfAbsent(c.getRepliedUserId(), userMapper::selectById);
                 repliedToName = repliedUser != null ? repliedUser.getNickname() : null;
             }
+            boolean isDeleted = c.getDeleted() != null && c.getDeleted() == FeedComment.DELETED;
             return FeedPostResponse.CommentItem.builder()
                     .id(c.getId())
                     .userId(c.getUserId())
                     .nickname(u != null ? u.getNickname() : "")
                     .avatarUrl(u != null ? u.getAvatarUrl() : "")
-                    .content(c.getContent())
+                    .content(isDeleted ? "该评论已删除" : c.getContent())
                     .parentId(c.getParentId())
                     .repliedToName(repliedToName)
                     .createdAt(c.getCreatedAt() != null ? c.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
+                    .deleted(isDeleted)
                     .build();
         }).collect(Collectors.toList());
 
@@ -473,6 +545,7 @@ public class FeedService {
                 .likeCount(post.getLikeCount())
                 .commentCount(post.getCommentCount())
                 .liked(liked)
+                .visibility(post.getVisibility() != null ? post.getVisibility() : VisibilityConstants.ALL)
                 .createdAt(post.getCreatedAt() != null ? post.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                 .comments(commentItems)
                 .build();

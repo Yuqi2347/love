@@ -76,12 +76,20 @@ public class MomentService {
 
         String status;
         try {
-            MomentEnrollment enrollment = enrollmentMapper.selectOne(
+            List<MomentEnrollment> enrollments = enrollmentMapper.selectList(
                     new LambdaQueryWrapper<MomentEnrollment>()
                             .eq(MomentEnrollment::getUserId, userId)
                             .eq(MomentEnrollment::getWeekTag, weekTag)
             );
-            status = enrollment == null ? "NOT_ENROLLED" : enrollment.getStatus();
+            if (enrollments == null || enrollments.isEmpty()) {
+                status = "NOT_ENROLLED";
+            } else {
+                boolean anyMatched = enrollments.stream().anyMatch(e -> MomentEnrollment.STATUS_MATCHED.equals(e.getStatus()));
+                boolean anyWaiting = enrollments.stream().anyMatch(e -> MomentEnrollment.STATUS_WAITING.equals(e.getStatus()));
+                status = anyMatched ? MomentEnrollment.STATUS_MATCHED
+                        : anyWaiting ? MomentEnrollment.STATUS_WAITING
+                        : MomentEnrollment.STATUS_UNMATCHED;
+            }
         } catch (Exception e) {
             log.warn("查询心动时刻报名状态失败（表可能不存在），默认未报名", e);
             status = "NOT_ENROLLED";
@@ -124,13 +132,17 @@ public class MomentService {
         if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
         if (Boolean.TRUE.equals(user.getMomentBanned())) throw new BusinessException(ResultCode.MOMENT_BANNED);
 
-        // 检查本周是否已报名
-        MomentEnrollment existing = enrollmentMapper.selectOne(
+        // 检查本周是否已报名（支持多池：删除旧记录后重新创建）
+        List<MomentEnrollment> existingList = enrollmentMapper.selectList(
                 new LambdaQueryWrapper<MomentEnrollment>()
                         .eq(MomentEnrollment::getUserId, userId)
                         .eq(MomentEnrollment::getWeekTag, weekTag)
         );
-        if (existing != null) throw new BusinessException(ResultCode.MOMENT_ALREADY_ENROLLED);
+        if (!existingList.isEmpty()) {
+            enrollmentMapper.delete(new LambdaQueryWrapper<MomentEnrollment>()
+                    .eq(MomentEnrollment::getUserId, userId)
+                    .eq(MomentEnrollment::getWeekTag, weekTag));
+        }
 
         // 保存/更新自评分
         user.setMomentSelfScore(request.getSelfScore());
@@ -152,18 +164,20 @@ public class MomentService {
             profileMapper.updateById(profile);
         }
 
-        // 确定匹配池
-        MomentPool pool = MomentPool.determine(user.getGender(), request.getTargetGender());
+        // 确定匹配池（支持双池：any 时男→MF+MM，女→MF+FF）
+        List<MomentPool> pools = MomentPool.determine(user.getGender(), request.getTargetGender());
 
-        // 创建报名记录
-        MomentEnrollment enrollment = new MomentEnrollment();
-        enrollment.setUserId(userId);
-        enrollment.setWeekTag(weekTag);
-        enrollment.setPool(pool.getCode());
-        enrollment.setStatus(MomentEnrollment.STATUS_WAITING);
-        enrollmentMapper.insert(enrollment);
+        // 创建多条报名记录
+        for (MomentPool pool : pools) {
+            MomentEnrollment enrollment = new MomentEnrollment();
+            enrollment.setUserId(userId);
+            enrollment.setWeekTag(weekTag);
+            enrollment.setPool(pool.getCode());
+            enrollment.setStatus(MomentEnrollment.STATUS_WAITING);
+            enrollmentMapper.insert(enrollment);
+        }
 
-        log.info("用户{}报名心动时刻: weekTag={}, pool={}", userId, weekTag, pool.getCode());
+        log.info("用户{}报名心动时刻: weekTag={}, pools={}", userId, weekTag, pools.stream().map(MomentPool::getCode).toList());
 
         int participantCount = 0;
         try {
@@ -190,18 +204,20 @@ public class MomentService {
         Long userId = CurrentUser.getId();
         String weekTag = getCurrentWeekTag();
 
-        MomentEnrollment enrollment = enrollmentMapper.selectOne(
+        List<MomentEnrollment> enrollments = enrollmentMapper.selectList(
                 new LambdaQueryWrapper<MomentEnrollment>()
                         .eq(MomentEnrollment::getUserId, userId)
                         .eq(MomentEnrollment::getWeekTag, weekTag)
         );
-        if (enrollment == null) throw new BusinessException(ResultCode.MOMENT_NOT_ENROLLED);
+        if (enrollments == null || enrollments.isEmpty()) throw new BusinessException(ResultCode.MOMENT_NOT_ENROLLED);
 
-        if (MomentEnrollment.STATUS_WAITING.equals(enrollment.getStatus())) {
+        boolean anyWaiting = enrollments.stream().anyMatch(e -> MomentEnrollment.STATUS_WAITING.equals(e.getStatus()));
+        if (anyWaiting) {
             throw new BusinessException(ResultCode.MOMENT_NO_RESULT);
         }
 
-        if (MomentEnrollment.STATUS_UNMATCHED.equals(enrollment.getStatus())) {
+        boolean allUnmatched = enrollments.stream().allMatch(e -> MomentEnrollment.STATUS_UNMATCHED.equals(e.getStatus()));
+        if (allUnmatched) {
             return MomentResultResponse.builder()
                     .matched(false)
                     .weekTag(weekTag)

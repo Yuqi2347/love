@@ -20,4 +20,7 @@ public class FeedPostRequest {
      * 默认为 TIMELINE
      */
     private String postType;
+
+    /** 可见范围：ALL=所有人，FOLLOWERS=关注我的人，FRIENDS=朋友，SELF=仅自己，默认 ALL */
+    private String visibility;
 }

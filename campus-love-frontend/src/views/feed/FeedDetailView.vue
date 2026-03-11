@@ -24,6 +24,9 @@
             <div class="post-name">{{ post.nickname }}</div>
             <div class="post-time">{{ formatTime(post.createdAt) }}</div>
           </div>
+          <button class="report-btn" title="举报" @click="handleReport(post.id, 'POST')">
+            <el-icon><Flag /></el-icon>
+          </button>
           <button
             v-if="canDeletePost(post)"
             class="delete-btn"
@@ -73,7 +76,7 @@
             class="comment-thread"
           >
             <!-- 根评论 -->
-            <div class="root-comment">
+            <div class="root-comment" :class="{ 'comment-deleted': thread.comment.deleted }">
               <img
                 :src="thread.comment.avatarUrl || defaultAvatar"
                 class="comment-avatar"
@@ -89,7 +92,8 @@
                 <div class="comment-text">{{ thread.comment.content }}</div>
                 <div class="comment-footer">
                   <span class="comment-time">{{ formatTime(thread.comment.createdAt) }}</span>
-                  <button class="reply-btn" @click="handleReplyClick(thread.comment, thread.comment)">回复</button>
+                  <button v-if="!thread.comment.deleted" class="reply-btn" @click="handleReplyClick(thread.comment, thread.comment)">回复</button>
+                  <button v-if="canDeleteComment(thread.comment)" class="reply-btn delete-comment-btn" @click="handleDeleteComment(thread.comment.id)">删除</button>
                 </div>
               </div>
             </div>
@@ -99,6 +103,7 @@
                 v-for="reply in getDisplayedReplies(thread.comment.id, thread.replies)"
                 :key="reply.id"
                 class="reply-item"
+                :class="{ 'comment-deleted': reply.deleted }"
               >
                 <img
                   :src="reply.avatarUrl || defaultAvatar"
@@ -108,15 +113,16 @@
                 <div class="reply-body">
                   <div class="reply-content">
                     <span class="reply-author" @click="$router.push(`/profile/${reply.userId}`)">{{ reply.nickname }}</span>
-                    <template v-if="reply.repliedToName">
+                    <template v-if="reply.repliedToName && !reply.deleted">
                       <span class="reply-arrow"> 回复 </span>
                       <span class="reply-target">@{{ reply.repliedToName }}</span>
                     </template>
-                    <span class="reply-text">：{{ reply.content }}</span>
+                    <span class="reply-text">{{ reply.deleted ? '' : '：' }}{{ reply.content }}</span>
                   </div>
                   <div class="reply-footer">
                     <span class="comment-time">{{ formatTime(reply.createdAt) }}</span>
-                    <button class="reply-btn" @click="handleReplyClick(reply, thread.comment)">回复</button>
+                    <button v-if="!reply.deleted" class="reply-btn" @click="handleReplyClick(reply, thread.comment)">回复</button>
+                    <button v-if="canDeleteComment(reply)" class="reply-btn delete-comment-btn" @click="handleDeleteComment(reply.id)">删除</button>
                   </div>
                 </div>
               </div>
@@ -192,11 +198,13 @@ import {
   unlikePost,
   addComment,
   deletePost,
+  deleteComment,
   type FeedPost,
   type FeedComment,
 } from '@/api/feedApi'
+import { submitReport } from '@/api/reportApi'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Delete } from '@element-plus/icons-vue'
+import { ArrowLeft, Delete, Flag } from '@element-plus/icons-vue'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect fill="%23f0f2f5" width="44" height="44" rx="22"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="20">👤</text></svg>'
 
@@ -311,6 +319,29 @@ function canDeletePost(p: FeedPost) {
   return userStore.user?.id === p.userId
 }
 
+function canDeleteComment(c: FeedComment) {
+  if (c.deleted) return false
+  return userStore.user?.id === c.userId || userStore.user?.isAdmin
+}
+
+async function handleDeleteComment(commentId: number) {
+  try {
+    await ElMessageBox.confirm('确定删除这条评论吗？', '提示', {
+      confirmButtonText: '删除',
+      cancelButtonText: '取消',
+      type: 'warning',
+    })
+    await deleteComment(commentId)
+    ElMessage.success('已删除')
+    if (post.value) {
+      const p = await getPostDetail(postId.value)
+      post.value = p.data.data
+    }
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('删除失败')
+  }
+}
+
 async function handleLike(p: FeedPost) {
   try {
     if (p.liked) {
@@ -323,6 +354,23 @@ async function handleLike(p: FeedPost) {
       p.likeCount = (p.likeCount || 0) + 1
     }
   } catch { /* handled */ }
+}
+
+async function handleReport(targetId: number, targetType: string) {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入举报理由', '举报', {
+      confirmButtonText: '提交',
+      cancelButtonText: '取消',
+      inputPattern: /.+/,
+      inputErrorMessage: '请输入举报理由',
+    })
+    if (value) {
+      await submitReport({ targetType, targetId, reason: value })
+      ElMessage.success('举报已提交')
+    }
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('举报失败')
+  }
 }
 
 async function handleDeletePost(id: number) {
@@ -493,6 +541,15 @@ onMounted(async () => {
 .post-name { font-weight: 600; font-size: 15px; }
 .post-time { font-size: 12px; color: var(--el-text-color-secondary); }
 
+.report-btn {
+  padding: 4px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--el-text-color-secondary);
+  &:hover { color: var(--el-color-warning); }
+}
+
 .delete-btn {
   padding: 4px;
   background: none;
@@ -624,6 +681,25 @@ onMounted(async () => {
   color: var(--el-text-color-primary);
   word-break: break-word;
   white-space: pre-wrap;
+}
+
+.comment-deleted .comment-text,
+.comment-deleted .reply-text {
+  color: var(--el-text-color-placeholder);
+  font-style: italic;
+}
+
+.delete-comment-btn {
+  color: var(--el-color-danger);
+}
+
+.delete-comment-btn:hover {
+  color: var(--el-color-danger);
+}
+
+.comment-deleted .comment-author,
+.comment-deleted .reply-author {
+  opacity: 0.8;
 }
 
 .comment-footer {

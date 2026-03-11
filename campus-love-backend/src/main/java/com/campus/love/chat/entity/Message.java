@@ -22,6 +22,11 @@ public class Message {
     private Integer msgType;
     private Boolean isRead;
 
+    /** 软删除：0 正常，1 已撤回（业务手动设置，不用 @TableLogic） */
+    private Integer deleted;
+
+    public static final int DELETED = 1;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }

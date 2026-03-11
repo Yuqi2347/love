@@ -11,6 +11,7 @@ export interface ChatMessage {
   content: string
   msgType: number
   isRead: boolean
+  deleted?: boolean
   createdAt: string
 }
 
@@ -33,6 +34,10 @@ export function getChatHistory(otherUserId: number, page = 0, size = 20) {
 
 export function markAsRead(otherUserId: number) {
   return request.put<ApiResult<void>>(`/chat/read/${otherUserId}`)
+}
+
+export function recallMessage(messageId: number) {
+  return request.delete<ApiResult<void>>(`/chat/message/${messageId}`)
 }
 
 /** 邀约详情内嵌群聊历史（仅群成员可拉取） */

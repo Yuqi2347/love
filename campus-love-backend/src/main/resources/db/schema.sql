@@ -3,7 +3,7 @@
 -- 新环境首次初始化时只需执行本脚本一次：
 --   mysql -uroot -p campus_love < schema.sql
 -- 或在客户端：SOURCE /绝对路径/schema.sql;
--- 已有数据库升级请使用增量脚本 V2～V16。
+-- 已有数据库升级请使用增量脚本 V2～V17。
 -- =============================================
 
 CREATE DATABASE IF NOT EXISTS campus_love
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS t_follow (
     INDEX idx_following (following_id)
 ) COMMENT '关注关系';
 
--- 聊天消息表（含 V4 群聊 group_id）
+-- 聊天消息表（含 V4 群聊 group_id，V17 软删除）
 CREATE TABLE IF NOT EXISTS t_message (
     id              BIGINT PRIMARY KEY AUTO_INCREMENT,
     sender_id       BIGINT          NOT NULL,
@@ -71,6 +71,7 @@ CREATE TABLE IF NOT EXISTS t_message (
     content         TEXT            NOT NULL,
     msg_type        TINYINT         NOT NULL DEFAULT 1 COMMENT '1=文字 2=图片 3=表情',
     is_read         TINYINT(1)      DEFAULT 0,
+    deleted         TINYINT(1)      DEFAULT 0 COMMENT '0=正常 1=已撤回（V17）',
     created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_conversation (sender_id, receiver_id),
     INDEX idx_receiver (receiver_id, is_read),
@@ -92,6 +93,7 @@ CREATE TABLE IF NOT EXISTS t_feed_post (
     link_image      VARCHAR(500)    DEFAULT NULL COMMENT '链接预览图',
     like_count      INT             DEFAULT 0 COMMENT '点赞数',
     comment_count   INT             DEFAULT 0 COMMENT '评论数',
+    visibility      VARCHAR(16)     DEFAULT 'ALL' COMMENT '可见性：ALL/FOLLOWERS/FRIENDS/SELF（V17）',
     deleted         TINYINT(1)      DEFAULT 0,
     created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME        DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -108,7 +110,7 @@ CREATE TABLE IF NOT EXISTS t_feed_like (
     UNIQUE KEY uk_like (post_id, user_id)
 ) COMMENT '朋友圈点赞';
 
--- 朋友圈评论表（含 V16 被回复用户ID）
+-- 朋友圈评论表（含 V16 被回复用户ID，V17 软删除）
 CREATE TABLE IF NOT EXISTS t_feed_comment (
     id              BIGINT PRIMARY KEY AUTO_INCREMENT,
     post_id         BIGINT          NOT NULL,
@@ -116,6 +118,7 @@ CREATE TABLE IF NOT EXISTS t_feed_comment (
     content         VARCHAR(512)    NOT NULL,
     parent_id       BIGINT          DEFAULT NULL COMMENT '父评论ID，用于回复',
     replied_user_id BIGINT          DEFAULT NULL COMMENT '被回复的用户ID（V16）',
+    deleted         TINYINT(1)      DEFAULT 0 COMMENT '0=正常 1=已删除（V17）',
     created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_post (post_id)
 ) COMMENT '朋友圈评论';
@@ -345,8 +348,8 @@ CREATE TABLE IF NOT EXISTS t_moment_enrollment (
     pool        VARCHAR(4)   NOT NULL COMMENT '匹配池: MF/MM/FF',
     status      VARCHAR(20)  DEFAULT 'WAITING' COMMENT 'WAITING/MATCHED/UNMATCHED',
     created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_user_week (user_id, week_tag)
-) COMMENT '心动一刻每周报名记录';
+    UNIQUE KEY uk_user_week_pool (user_id, week_tag, pool)
+) COMMENT '心动一刻每周报名记录（V17 支持同周多池）';
 
 CREATE TABLE IF NOT EXISTS t_moment_match_result (
     id          BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -361,3 +364,19 @@ CREATE TABLE IF NOT EXISTS t_moment_match_result (
     INDEX idx_user_a (user_id_a),
     INDEX idx_user_b (user_id_b)
 ) COMMENT '心动一刻每周配对结果';
+
+-- 举报记录表（V17）
+CREATE TABLE IF NOT EXISTS t_report (
+    id            BIGINT PRIMARY KEY AUTO_INCREMENT,
+    reporter_id   BIGINT NOT NULL COMMENT '举报人',
+    target_type   VARCHAR(16) NOT NULL COMMENT 'POST/COMMENT/USER/MESSAGE',
+    target_id     BIGINT NOT NULL COMMENT '目标ID',
+    reason        VARCHAR(500) NOT NULL COMMENT '举报理由',
+    status        VARCHAR(16) DEFAULT 'PENDING' COMMENT 'PENDING/REVIEWED/RESOLVED',
+    admin_note    VARCHAR(500) DEFAULT NULL COMMENT '管理员备注',
+    created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
+    reviewed_at   DATETIME DEFAULT NULL,
+    INDEX idx_reporter (reporter_id),
+    INDEX idx_target (target_type, target_id),
+    INDEX idx_status (status)
+) COMMENT '举报记录表';

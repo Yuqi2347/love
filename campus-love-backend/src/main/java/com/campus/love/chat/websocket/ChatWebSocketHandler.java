@@ -95,7 +95,7 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         }
     }
 
-    private void sendToUser(Long userId, String message) {
+    public void sendToUser(Long userId, String message) {
         WebSocketSession session = SESSIONS.get(userId);
         if (session != null && session.isOpen()) {
             try {

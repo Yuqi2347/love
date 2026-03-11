@@ -44,6 +44,13 @@ public class ChatController {
         return Result.success(chatService.getChatHistory(otherUserId, page, size));
     }
 
+    @Operation(summary = "撤回消息（1小时内）")
+    @DeleteMapping("/message/{messageId}")
+    public Result<Void> recallMessage(@PathVariable Long messageId) {
+        chatService.recallMessage(messageId);
+        return Result.success();
+    }
+
     @Operation(summary = "标记消息为已读")
     @PutMapping("/read/{otherUserId}")
     public Result<Void> markAsRead(@PathVariable Long otherUserId) {

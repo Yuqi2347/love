@@ -10,6 +10,7 @@ import com.campus.love.user.dto.UserProfileRequest;
 import com.campus.love.user.dto.UserProfileResponse;
 import com.campus.love.user.dto.UserSearchItemResponse;
 import com.campus.love.user.entity.User;
+import com.campus.love.feed.constants.VisibilityConstants;
 import com.campus.love.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -81,7 +82,9 @@ public class UserService {
         user.setInterests(request.getInterests());
         if (request.getFeedVisibility() != null && !request.getFeedVisibility().isEmpty()) {
             String v = request.getFeedVisibility().toUpperCase();
-            if ("ALL".equals(v) || "FOLLOWING".equals(v) || "FOLLOWERS".equals(v) || "FRIENDS".equals(v) || "SELF".equals(v)) {
+            if (VisibilityConstants.ALL.equals(v) || VisibilityConstants.FOLLOWING.equals(v)
+                    || VisibilityConstants.FOLLOWERS.equals(v) || VisibilityConstants.FRIENDS.equals(v)
+                    || VisibilityConstants.SELF.equals(v)) {
                 user.setFeedVisibility(v);
             }
         }
@@ -124,9 +127,11 @@ public class UserService {
         Long userId = CurrentUser.getId();
         User user = userMapper.selectById(userId);
         if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
-        String v = visibility != null ? visibility.trim().toUpperCase() : "ALL";
-        if (!"ALL".equals(v) && !"FOLLOWING".equals(v) && !"FOLLOWERS".equals(v) && !"FRIENDS".equals(v) && !"SELF".equals(v)) {
-            v = "ALL";
+        String v = visibility != null ? visibility.trim().toUpperCase() : VisibilityConstants.ALL;
+        if (!VisibilityConstants.ALL.equals(v) && !VisibilityConstants.FOLLOWING.equals(v)
+                && !VisibilityConstants.FOLLOWERS.equals(v) && !VisibilityConstants.FRIENDS.equals(v)
+                && !VisibilityConstants.SELF.equals(v)) {
+            v = VisibilityConstants.ALL;
         }
         user.setFeedVisibility(v);
         userMapper.updateById(user);
@@ -200,7 +205,7 @@ public class UserService {
                 .bio(user.getBio())
                 .interests(user.getInterests())
                 .profileComplete(user.getProfileComplete())
-                .feedVisibility(user.getFeedVisibility() != null ? user.getFeedVisibility() : "ALL")
+                .feedVisibility(user.getFeedVisibility() != null ? user.getFeedVisibility() : VisibilityConstants.ALL)
                 .build();
     }
 }

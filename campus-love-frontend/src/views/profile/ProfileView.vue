@@ -184,31 +184,20 @@
       </div>
     </div>
 
-    <!-- User's Posts -->
-    <div class="profile-posts">
-      <div class="posts-tabs">
-        <button class="tab-btn active">动态</button>
+    <!-- 动态入口卡片（微信风格） -->
+    <div v-if="profile" class="profile-posts-entry" @click="$router.push(`/profile/${profileId}/posts`)">
+      <div class="posts-entry-thumbnails">
+        <img
+          v-for="(url, idx) in postSummary.recentImageUrls"
+          :key="idx"
+          :src="getMediaUrl(url)"
+          class="posts-entry-thumb"
+        />
+        <div v-if="postSummary.recentImageUrls.length < 3" class="posts-entry-placeholder" />
       </div>
-
-      <div v-for="post in posts" :key="post.id" class="feed-item">
-        <div class="feed-item-content">
-          <p class="feed-content">{{ post.content }}</p>
-          <div class="feed-meta">
-            <span>{{ formatTime(post.createdAt) }}</span>
-            <span>❤️ {{ post.likeCount }} · 💬 {{ post.commentCount }}</span>
-          </div>
-        </div>
-        <button
-          v-if="canDeletePost(post)"
-          class="feed-delete-btn"
-          title="删除"
-          @click="handleDeletePost(post.id)"
-        >
-          🗑️
-        </button>
-      </div>
-      <div v-if="!posts.length" class="empty-hint">
-        暂无动态
+      <div class="posts-entry-info">
+        <span class="posts-entry-label">动态</span>
+        <span class="posts-entry-count">{{ postSummary.total }}条</span>
       </div>
     </div>
   </div>
@@ -411,7 +400,7 @@ import { getUserProfile, updateFeedVisibility, type UserProfile } from '@/api/us
 import { getMatchDetail, type MatchResult } from '@/api/matchApi'
 import { getInviteStats, getUserInviteStats, type InviteStats } from '@/api/inviteApi'
 import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, setUserRemark, type FollowUser } from '@/api/followApi'
-import { getUserTimelinePosts, getUserDiscoveryPosts, deletePost, type FeedPost } from '@/api/feedApi'
+import { getUserPostsSummary } from '@/api/feedApi'
 import { ElMessage } from 'element-plus'
 import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton, InfoFilled, ArrowLeft } from '@element-plus/icons-vue'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
@@ -443,7 +432,7 @@ const profile = ref<UserProfile | null>(null)
 const followStatus = ref<string>(FollowStatus.NONE)
 const matchResult = ref<MatchResult | null>(null)
 const inviteStats = ref<InviteStats | null>(null)
-const posts = ref<FeedPost[]>([])
+const postSummary = ref<{ total: number; recentImageUrls: string[] }>({ total: 0, recentImageUrls: [] })
 const followingCount = ref(0)
 const followerCount = ref(0)
 const mutualCount = ref(0)
@@ -594,12 +583,6 @@ const displayAge = computed(() => {
   return null
 })
 
-// 判断是否可以删除帖子（管理员或帖子作者）
-function canDeletePost(post: FeedPost): boolean {
-  const isAdmin = userStore.user?.isAdmin || false
-  const isOwner = post.userId === userStore.user?.id
-  return isAdmin || isOwner
-}
 
 // 打开关注列表
 function handleOpenFollowing() {
@@ -659,7 +642,7 @@ async function loadProfile() {
     }
 
     // 加载帖子
-    await loadPostsByType()
+    await loadPostSummary()
 
     // 他人页面：获取关注状态和匹配度（先加载这些重要数据）
     if (!isMe.value) {
@@ -708,28 +691,18 @@ async function loadFollowCounts() {
   }
 }
 
-async function loadPostsByType() {
+async function loadPostSummary() {
   if (!profileId.value) return
   try {
-    // 合并获取所有动态
-    const [timelineRes, discoveryRes] = await Promise.all([
-      getUserTimelinePosts(profileId.value, 0, 20),
-      getUserDiscoveryPosts(profileId.value, 0, 20)
-    ])
-    const allPosts = [...(timelineRes.data.data || []), ...(discoveryRes.data.data || [])]
-    // 按时间倒序
-    posts.value = allPosts.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    const res = await getUserPostsSummary(profileId.value)
+    postSummary.value = res.data.data || { total: 0, recentImageUrls: [] }
   } catch { /* handled */ }
 }
 
-async function handleDeletePost(postId: number) {
-  try {
-    await deletePost(postId)
-    posts.value = posts.value.filter(p => p.id !== postId)
-    ElMessage.success('删除成功')
-  } catch {
-    ElMessage.error('删除失败')
-  }
+function getMediaUrl(url: string | null): string {
+  if (!url) return ''
+  if (url.startsWith('http') || url.startsWith('/api')) return url
+  return '/api' + (url.startsWith('/') ? url : '/' + url)
 }
 
 function formatTime(timeStr: string): string {
@@ -1405,7 +1378,58 @@ async function handleAvatarChange(event: Event) {
   .bar-val { width: 28px; font-size: 13px; font-weight: 700; color: $text-primary; text-align: right; }
 }
 
-.profile-posts { margin-top: 8px; }
+.profile-posts-entry {
+  margin: 16px 24px;
+  padding: 12px 16px;
+  background: $bg-secondary;
+  border-radius: $radius-lg;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  cursor: pointer;
+  transition: background $transition-fast;
+
+  &:hover {
+    background: $bg-tertiary;
+  }
+}
+
+.posts-entry-thumbnails {
+  display: flex;
+  gap: 4px;
+  width: 80px;
+  height: 80px;
+  flex-shrink: 0;
+}
+
+.posts-entry-thumb {
+  flex: 1;
+  object-fit: cover;
+  border-radius: 4px;
+}
+
+.posts-entry-placeholder {
+  flex: 1;
+  background: $bg-tertiary;
+  border-radius: 4px;
+}
+
+.posts-entry-info {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.posts-entry-label {
+  font-size: 16px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.posts-entry-count {
+  font-size: 13px;
+  color: $text-muted;
+}
 
 .posts-tabs {
   display: flex;

@@ -62,6 +62,14 @@
               <div class="feed-time">{{ formatTime(item.post.createdAt) }}</div>
             </div>
             <button
+              type="button"
+              class="feed-report-btn"
+              title="举报"
+              @click.stop="handleReport(item.post.id, 'POST')"
+            >
+              <el-icon><Flag /></el-icon>
+            </button>
+            <button
               v-if="canDeletePost(item.post)"
               type="button"
               class="feed-delete-btn"
@@ -192,6 +200,15 @@
           </div>
         </div>
 
+        <!-- 可见范围 -->
+        <el-form-item label="可见范围">
+          <el-select v-model="postVisibility" placeholder="选择可见范围" style="width: 100%">
+            <el-option label="所有人" value="ALL" />
+            <el-option label="关注我的人" value="FOLLOWERS" />
+            <el-option label="朋友" value="FRIENDS" />
+            <el-option label="仅自己" value="SELF" />
+          </el-select>
+        </el-form-item>
       </el-form>
       <template #footer>
         <el-button @click="closePostDialog">取消</el-button>
@@ -224,10 +241,11 @@ import {
   type FeedPost,
   type UserLevelInfo,
 } from '@/api/feedApi'
+import { submitReport } from '@/api/reportApi'
 import { useUserStore } from '@/store/userStore'
 import { useInviteStore } from '@/store/inviteStore'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Search } from '@element-plus/icons-vue'
+import { Plus, Delete, Search, Flag } from '@element-plus/icons-vue'
 import type { Invite } from '@/api/inviteApi'
 import {
   InviteType,
@@ -251,6 +269,7 @@ const searchKeyword = ref('')
 const activeTab = ref<'recommend' | 'post' | 'following'>('recommend')
 const showPostDialog = ref(false)
 const postContent = ref('')
+const postVisibility = ref('ALL')
 const posting = ref(false)
 
 // 多媒体上传状态
@@ -425,7 +444,8 @@ async function handlePost() {
       videos: uploadedVideos.value.length ? uploadedVideos.value.join(',') : undefined,
       linkUrl: linkPreview.value.url || undefined,
       linkTitle: linkPreview.value.title || undefined,
-      linkImage: linkPreview.value.image || undefined
+      linkImage: linkPreview.value.image || undefined,
+      visibility: postVisibility.value || 'ALL'
     })
     posts.value.unshift(res.data.data)
     resetPostForm()
@@ -442,6 +462,7 @@ async function handlePost() {
 
 function resetPostForm() {
   postContent.value = ''
+  postVisibility.value = 'ALL'
   uploadedImages.value = []
   uploadedVideos.value = []
   linkPreview.value = { url: '', title: '', image: '' }
@@ -550,6 +571,23 @@ function getMediaUrl(url: string | null): string {
   }
   // 添加 /api 前缀
   return '/api' + (url.startsWith('/') ? url : '/' + url)
+}
+
+async function handleReport(targetId: number, targetType: string) {
+  try {
+    const { value } = await ElMessageBox.prompt('请输入举报理由', '举报', {
+      confirmButtonText: '提交',
+      cancelButtonText: '取消',
+      inputPattern: /.+/,
+      inputErrorMessage: '请输入举报理由',
+    })
+    if (value) {
+      await submitReport({ targetType, targetId, reason: value })
+      ElMessage.success('举报已提交')
+    }
+  } catch (e) {
+    if (e !== 'cancel') ElMessage.error('举报失败')
+  }
 }
 
 async function handleDeletePost(postId: number) {
@@ -824,6 +862,17 @@ async function handleDeletePost(postId: number) {
 .feed-user {
   flex: 1;
   cursor: pointer;
+}
+
+.feed-report-btn {
+  display: flex;
+  align-items: center;
+  padding: 6px 8px;
+  border: none;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+  &:hover { color: var(--el-color-warning); }
 }
 
 .feed-delete-btn {

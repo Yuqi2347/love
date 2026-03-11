@@ -22,6 +22,7 @@ public class FeedPostResponse {
     private Integer likeCount;
     private Integer commentCount;
     private Boolean liked;
+    private String visibility;
     private String createdAt;
     private List<CommentItem> comments;
 
@@ -36,5 +37,6 @@ public class FeedPostResponse {
         private Long parentId;
         private String repliedToName;  // 被回复的用户昵称
         private String createdAt;
+        private Boolean deleted;  // 是否已删除
     }
 }

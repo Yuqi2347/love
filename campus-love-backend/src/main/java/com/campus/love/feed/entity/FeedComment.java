@@ -20,6 +20,11 @@ public class FeedComment {
     /** 被回复的用户ID（用于显示"回复 @用户名"） */
     private Long repliedUserId;
 
+    /** 软删除：0 正常，1 已删除（业务手动设置，不用 @TableLogic） */
+    private Integer deleted;
+
+    public static final int DELETED = 1;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 }
