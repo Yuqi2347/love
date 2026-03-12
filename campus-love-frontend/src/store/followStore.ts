@@ -48,6 +48,12 @@ export const useFollowStore = defineStore('follow', () => {
     followedUsers.value = followedUsers.value.filter(u => u.userId !== userId)
   }
 
+  function setRemark(userId: number, remark: string) {
+    followedUsers.value = followedUsers.value.map(u =>
+      u.userId === userId ? { ...u, remark: remark || '' } : u
+    )
+  }
+
   function clear() {
     followedIds.value = []
     followedUsers.value = []
@@ -62,6 +68,7 @@ export const useFollowStore = defineStore('follow', () => {
     loadFollowedIds,
     addFollowed,
     removeFollowed,
+    setRemark,
     clear,
   }
 })

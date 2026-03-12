@@ -157,6 +157,28 @@ export function formatInviteTime(timeStr: string): string {
   return date.toLocaleDateString('zh-CN')
 }
 
+// 格式化邀约时间区间：有结束时间显示「开始-结束」，无则显示「开始-」
+export function formatInviteTimeRange(inviteTime: string, inviteEndTime?: string | null): string {
+  const start = new Date(inviteTime)
+  const startStr = start.toLocaleString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  if (!inviteEndTime) {
+    return `${startStr}-`
+  }
+  const end = new Date(inviteEndTime)
+  const endStr = end.toLocaleString('zh-CN', {
+    month: 'numeric',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  })
+  return `${startStr}-${endStr}`
+}
+
 // 格式化邀约周期配置
 export function formatPeriodConfig(config: string): string {
   if (!config) return ''

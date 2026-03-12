@@ -57,25 +57,24 @@ img {
   background: $text-muted;
 }
 
-// 主题按钮
+// 主题按钮（荔枝红边框+文字，避免大块填充）
 .btn-primary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 6px;
   padding: 10px 24px;
-  background: $primary-gradient;
-  color: $text-inverse;
+  background: rgba($primary, 0.06);
+  color: $primary;
+  border: 1.5px solid $primary;
   border-radius: $radius-full;
   font-weight: 600;
   font-size: 15px;
   transition: all $transition-base;
-  border: none;
   cursor: pointer;
-  box-shadow: 0 4px 12px rgba(255, 107, 129, 0.2); // 常态就有轻微发光
 
   &:hover {
-    opacity: 0.95;
+    background: rgba($primary, 0.1);
     box-shadow: $shadow-glow;
     transform: translateY(-2px);
   }
@@ -161,10 +160,11 @@ img {
   white-space: nowrap;
 }
 
-// Element Plus 深度覆盖
+// Element Plus 深度覆盖（荔枝红边框+文字）
 .el-button--primary {
-  background: $primary-gradient !important;
-  border: none !important;
+  background: rgba($primary, 0.06) !important;
+  color: $primary !important;
+  border: 1.5px solid $primary !important;
   border-radius: $radius-full !important;
 }
 

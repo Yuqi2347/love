@@ -5,12 +5,14 @@ import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.enums.FollowStatusEnum;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
+import com.campus.love.common.constants.RedisKeyConstants;
 import com.campus.love.follow.dto.FollowResponse;
 import com.campus.love.follow.entity.Follow;
 import com.campus.love.follow.mapper.FollowMapper;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
+import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -28,6 +30,7 @@ public class FollowService {
 
     private final FollowMapper followMapper;
     private final UserMapper userMapper;
+    private final RedisTemplate<String, Object> redisTemplate;
 
     @Transactional
     public void follow(Long targetUserId) {
@@ -76,6 +79,9 @@ public class FollowService {
         }
 
         followMapper.deleteById(follow.getId());
+
+        redisTemplate.delete(RedisKeyConstants.chatNonMutualSent(currentUserId, targetUserId));
+        redisTemplate.delete(RedisKeyConstants.chatNonMutualSent(targetUserId, currentUserId));
 
         // If was mutual, update reverse to non-mutual
         if (Boolean.TRUE.equals(follow.getIsMutual())) {

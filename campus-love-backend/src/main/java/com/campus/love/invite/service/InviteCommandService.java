@@ -68,20 +68,35 @@ public class InviteCommandService {
         invite.setInvitePeriod(request.getInvitePeriod());
         invite.setPeriodConfig(request.getPeriodConfig());
         invite.setInviteTime(TimeParseUtil.parseUtcToLocalDateTime(request.getInviteTime()));
+        invite.setInviteEndTime(request.getInviteEndTime() != null && !request.getInviteEndTime().isBlank()
+                ? TimeParseUtil.parseUtcToLocalDateTime(request.getInviteEndTime()) : null);
         invite.setLocation(request.getLocation());
         if (InviteModeEnum.PRIVATE.name().equals(request.getInviteMode())) {
             invite.setMaxParticipants(1);
         } else {
             invite.setMaxParticipants(request.getMaxParticipants());
         }
-        invite.setParticipantCount(0);
         invite.setStatus(InviteStatusEnum.RECRUITING.name());
         invite.setDeadlineHours(request.getDeadlineHours());
         invite.setAtmosphereTags(request.getAtmosphereTags());
         invite.setIsUrgent(request.getIsUrgent() != null && request.getIsUrgent());
         invite.setDeleted(false);
 
+        if (InviteModeEnum.PUBLIC.name().equals(request.getInviteMode())) {
+            invite.setParticipantCount(1);
+        } else {
+            invite.setParticipantCount(0);
+        }
+
         inviteMapper.insert(invite);
+
+        if (InviteModeEnum.PUBLIC.name().equals(request.getInviteMode())) {
+            InviteParticipant creatorParticipant = new InviteParticipant();
+            creatorParticipant.setInviteId(invite.getId());
+            creatorParticipant.setUserId(currentUserId);
+            creatorParticipant.setJoinAt(LocalDateTime.now());
+            participantMapper.insert(creatorParticipant);
+        }
 
         if (InviteModeEnum.PUBLIC.name().equals(invite.getInviteMode())
                 || InviteModeEnum.PRIVATE.name().equals(invite.getInviteMode())) {

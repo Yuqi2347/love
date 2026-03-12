@@ -20,11 +20,15 @@
             class="post-avatar"
             @click="$router.push(`/profile/${post.userId}`)"
           />
-          <div class="post-user" @click="$router.push(`/profile/${post.userId}`)">
-            <div class="post-name">{{ post.nickname }}</div>
+          <div class="post-user">
+            <div class="post-name" @click="$router.push(`/profile/${post.userId}`)">{{ post.nickname }}</div>
             <div class="post-time">{{ formatTime(post.createdAt) }}</div>
           </div>
-          <button class="report-btn" title="举报" @click="handleReport(post.id, 'POST')">
+          <button
+            :class="['report-btn', { reported: postReported }]"
+            :title="postReported ? '已举报' : '举报'"
+            @click="handleReportClick(post.id, 'POST')"
+          >
             <el-icon><Flag /></el-icon>
           </button>
           <button
@@ -67,15 +71,15 @@
             :class="['action-btn', { active: post.liked }]"
             @click="handleLike(post)"
           >
-            <span class="action-icon">{{ post.liked ? '❤️' : '🤍' }}</span>
+            <el-icon :size="18"><StarFilled v-if="post.liked" /><Star v-else /></el-icon>
             <span>{{ post.likeCount }}</span>
           </button>
           <button class="action-btn" disabled>
-            <span class="action-icon">💬</span>
+            <el-icon :size="18"><ChatDotRound /></el-icon>
             <span>{{ post.commentCount }}</span>
           </button>
           <button class="action-btn" @click="openShareDialog">
-            <span class="action-icon">🔗</span>
+            <el-icon :size="18"><Share /></el-icon>
             <span>分享</span>
           </button>
         </div>
@@ -105,6 +109,18 @@
                   <span class="comment-floor">#{{ idx + 1 }}</span>
                 </div>
                 <div class="comment-text">{{ thread.comment.content }}</div>
+                <div v-if="thread.comment.images && !thread.comment.deleted" class="comment-images">
+                  <el-image
+                    v-for="(img, i) in thread.comment.images.split(',')"
+                    :key="i"
+                    :src="imageUrl(img)"
+                    :preview-src-list="thread.comment.images.split(',').map(u => imageUrl(u))"
+                    :initial-index="i"
+                    fit="cover"
+                    class="comment-img"
+                    preview-teleported
+                  />
+                </div>
                 <div class="comment-footer">
                   <span class="comment-time">{{ formatTime(thread.comment.createdAt) }}</span>
                   <button v-if="!thread.comment.deleted" class="reply-btn" @click="handleReplyClick(thread.comment, thread.comment)">回复</button>
@@ -133,6 +149,18 @@
                       <span class="reply-target">@{{ reply.repliedToName }}</span>
                     </template>
                     <span class="reply-text">{{ reply.deleted ? '' : '：' }}{{ reply.content }}</span>
+                    <div v-if="reply.images && !reply.deleted" class="comment-images">
+                      <el-image
+                        v-for="(img, i) in reply.images.split(',')"
+                        :key="i"
+                        :src="imageUrl(img)"
+                        :preview-src-list="reply.images.split(',').map(u => imageUrl(u))"
+                        :initial-index="i"
+                        fit="cover"
+                        class="comment-img"
+                        preview-teleported
+                      />
+                    </div>
                   </div>
                   <div class="reply-footer">
                     <span class="comment-time">{{ formatTime(reply.createdAt) }}</span>
@@ -175,7 +203,20 @@
             <span>回复 @{{ replyingTo.nickname }}</span>
             <button class="reply-cancel" @click="cancelReply">✕</button>
           </div>
+          <div v-if="commentImages.length" class="comment-images-preview">
+            <div v-for="(img, i) in commentImages" :key="i" class="comment-preview-item">
+              <img :src="imageUrl(img)" class="comment-preview-img" />
+              <button type="button" class="comment-preview-remove" @click="removeCommentImage(i)">
+                <el-icon><Close /></el-icon>
+              </button>
+            </div>
+          </div>
           <div class="input-row">
+            <input ref="commentImageInputRef" type="file" accept="image/*" multiple class="hidden-file-input" @change="handleCommentImageSelect" />
+            <button type="button" class="icon-btn" title="图片" @click="commentImageInputRef?.click()">
+              <el-icon><Picture /></el-icon>
+            </button>
+            <EmojiPicker @insert="insertCommentEmoji" />
             <el-input
               ref="commentInputRef"
               v-model="commentText"
@@ -185,7 +226,7 @@
             />
             <button
               class="send-btn"
-              :disabled="!commentText.trim() || submitting"
+              :disabled="(!commentText.trim() && !commentImages.length) || submitting"
               @click="submitComment"
             >
               发送
@@ -200,6 +241,14 @@
       <p>帖子不存在或已被删除</p>
       <button class="btn-outline" @click="goBack">返回</button>
     </div>
+
+    <!-- 举报弹窗 -->
+    <ReportDialog
+      v-model="showReportDialog"
+      :target-type="reportTargetType"
+      :target-id="reportTargetId"
+      @success="onReportSuccess"
+    />
 
     <!-- 分享弹窗 -->
     <ShareDialog
@@ -224,10 +273,13 @@ import {
   type FeedPost,
   type FeedComment,
 } from '@/api/feedApi'
-import { submitReport } from '@/api/reportApi'
+import { checkReported, getMyReport } from '@/api/reportApi'
+import ReportDialog from '@/components/ReportDialog.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Delete, Flag } from '@element-plus/icons-vue'
+import { ArrowLeft, Delete, Flag, Picture, Close } from '@element-plus/icons-vue'
 import ShareDialog from '@/components/ShareDialog.vue'
+import EmojiPicker from '@/components/EmojiPicker.vue'
+import { uploadImage } from '@/api/feedApi'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect fill="%23f0f2f5" width="44" height="44" rx="22"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="20">👤</text></svg>'
 
@@ -239,11 +291,19 @@ const postId = computed(() => Number(route.params.postId))
 const post = ref<FeedPost | null>(null)
 const loading = ref(true)
 const commentText = ref('')
+const commentImages = ref<string[]>([])
 const submitting = ref(false)
 const commentInputRef = ref()
+const commentImageInputRef = ref<HTMLInputElement | null>(null)
 
 // 分享相关状态
 const showShareDialog = ref(false)
+
+// 举报相关
+const showReportDialog = ref(false)
+const reportTargetType = ref('POST')
+const reportTargetId = ref(0)
+const postReported = ref(false)
 
 function openShareDialog() {
   showShareDialog.value = true
@@ -396,21 +456,30 @@ async function handleLike(p: FeedPost) {
   } catch { /* handled */ }
 }
 
-async function handleReport(targetId: number, targetType: string) {
+async function handleReportClick(targetId: number, targetType: string) {
   try {
-    const { value } = await ElMessageBox.prompt('请输入举报理由', '举报', {
-      confirmButtonText: '提交',
-      cancelButtonText: '取消',
-      inputPattern: /.+/,
-      inputErrorMessage: '请输入举报理由',
-    })
-    if (value) {
-      await submitReport({ targetType, targetId, reason: value })
-      ElMessage.success('举报已提交')
+    const res = await checkReported(targetType, targetId)
+    if (res.data.data) {
+      const myRes = await getMyReport(targetType, targetId)
+      const info = myRes.data.data
+      const types = info?.violationTypes ? info.violationTypes.split(',') : []
+      const reason = info?.reason || ''
+      const adminNote = info?.adminNote || ''
+      let msg = types.length ? `举报类型：${types.join('、')}${reason ? `\n理由：${reason}` : ''}` : '您已举报过该内容'
+      if (adminNote) msg += `\n\n举报反馈：${adminNote}`
+      ElMessage.info(msg)
+      return
     }
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('举报失败')
+    reportTargetType.value = targetType
+    reportTargetId.value = targetId
+    showReportDialog.value = true
+  } catch {
+    ElMessage.error('操作失败')
   }
+}
+
+function onReportSuccess() {
+  postReported.value = true
 }
 
 async function handleDeletePost(id: number) {
@@ -450,18 +519,45 @@ function handleReplyClick(targetComment: FeedComment, rootComment: FeedComment) 
 function cancelReply() {
   replyingTo.value = null
   commentText.value = ''
+  commentImages.value = []
+}
+
+function insertCommentEmoji(emoji: string) {
+  commentText.value += emoji
+}
+
+async function handleCommentImageSelect(e: Event) {
+  const target = e.target as HTMLInputElement
+  const files = target.files
+  if (!files?.length) return
+  for (let i = 0; i < files.length; i++) {
+    const file = files[i]
+    if (!file.type.startsWith('image/')) continue
+    try {
+      const res = await uploadImage(file)
+      const url = res.data.data
+      if (url) commentImages.value.push(url)
+    } catch {
+      ElMessage.error('图片上传失败')
+    }
+  }
+  if (target) target.value = ''
+}
+
+function removeCommentImage(idx: number) {
+  commentImages.value.splice(idx, 1)
 }
 
 async function submitComment() {
   const text = commentText.value.trim()
-  if (!text || !post.value) return
+  const imagesStr = commentImages.value.length ? commentImages.value.join(',') : ''
+  if ((!text && !imagesStr) || !post.value) return
   submitting.value = true
   try {
-    // parentId 始终指向根评论（确保后端归组正确），repliedUserId 指向实际被回复人
     const parentId = replyingTo.value ? replyingTo.value.rootCommentId : null
     const repliedUserId = replyingTo.value ? replyingTo.value.repliedUserId : null
 
-    await addComment({ postId: post.value.id, content: text, parentId, repliedUserId })
+    await addComment({ postId: post.value.id, content: text || '', images: imagesStr || undefined, parentId, repliedUserId })
 
     const newComment: FeedComment = {
       id: Date.now(),
@@ -469,6 +565,7 @@ async function submitComment() {
       nickname: userStore.user!.nickname,
       avatarUrl: userStore.user!.avatarUrl,
       content: text,
+      images: imagesStr || null,
       parentId: parentId,
       repliedToName: replyingTo.value?.nickname || null,
       createdAt: new Date().toISOString(),
@@ -477,6 +574,7 @@ async function submitComment() {
     post.value.comments.push(newComment)
     post.value.commentCount = (post.value.commentCount || 0) + 1
     commentText.value = ''
+    commentImages.value = []
     replyingTo.value = null
     ElMessage.success('评论成功')
   } catch {
@@ -490,6 +588,10 @@ onMounted(async () => {
   try {
     const res = await getPostDetail(postId.value)
     post.value = res.data.data || null
+    if (post.value) {
+      const reported = await checkReported('POST', post.value.id)
+      postReported.value = !!reported.data.data
+    }
   } catch {
     post.value = null
   } finally {
@@ -577,12 +679,15 @@ onMounted(async () => {
   object-fit: cover;
 }
 
-.post-user { flex: 1; cursor: pointer; }
-.post-name { font-weight: 600; font-size: 15px; }
-.post-time { font-size: 12px; color: var(--el-text-color-secondary); }
+.post-user { flex: 1; }
+.post-name { font-weight: 600; font-size: 15px; cursor: pointer; }
+.post-time { font-size: 12px; color: var(--el-text-color-secondary); cursor: default; }
 
 .report-btn {
   padding: 4px;
+  &.reported {
+    color: var(--el-color-primary);
+  }
   background: none;
   border: none;
   cursor: pointer;
@@ -651,7 +756,7 @@ onMounted(async () => {
   font-size: 14px;
   color: var(--el-text-color-secondary);
   cursor: pointer;
-  &.active { color: #f43f5e; }
+  &.active { color: $primary; }
   &:hover:not(:disabled) { color: var(--el-color-primary); }
 }
 
@@ -735,6 +840,82 @@ onMounted(async () => {
   color: var(--el-text-color-primary);
   word-break: break-word;
   white-space: pre-wrap;
+  cursor: default;
+}
+
+.comment-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+
+  .comment-img {
+    width: 80px;
+    height: 80px;
+    border-radius: 8px;
+    object-fit: cover;
+  }
+}
+
+.comment-images-preview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+
+  .comment-preview-item {
+    position: relative;
+    width: 60px;
+    height: 60px;
+
+    .comment-preview-img {
+      width: 100%;
+      height: 100%;
+      border-radius: 8px;
+      object-fit: cover;
+    }
+
+    .comment-preview-remove {
+      position: absolute;
+      top: -6px;
+      right: -6px;
+      width: 20px;
+      height: 20px;
+      padding: 0;
+      border-radius: 50%;
+      background: var(--el-color-danger);
+      color: white;
+      border: none;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+    }
+  }
+}
+
+.hidden-file-input {
+  display: none;
+}
+
+.input-row .icon-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: transparent;
+  color: var(--el-text-color-secondary);
+  cursor: pointer;
+  border-radius: 8px;
+  flex-shrink: 0;
+
+  &:hover {
+    background: var(--el-fill-color-light);
+    color: var(--el-color-primary);
+  }
 }
 
 .comment-deleted .comment-text,

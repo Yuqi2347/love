@@ -27,158 +27,108 @@ public class YuanFenAnalysisSkill {
 
     /** 用户 Prompt 模板（异性） */
     private static final String PROMPT_TEMPLATE_OPPOSITE = """
-            ------------------------------------------------
+            ---------------------------------
+            【用户A客观数据】
+            - 基础画像：{nicknameA} | {genderA} | {ageA}岁 | {schoolA}{gradeA} | {majorA}专业
+            - 心理与星象基建：MBTI={mbtiA} | 星座={zodiacA}
+            - 偏好标签：[{interestsA}]
 
-            【用户A信息】
+            【用户B客观数据】
+            - 基础画像：{nicknameB} | {genderB} | {ageB}岁 | {schoolB}{gradeB} | {majorB}专业
+            - 心理与星象基建：MBTI={mbtiB} | 星座={zodiacB}
+            - 偏好标签：[{interestsB}]
 
-            - 昵称：{nicknameA}
-            - 性别：{genderA}
-            - 年龄：{ageA} 岁
-            - 学校：{schoolA}
-            - 年级：{gradeA}
-            - MBTI：{mbtiA}
-            - 星座：{zodiacA}
-            - 兴趣爱好：{interestsA}
-            - 专业：{majorA}
+            【系统匹配硬指标】
+            - 综合缘分评分：{totalScore}/100
+            - 细分维度得分：兴趣={interestScore} | MBTI={mbtiScore} | 星座={zodiacScore} | 八字={baziScore} | 专业跨度={majorScore}
+            ---------------------------------
 
-            【用户B信息】
-
-            - 昵称：{nicknameB}
-            - 性别：{genderB}
-            - 年龄：{ageB} 岁
-            - 学校：{schoolB}
-            - 年级：{gradeB}
-            - MBTI：{mbtiB}
-            - 星座：{zodiacB}
-            - 兴趣爱好：{interestsB}
-            - 专业：{majorB}
-
-            ------------------------------------------------
-
-            匹配系统评分（分析时请参考）：
-
-            - 综合匹配度：{totalScore} /100
-            - 兴趣契合：{interestScore}
-            - MBTI 契合：{mbtiScore}
-            - 星座契合：{zodiacScore}
-            - 八字缘分：{baziScore}
-            - 专业匹配：{majorScore}
-
-            ------------------------------------------------
-
-            【分析要求】
-
-            请综合以上信息，从性格、兴趣、学习环境、恋爱模式等角度进行分析。
-
-            分析要做到：
-            1. 有逻辑（解释为什么适合或不适合）
-            2. 有生活感（举简单的校园或日常相处场景）
-            3. 有情绪温度（读起来像朋友在认真分析）
-
-            ------------------------------------------------
-
-            请按以下 JSON 结构输出：
+            【输出结构与深度指令】
+            重要：在输出 JSON 各字段时，请使用上述两人的真实昵称「{nicknameA}」和「{nicknameB}」来指代双方，不要使用 A、B 或用户A、用户B 等抽象称呼。
+            请基于上述所有硬数据，深度推演两人的关系网络，并严格按照以下 JSON 字段和篇幅要求输出：
 
             {
-              "yuanFenIndex": "（用一个有创意、有情绪感的短语描述两人缘分等级，例如：命运的小小暗号、慢慢靠近的频率、可能错过也可能相遇、怦然心动型缘分等）",
-              "overallInterpretation": "（150字以内，总体评价两人的缘分气质，语气像一个懂他们的朋友在总结这段关系的感觉）",
-              "personalityAnalysis": "（150字以内，分析MBTI和性格互动模式，例如谁更主动、谁更理性，举一个具体生活场景）",
-              "interestChemistry": "（120字以内，分析兴趣爱好带来的互动方式，比如一起做什么会更容易产生好感）",
-              "campusStoryScene": "（100字以内，用一个很具体的校园场景描写两人的可能互动，例如图书馆、自习室、操场、咖啡店等，让用户产生画面感）",
-              "recommendActivities": [
-                "活动1（结合两人兴趣设计一个有点浪漫的约会或互动方式）",
-                "活动2",
-                "活动3"
-              ],
-              "potentialChallenge": "（80字以内，指出一个现实中可能的摩擦点，但语气温柔，并给出一个简单建议）",
-              "developmentPotential": "（120字以内，结合评分理性判断两人的发展潜力，不要做绝对化结论，而是给出鼓励式建议）",
-              "exclusiveQuote": "（一句20字以内的浪漫金句，适合截图分享）"
+              "_dataReasoning": "（必填草稿，不对用户展示）请先在此处用200字进行硬核逻辑推演。列出支持他们相吸的具体数据点（如：{nicknameA}的什么专业特质完美嵌合了{nicknameB}的什么MBTI功能？85分的兴趣分具体体现在哪两个爱好的化学反应上？低分维度会引发什么具体现实矛盾？）",
+
+              "yuanFenIndex": "（15字以内）基于数据推演出的核心精神羁绊词，需具有物理或建筑学美感。",
+
+              "dataBackedOverview": "（约120字）将冷冰冰的【系统匹配硬指标】翻译成兼具理性和宿命感的综合判词。必须隐晦但不突兀地融入综合分、最高分维度和最低分维度背后的现实意义。例如解释为什么某一项得分不高，但在总体上却构成了绝妙的制衡。",
+
+              "cognitiveArchitecture": "（约400字）MBTI底层逻辑与专业属性的深度融合分析。
+                  要求：
+                  1. 必须使用具体的认知功能术语（如Ni, Ne, Ti, Fe等）剖析两人信息处理和决策模型的差异。
+                  2. 必须将两人的【专业属性】（如人工智能的底层逻辑 vs 建筑学的空间感知）作为认知功能的放大器进行分析。
+                  3. 举证分析：在面临认知重构或重大决策的场景中，对方的劣势功能如何被己方的优势功能完美接管（实现数据上的互补）。叙述时请用昵称「{nicknameA}」「{nicknameB}」指代。",
+
+              "interestResonance": "（约150字）基于具体的【偏好标签】和【兴趣得分】，进行跨界化学反应分析。不要仅停留在"都有摄影爱好"的重合点，更要深挖"咖啡+瑜伽"或"独立音乐+电影"这种不同爱好之间如何相互渗透，形成更高阶的生活方式闭环。",
+
+              "cinematicScene": "（约250字）高颗粒度、强张力的校园宿命感微电影预演。
+                  要素要求：
+                  1. 场景必须是一个能同时触发两人【专业属性】或【爱好】的具体地点（如实验室、模型室、暗房等）。
+                  2. 必须包含一个具有心理推拉感（Push & Pull）的微小冲突或动作交锋。
+                  3. 必须包含一句符合双方 MBTI 逻辑的高智感对白。
+                  4. 描写要侧重光影、声音和微小的肢体语言（如指尖、眼神、咖啡杯的水渍）。",
+
+              "frictionAndEvolution": "（约150字）基于得分最低的维度（或MBTI的天然盲区）推演出的致命摩擦点。
+                  要求：精准预判在长期相处中，哪种特定场景会触发危机（例如{nicknameA}的系统化冷漠伤害了{nicknameB}的情感阈值），并给出基于双方认知逻辑的"降维化解方案"。叙述时请用昵称指代。",
+
+              "exclusiveQuote": "（20字以内）结合双方专业意象与性格张力，极具诗意和宿命感的专属金句。"
             }
-            """ + YuanFenPromptTemplates.JSON_EXAMPLE_OPPOSITE;
+
+            请基于以上设定和 JSON 格式，开始深度解析：
+            """;
 
     /** 用户 Prompt 模板（同性） */
     private static final String PROMPT_TEMPLATE_SAME = """
-            ------------------------------------------------
+            ---------------------------------
+            【用户A客观数据】
+            - 基础画像：{nicknameA} | {genderA} | {ageA}岁 | {schoolA}{gradeA} | {majorA}专业
+            - 心理与星象基建：MBTI={mbtiA} | 星座={zodiacA}
+            - 偏好标签：[{interestsA}]
 
-            【用户A信息】
+            【用户B客观数据】
+            - 基础画像：{nicknameB} | {genderB} | {ageB}岁 | {schoolB}{gradeB} | {majorB}专业
+            - 心理与星象基建：MBTI={mbtiB} | 星座={zodiacB}
+            - 偏好标签：[{interestsB}]
 
-            - 昵称：{nicknameA}
-            - 性别：{genderA}
-            - 年龄：{ageA} 岁
-            - 学校：{schoolA}
-            - 年级：{gradeA}
-            - MBTI：{mbtiA}
-            - 星座：{zodiacA}
-            - 兴趣爱好：{interestsA}
-            - 专业：{majorA}
+            【系统匹配硬指标】
+            - 综合羁绊评分：{totalScore}/100
+            - 细分维度得分：兴趣={interestScore} | MBTI={mbtiScore} | 星座={zodiacScore} | 八字={baziScore} | 专业跨度={majorScore}
+            ---------------------------------
 
-            【用户B信息】
-
-            - 昵称：{nicknameB}
-            - 性别：{genderB}
-            - 年龄：{ageB} 岁
-            - 学校：{schoolB}
-            - 年级：{gradeB}
-            - MBTI：{mbtiB}
-            - 星座：{zodiacB}
-            - 兴趣爱好：{interestsB}
-            - 专业：{majorB}
-
-            ------------------------------------------------
-
-            匹配系统评分（请参考）：
-
-            - 综合匹配度：{totalScore} /100
-            - 兴趣契合：{interestScore}
-            - MBTI 契合：{mbtiScore}
-            - 星座契合：{zodiacScore}
-            - 八字缘分：{baziScore}
-            - 专业匹配：{majorScore}
-
-            ------------------------------------------------
-
-            【分析要求】
-
-            请综合以上信息，从以下角度分析两人的关系：
-
-            - 性格互动模式
-            - 兴趣与生活方式契合度
-            - 在校园环境中的互动氛围
-            - 情感连接方式
-            - 关系发展的潜在可能
-
-            分析风格要求：
-
-            - 真实、有温度
-            - 有生活场景感
-            - 像朋友在认真观察两人的关系
-            - 可以适当描述日常互动情景
-
-            请确保分析内容 **大体符合系统评分**：
-            - 高分 → 更容易产生深度连接
-            - 中分 → 有潜力但需要磨合
-            - 低分 → 更像不同轨道的人
-
-            ------------------------------------------------
-
-            请按以下 JSON 结构输出：
+            【输出结构与深度指令】
+            重要：在输出 JSON 各字段时，请使用上述两人的真实昵称「{nicknameA}」和「{nicknameB}」来指代双方，不要使用 A、B 或用户A、用户B 等抽象称呼。
+            请基于上述数据，深度推演两人的关系网络，并严格按照以下 JSON 字段要求输出：
 
             {
-              "yuanFenIndex": "（用一个有情绪感的短语描述两人关系，例如：同频的灵魂、默契搭子、奇妙组合、慢慢靠近的关系、意外的同路人等）",
-              "overallInterpretation": "（150字以内，总体描述两人之间的关系气质，例如更像朋友型关系、互补型关系、灵魂交流型关系等）",
-              "personalityInteraction": "（150字以内，分析两人MBTI性格互动方式，并举一个具体生活互动场景）",
-              "interestChemistry": "（120字以内，分析兴趣爱好带来的互动方式，例如一起做什么会更有默契）",
-              "campusMoment": "（100字以内，用一个具体的校园场景描写两人互动，例如自习室、社团活动、咖啡店聊天等，让用户产生画面感）",
-              "relationshipPotential": "（120字以内，分析这种关系未来可能的发展方向，例如成为长期好友、彼此支持的伙伴，或存在更深情感可能）",
-              "potentialChallenge": "（80字以内，指出可能的摩擦点，但语气温柔，并给出简单建议）",
-              "recommendActivities": [
-                "互动建议1（适合两人的活动）",
-                "互动建议2",
-                "互动建议3"
-              ],
-              "exclusiveQuote": "（一句20字以内的关系金句，可以偏友情，也可以带一点暧昧氛围，适合截图分享）"
+              "_dataReasoning": "（必填草稿，不对用户展示）在此处用200字进行硬核逻辑推演。列出支持他们产生深层羁绊的具体数据点（例如：{nicknameA}的专业逻辑如何补足{nicknameB}的思维盲区？同性之间的高MBTI得分意味着怎样的精神镜像？低分维度会带来怎样的良性博弈或现实阵痛？）",
+
+              "yuanFenIndex": "（15字以内）基于数据推演出的核心精神羁绊词，如'双子星式的智性交锋'或'同频共振的深海锚点'。",
+
+              "dataBackedOverview": "（约120字）将冷冰冰的【系统匹配硬指标】翻译成兼具理性和宿命感的综合判词。需指明这段高分同性羁绊的底色——是能在顶峰相见的战友，还是能抚平彼此精神褶皱的灵魂伴侣。隐晦地说明最高分与最低分维度的现实意义。",
+
+              "cognitiveArchitecture": "（约400字）MBTI底层逻辑与专业属性的深度融合分析。
+                  要求：
+                  1. 使用具体的认知功能术语（如Ti, Te, Ni, Ne等）剖析两人的思维链路。
+                  2. 结合两人的【专业属性】，分析他们在面对现实挑战或精神探索时，如何形成"镜像互补"或"协同放电"。例如：一个在构建底层算法，一个在统筹全局框架。
+                  3. 说明对方如何成为了自己内心理想化或被压抑部分的投射，实现 1+1>2 的灵魂补全。",
+
+              "interestResonance": "（约150字）基于具体的【偏好标签】和【兴趣得分】，深挖同性之间特有的互动模式。分析那些看似不相关的兴趣（如一方的遥感影像与另一方的徒步探险）如何通过内在的逻辑或审美统一起来，形成精神上的闭环。",
+
+              "cinematicScene": "（约250字）高颗粒度、强张力的校园/职场微电影预演。
+                  要素要求：
+                  1. 场景需触发两人的【专业属性】（如实验室的白板前、深夜的会议室或天台）。
+                  2. 展现同性之间特有的推拉感：可以是理念的激烈碰撞后相视一笑，也可以是极度疲惫时无需多言的默契递递咖啡。
+                  3. 包含一句符合双方智力水平与 MBTI 逻辑的高智感对白。
+                  4. 描写侧重微小的肢体语言、光影切割和沉默中的情绪流转。",
+
+              "frictionAndEvolution": "（约150字）基于得分最低的维度（或MBTI的同极相斥/盲区）推演出的致命摩擦点。精准预判在长期并肩前行中可能爆发的危机（如掌控欲与自由意志的冲突），并给出高维度的破局建议。",
+
+              "exclusiveQuote": "（20字以内）结合双方专业意象与性格张力，极具宿命感与力量感的专属金句（超越性别的狭隘，直击灵魂）。"
             }
-            """ + YuanFenPromptTemplates.JSON_EXAMPLE_SAME;
+
+            请严格按照上述 JSON 格式，为当前两位用户输出深度解析报告：
+            """;
 
     public YuanFenAnalysisResult analyze(User userA, User userB, MatchResultResponse matchResult) {
         boolean sameGender = isSameGender(userA.getGender(), userB.getGender());
@@ -204,7 +154,23 @@ public class YuanFenAnalysisSkill {
 
         try {
             YuanFenAnalysisResponse result = objectMapper.readValue(json, YuanFenAnalysisResponse.class);
-            // 同性版本字段映射到统一 DTO
+            // 新模板字段映射到前端展示字段
+            if (result.getDataBackedOverview() != null && result.getOverallInterpretation() == null) {
+                result.setOverallInterpretation(result.getDataBackedOverview());
+            }
+            if (result.getCognitiveArchitecture() != null && result.getPersonalityAnalysis() == null) {
+                result.setPersonalityAnalysis(result.getCognitiveArchitecture());
+            }
+            if (result.getInterestResonance() != null && result.getInterestChemistry() == null) {
+                result.setInterestChemistry(result.getInterestResonance());
+            }
+            if (result.getCinematicScene() != null && result.getCampusStoryScene() == null) {
+                result.setCampusStoryScene(result.getCinematicScene());
+            }
+            if (result.getFrictionAndEvolution() != null && result.getPotentialChallenge() == null) {
+                result.setPotentialChallenge(result.getFrictionAndEvolution());
+            }
+            // 同性版本旧字段映射（兼容）
             if (sameGender) {
                 if (result.getPersonalityInteraction() != null && result.getPersonalityAnalysis() == null) {
                     result.setPersonalityAnalysis(result.getPersonalityInteraction());
@@ -239,7 +205,7 @@ public class YuanFenAnalysisSkill {
         String template = sameGender ? PROMPT_TEMPLATE_SAME : PROMPT_TEMPLATE_OPPOSITE;
         MatchResultResponse.MatchDetail detail = match.getDetail();
         return template
-                .replace("{nicknameA}", desensitize(a.getNickname()))
+                .replace("{nicknameA}", a.getNickname() != null && !a.getNickname().isBlank() ? a.getNickname().trim() : "匿名")
                 .replace("{genderA}", genderLabel(a.getGender()))
                 .replace("{ageA}", String.valueOf(calcAge(a.getBirthDate())))
                 .replace("{schoolA}", safe(a.getSchool()))
@@ -248,7 +214,7 @@ public class YuanFenAnalysisSkill {
                 .replace("{zodiacA}", safe(a.getZodiac()))
                 .replace("{interestsA}", safe(a.getInterests()))
                 .replace("{majorA}", safe(a.getMajor()))
-                .replace("{nicknameB}", desensitize(b.getNickname()))
+                .replace("{nicknameB}", b.getNickname() != null && !b.getNickname().isBlank() ? b.getNickname().trim() : "匿名")
                 .replace("{genderB}", genderLabel(b.getGender()))
                 .replace("{ageB}", String.valueOf(calcAge(b.getBirthDate())))
                 .replace("{schoolB}", safe(b.getSchool()))
@@ -263,12 +229,6 @@ public class YuanFenAnalysisSkill {
                 .replace("{zodiacScore}", String.valueOf(detail.getZodiacScore()))
                 .replace("{baziScore}", String.valueOf(detail.getBaziScore()))
                 .replace("{majorScore}", String.valueOf(detail.getMajorScore()));
-    }
-
-    /** 脱敏：只保留前2字 */
-    private String desensitize(String nickname) {
-        if (nickname == null || nickname.isEmpty()) return "匿名";
-        return nickname.length() <= 2 ? nickname : nickname.substring(0, 2) + "**";
     }
 
     private String genderLabel(Integer gender) {

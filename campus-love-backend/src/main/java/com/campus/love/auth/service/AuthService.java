@@ -22,12 +22,18 @@ public class AuthService {
     private final JwtUtil jwtUtil;
     private final PasswordEncoder passwordEncoder;
     private final com.campus.love.auth.service.EmailVerifyService emailVerifyService;
+    private final com.campus.love.auth.service.SchoolService schoolService;
     private final RateLimitService rateLimitService;
 
     public AuthResponse register(RegisterRequest request) {
         String email = request.getEmail();
         if (email == null || !email.contains("@") || email.indexOf("@") >= email.length() - 1) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "邮箱格式不正确");
+        }
+        if (request.getSchool() != null && !request.getSchool().isBlank()) {
+            if (!schoolService.isEmailSuffixMatch(email, request.getSchool())) {
+                throw new BusinessException(ResultCode.BAD_REQUEST, "邮箱后缀与所选学校不匹配，请使用该校邮箱注册");
+            }
         }
         String normalizedEmail = email.trim().toLowerCase();
 
@@ -47,6 +53,7 @@ public class AuthService {
         user.setEmail(request.getEmail());
         user.setPassword(passwordEncoder.encode(request.getPassword()));
         user.setNickname(request.getNickname());
+        user.setSchool(request.getSchool());
         user.setGender(0);
         user.setProfileComplete(false);
         user.setStatus(1);

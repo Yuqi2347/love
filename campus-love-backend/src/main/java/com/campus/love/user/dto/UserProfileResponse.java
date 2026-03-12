@@ -29,9 +29,13 @@ public class UserProfileResponse {
     private String zodiac;
     private String bazi;
     private String avatarUrl;
+    /** 个人主页背景图 URL */
+    private String coverImageUrl;
     private String bio;
     private String interests;
     private Boolean profileComplete;
     /** 朋友圈展示设置：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见 */
     private String feedVisibility;
+    /** 动态可见时间(天)：3=近三天，30=近一月，180=近半年，-1=全部 */
+    private Integer feedVisibilityTime;
 }

@@ -121,14 +121,15 @@
         <div v-else class="empty-hint">关注用户后在此显示</div>
       </div>
 
-      <div class="panel-card board-card" @click="$router.push('/discover')">
+      <div class="panel-card board-card">
         <h3 class="panel-title">热门邀约看板</h3>
         <div v-if="boardLoading" class="board-loading">加载中...</div>
         <div v-else-if="inviteBoard.length" class="board-list">
           <div
             v-for="item in inviteBoard"
             :key="item.inviteType"
-            class="board-item"
+            class="board-item board-item-clickable"
+            @click="$router.push(`/invite?source=public&type=${item.inviteType}`)"
           >
             <div class="board-item-left">
               <span class="board-dot" :style="{ background: getTypeColor(item.inviteType) }" />
@@ -183,18 +184,12 @@
           </div>
         </div>
 
-        <!-- 上传按钮 -->
+        <!-- 上传按钮：统一图片/视频选择 -->
         <div class="media-actions">
-          <input ref="imageInputRef" type="file" accept="image/*" multiple hidden @change="handleImageSelect" />
-          <button class="media-btn" @click="imageInputRef?.click()">
+          <input ref="mediaInputRef" type="file" accept="image/*,video/*" multiple hidden @change="handleMediaSelect" />
+          <button class="media-btn" @click="mediaInputRef?.click()">
             <el-icon><Picture /></el-icon>
-            <span>图片</span>
-          </button>
-
-          <input ref="videoInputRef" type="file" accept="video/*" hidden @change="handleVideoSelect" />
-          <button class="media-btn" @click="videoInputRef?.click()">
-            <el-icon><VideoCamera /></el-icon>
-            <span>视频</span>
+            <span>图片/视频</span>
           </button>
 
           <button class="media-btn" @click="showLinkInput = !showLinkInput">
@@ -225,6 +220,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { useFollowStore } from '@/store/followStore'
+import { useMatchStore } from '@/store/matchStore'
 import { getRecommendations, getMatchDetail, type MatchResult } from '@/api/matchApi'
 import { followUser, unfollowUser, getFollowingList } from '@/api/followApi'
 import { createPost, uploadImage, uploadVideo } from '@/api/feedApi'
@@ -239,18 +235,23 @@ const router = useRouter()
 const userStore = useUserStore()
 const badgeStore = useBadgeStore()
 const followStore = useFollowStore()
+const matchStore = useMatchStore()
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f0f2f5" width="40" height="40" rx="20"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="18">👤</text></svg>'
 
 const navItems = computed(() => {
   const b = badgeStore.badges
-  return [
-    { path: '/discover', label: '发现', icon: 'Compass', showDot: false },
-    { path: '/match', label: '匹配', icon: 'MagicStick', showDot: false },
-    { path: '/moment', label: '心动时刻', icon: 'Aim', showDot: false },
-    { path: '/invite', label: '邀约', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
-    { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 },
+  const items = [
+    { path: '/discover', label: '探索', icon: 'Compass', showDot: false },
+    { path: '/match', label: '缘分', icon: 'MagicStick', showDot: false },
+    { path: '/moment', label: '心动', icon: 'Aim', showDot: false },
+    { path: '/invite', label: '约局', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
+    { path: '/chat', label: '私信', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 },
   ]
+  if (userStore.user?.isAdmin) {
+    items.push({ path: '/admin/reports', label: '举报管理', icon: 'Flag', showDot: false })
+  }
+  return items
 })
 
 const isActive = (path: string) => route.path.startsWith(path)
@@ -279,8 +280,7 @@ const linkPreview = ref<{ url: string; title: string; image: string }>({ url: ''
 const linkUrlInput = ref('')
 const showLinkInput = ref(false)
 const isPublishing = ref(false)
-const imageInputRef = ref<HTMLInputElement>()
-const videoInputRef = ref<HTMLInputElement>()
+const mediaInputRef = ref<HTMLInputElement>()
 
 // 邀约看板（按类型统计）
 const inviteBoard = ref<Array<InviteTypeCount & { percent: number }>>([])
@@ -420,6 +420,10 @@ function onVisibilityChange() {
   if (document.visibilityState === 'visible' && userStore.user) badgeStore.fetchBadges()
 }
 
+watch(() => matchStore.weightVersion, () => {
+  if (userStore.user) loadRecommendations()
+})
+
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
   document.addEventListener('visibilitychange', onVisibilityChange)
@@ -494,25 +498,41 @@ function resetPostForm() {
 }
 
 // 图片上传
-async function handleImageSelect(e: Event) {
+async function handleMediaSelect(e: Event) {
   const target = e.target as HTMLInputElement
   const files = target.files
   if (!files) return
 
   for (const file of Array.from(files)) {
-    if (file.size > 10 * 1024 * 1024) {
-      ElMessage.warning('图片大小不能超过10MB')
-      continue
-    }
-    try {
-      ElMessage.info('上传中...')
-      const res = await uploadImage(file)
-      // 后端返回 data 字段为 "/uploads/xxx.jpg"，存储原始路径，显示时用 getMediaUrl() 加前缀
-      const imagePath = res.data.data
-      if (imagePath) uploadedImages.value.push(imagePath)
-      ElMessage.success('图片上传成功')
-    } catch (err) {
-      ElMessage.error('图片上传失败')
+    const isVideo = file.type.startsWith('video/')
+    if (isVideo) {
+      if (file.size > 100 * 1024 * 1024) {
+        ElMessage.warning('视频大小不能超过100MB')
+        continue
+      }
+      try {
+        ElMessage.info('视频上传中，请稍候...')
+        const res = await uploadVideo(file)
+        const path = res.data.data
+        if (path) uploadedVideos.value.push(path)
+        ElMessage.success('视频上传成功')
+      } catch (err) {
+        ElMessage.error('视频上传失败')
+      }
+    } else {
+      if (file.size > 10 * 1024 * 1024) {
+        ElMessage.warning('图片大小不能超过10MB')
+        continue
+      }
+      try {
+        ElMessage.info('上传中...')
+        const res = await uploadImage(file)
+        const path = res.data.data
+        if (path) uploadedImages.value.push(path)
+        ElMessage.success('图片上传成功')
+      } catch (err) {
+        ElMessage.error('图片上传失败')
+      }
     }
   }
   target.value = ''
@@ -520,29 +540,6 @@ async function handleImageSelect(e: Event) {
 
 function removeImage(index: number) {
   uploadedImages.value.splice(index, 1)
-}
-
-// 视频上传
-async function handleVideoSelect(e: Event) {
-  const target = e.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-
-  if (file.size > 100 * 1024 * 1024) {
-    ElMessage.warning('视频大小不能超过100MB')
-    return
-  }
-
-  try {
-    ElMessage.info('视频上传中，请稍候...')
-    const res = await uploadVideo(file)
-    const videoPath = res.data.data
-    if (videoPath) uploadedVideos.value.push(videoPath)
-    ElMessage.success('视频上传成功')
-  } catch (err) {
-    ElMessage.error('视频上传失败')
-  }
-  target.value = ''
 }
 
 function removeVideo(index: number) {
@@ -620,14 +617,17 @@ onMounted(loadInviteBoard)
 <style lang="scss" scoped>
 .main-layout {
   display: flex;
+  gap: 16px;
   min-height: 100vh;
   max-width: 1280px;
   margin: 0 auto;
+  padding: 0 16px;
 }
 
 // === Left Sidebar ===
 .sidebar {
   width: $sidebar-width;
+  flex-shrink: 0;
   position: sticky;
   top: 0;
   height: 100vh;
@@ -653,9 +653,7 @@ onMounted(loadInviteBoard)
   .logo-text {
     font-size: 22px;
     font-weight: 800;
-    background: $primary-gradient;
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
+    color: $primary;
   }
 }
 
@@ -994,6 +992,15 @@ onMounted(loadInviteBoard)
   gap: 12px;
   padding: 12px 12px 10px;
   border-radius: $radius-lg;
+}
+
+.board-item-clickable {
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: rgba(0, 0, 0, 0.04);
+  }
 }
 
 .board-item-left {

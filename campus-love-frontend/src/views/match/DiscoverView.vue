@@ -68,10 +68,20 @@
               <div class="feed-time">{{ formatTime(item.post.createdAt) }}</div>
             </div>
             <button
+              v-if="isAdmin && (reportCountByPostId[item.post.id] || 0) > 0"
               type="button"
-              class="feed-report-btn"
-              title="举报"
-              @click.stop="handleReport(item.post.id, 'POST')"
+              class="feed-report-count-badge"
+              :title="`${reportCountByPostId[item.post.id]} 条举报，点击查看`"
+              @click.stop="$router.push(`/admin/reports?targetId=${item.post.id}`)"
+            >
+              <el-icon><WarningFilled /></el-icon>
+              <span>{{ reportCountByPostId[item.post.id] }}</span>
+            </button>
+            <button
+              type="button"
+              :class="['feed-report-btn', { reported: reportedPostIds.has(item.post.id) }]"
+              :title="reportedPostIds.has(item.post.id) ? '已举报' : '举报'"
+              @click.stop="handleReportClick(item.post.id, 'POST')"
             >
               <el-icon><Flag /></el-icon>
             </button>
@@ -129,15 +139,15 @@
               :class="['action-btn', { active: item.post.liked }]"
               @click="handleLike(item.post.id, item.post.liked)"
             >
-              <span class="action-icon">{{ item.post.liked ? '❤️' : '🤍' }}</span>
+              <el-icon :size="18"><StarFilled v-if="item.post.liked" /><Star v-else /></el-icon>
               <span>{{ item.post.likeCount }}</span>
             </button>
             <button class="action-btn" @click="goPostDetail(item.post.id)">
-              <span class="action-icon">💬</span>
+              <el-icon :size="18"><ChatDotRound /></el-icon>
               <span>{{ item.post.commentCount }}</span>
             </button>
             <button class="action-btn" @click="openShareDialog(item.post)">
-              <span class="action-icon">🔗</span>
+              <el-icon :size="18"><Share /></el-icon>
               <span>分享</span>
             </button>
           </div>
@@ -192,18 +202,12 @@
             </div>
           </div>
 
-          <!-- 上传按钮 -->
+          <!-- 上传按钮：统一图片/视频选择 -->
           <div class="media-actions">
-            <input ref="imageInputRef" type="file" accept="image/*" multiple hidden @change="handleImageSelect" />
-            <button type="button" class="media-btn" @click="imageInputRef?.click()">
+            <input ref="mediaInputRef" type="file" accept="image/*,video/*" multiple hidden @change="handleMediaSelect" />
+            <button type="button" class="media-btn" @click="mediaInputRef?.click()">
               <el-icon><Picture /></el-icon>
-              <span>图片</span>
-            </button>
-
-            <input ref="videoInputRef" type="file" accept="video/*" hidden @change="handleVideoSelect" />
-            <button type="button" class="media-btn" @click="videoInputRef?.click()">
-              <el-icon><VideoCamera /></el-icon>
-              <span>视频</span>
+              <span>图片/视频</span>
             </button>
 
             <button type="button" class="media-btn" @click="showLinkInput = !showLinkInput">
@@ -242,6 +246,14 @@
       <p>暂无内容</p>
     </div>
 
+    <!-- 举报弹窗 -->
+    <ReportDialog
+      v-model="showReportDialog"
+      :target-type="reportTargetType"
+      :target-id="reportTargetId"
+      @success="onReportSuccess"
+    />
+
     <!-- 分享弹窗 -->
     <ShareDialog
       v-model:show="showShareDialog"
@@ -268,11 +280,12 @@ import {
   type FeedPost,
   type UserLevelInfo,
 } from '@/api/feedApi'
-import { submitReport } from '@/api/reportApi'
+import { checkReported, getMyReport, getReportCountByPostIds, VIOLATION_TYPES } from '@/api/reportApi'
+import ReportDialog from '@/components/ReportDialog.vue'
 import { useUserStore } from '@/store/userStore'
 import { useInviteStore } from '@/store/inviteStore'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Search, Flag } from '@element-plus/icons-vue'
+import { Plus, Delete, Search, Flag, WarningFilled } from '@element-plus/icons-vue'
 import type { Invite } from '@/api/inviteApi'
 import ShareDialog from '@/components/ShareDialog.vue'
 
@@ -291,6 +304,10 @@ const CONTENT_MAX_LENGTH = 100
 
 const levelInfo = ref<UserLevelInfo | null>(null)
 const searchKeyword = ref('')
+const reportedPostIds = ref<Set<number>>(new Set())
+const showReportDialog = ref(false)
+const reportTargetType = ref('POST')
+const reportTargetId = ref(0)
 const activeTab = ref<'recommend' | 'post' | 'following' | 'liked'>('recommend')
 const showPostDialog = ref(false)
 const postContent = ref('')
@@ -303,8 +320,7 @@ const uploadedVideos = ref<string[]>([])
 const linkPreview = ref<{ url: string; title: string; image: string }>({ url: '', title: '', image: '' })
 const linkUrlInput = ref('')
 const showLinkInput = ref(false)
-const imageInputRef = ref<HTMLInputElement>()
-const videoInputRef = ref<HTMLInputElement>()
+const mediaInputRef = ref<HTMLInputElement>()
 
 // 分享相关状态
 const showShareDialog = ref(false)
@@ -324,11 +340,24 @@ function goPostDetail(postId: number) {
   router.push(`/feed/${postId}`)
 }
 
+const isAdmin = computed(() => userStore.user?.isAdmin || false)
+
+// 管理员：帖子举报数量（postId -> count）
+const reportCountByPostId = ref<Record<number, number>>({})
+
+async function fetchReportCountsForPosts(postIds: number[]) {
+  if (!isAdmin.value || !postIds.length) return
+  try {
+    const res = await getReportCountByPostIds(postIds)
+    reportCountByPostId.value = { ...reportCountByPostId.value, ...res.data.data }
+  } catch { /* ignore */ }
+}
+
 // 判断是否可以删除帖子（管理员或帖子作者）
 function canDeletePost(post: FeedPost): boolean {
-  const isAdmin = userStore.user?.isAdmin || false
+  const admin = userStore.user?.isAdmin || false
   const isOwner = post.userId === userStore.user?.id
-  return isAdmin || isOwner
+  return admin || isOwner
 }
 
 // 从 URL 读取邀约类型筛选（热门邀约看板跳转时传入）
@@ -363,6 +392,9 @@ async function loadLikedPosts() {
   try {
     const res = await getLikedPosts(0, 20)
     likedPosts.value = res.data.data || []
+    if (isAdmin.value && likedPosts.value.length) {
+      fetchReportCountsForPosts(likedPosts.value.map((p) => p.id))
+    }
   } catch { /* empty */ }
 }
 
@@ -408,6 +440,9 @@ async function loadPosts(keyword?: string) {
   try {
     const res = await getDiscoveryPosts(0, 20, keyword)
     posts.value = res.data.data || []
+    if (isAdmin.value && posts.value.length) {
+      fetchReportCountsForPosts(posts.value.map((p) => p.id))
+    }
   } catch { /* empty */ }
 }
 
@@ -415,6 +450,9 @@ async function loadFollowingPosts() {
   try {
     const res = await getTimeline(0, 20)
     followingPosts.value = res.data.data || []
+    if (isAdmin.value && followingPosts.value.length) {
+      fetchReportCountsForPosts(followingPosts.value.map((p) => p.id))
+    }
   } catch { /* empty */ }
 }
 
@@ -525,25 +563,41 @@ function closePostDialog() {
 }
 
 // 图片上传
-async function handleImageSelect(e: Event) {
+async function handleMediaSelect(e: Event) {
   const target = e.target as HTMLInputElement
   const files = target.files
   if (!files) return
 
   for (const file of Array.from(files)) {
-    if (file.size > 10 * 1024 * 1024) {
-      ElMessage.warning('图片大小不能超过10MB')
-      continue
-    }
-    try {
-      ElMessage.info('上传中...')
-      const res = await uploadImage(file)
-      // 后端返回 data 字段为 "/uploads/xxx.jpg"，存储原始路径，显示时用 getMediaUrl() 加前缀
-      const imagePath = res.data.data
-      if (imagePath) uploadedImages.value.push(imagePath)
-      ElMessage.success('图片上传成功')
-    } catch (err) {
-      ElMessage.error('图片上传失败')
+    const isVideo = file.type.startsWith('video/')
+    if (isVideo) {
+      if (file.size > 100 * 1024 * 1024) {
+        ElMessage.warning('视频大小不能超过100MB')
+        continue
+      }
+      try {
+        ElMessage.info('视频上传中，请稍候...')
+        const res = await uploadVideo(file)
+        const path = res.data.data
+        if (path) uploadedVideos.value.push(path)
+        ElMessage.success('视频上传成功')
+      } catch (err) {
+        ElMessage.error('视频上传失败')
+      }
+    } else {
+      if (file.size > 10 * 1024 * 1024) {
+        ElMessage.warning('图片大小不能超过10MB')
+        continue
+      }
+      try {
+        ElMessage.info('上传中...')
+        const res = await uploadImage(file)
+        const path = res.data.data
+        if (path) uploadedImages.value.push(path)
+        ElMessage.success('图片上传成功')
+      } catch (err) {
+        ElMessage.error('图片上传失败')
+      }
     }
   }
   target.value = ''
@@ -551,29 +605,6 @@ async function handleImageSelect(e: Event) {
 
 function removeImage(index: number) {
   uploadedImages.value.splice(index, 1)
-}
-
-// 视频上传
-async function handleVideoSelect(e: Event) {
-  const target = e.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-
-  if (file.size > 100 * 1024 * 1024) {
-    ElMessage.warning('视频大小不能超过100MB')
-    return
-  }
-
-  try {
-    ElMessage.info('视频上传中，请稍候...')
-    const res = await uploadVideo(file)
-    const videoPath = res.data.data
-    if (videoPath) uploadedVideos.value.push(videoPath)
-    ElMessage.success('视频上传成功')
-  } catch (err) {
-    ElMessage.error('视频上传失败')
-  }
-  target.value = ''
 }
 
 function removeVideo(index: number) {
@@ -646,21 +677,32 @@ function shouldCollapse(content: string): boolean {
   return content.length > CONTENT_MAX_LENGTH
 }
 
-async function handleReport(targetId: number, targetType: string) {
+async function handleReportClick(targetId: number, targetType: string) {
   try {
-    const { value } = await ElMessageBox.prompt('请输入举报理由', '举报', {
-      confirmButtonText: '提交',
-      cancelButtonText: '取消',
-      inputPattern: /.+/,
-      inputErrorMessage: '请输入举报理由',
-    })
-    if (value) {
-      await submitReport({ targetType, targetId, reason: value })
-      ElMessage.success('举报已提交')
+    const res = await checkReported(targetType, targetId)
+    if (res.data.data) {
+      const myRes = await getMyReport(targetType, targetId)
+      const info = myRes.data.data
+      const types = info?.violationTypes ? info.violationTypes.split(',') : []
+      const reason = info?.reason || ''
+      const adminNote = info?.adminNote || ''
+      const labels = types.map(t => VIOLATION_TYPES.find(v => v.value === t)?.label || t).filter(Boolean)
+      let msg = labels.length ? `举报类型：${labels.join('、')}${reason ? `\n理由：${reason}` : ''}` : '您已举报过该内容'
+      if (adminNote) msg += `\n\n举报反馈：${adminNote}`
+      ElMessage.info(msg)
+      return
     }
-  } catch (e) {
-    if (e !== 'cancel') ElMessage.error('举报失败')
+    reportTargetType.value = targetType
+    reportTargetId.value = targetId
+    showReportDialog.value = true
+  } catch {
+    ElMessage.error('操作失败')
   }
+}
+
+function onReportSuccess() {
+  reportedPostIds.value.add(reportTargetId.value)
+  reportedPostIds.value = new Set(reportedPostIds.value)
 }
 
 async function handleDeletePost(postId: number) {
@@ -937,8 +979,26 @@ async function handleDeletePost(postId: number) {
   cursor: pointer;
 }
 
+.feed-report-count-badge {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px;
+  border: none;
+  background: rgba(#e65100, 0.12);
+  color: #e65100;
+  font-size: 12px;
+  font-weight: 500;
+  border-radius: $radius-md;
+  cursor: pointer;
+  &:hover { background: rgba(#e65100, 0.2); }
+}
+
 .feed-report-btn {
   display: flex;
+  &.reported {
+    color: var(--el-color-primary);
+  }
   align-items: center;
   padding: 6px 8px;
   border: none;
@@ -1034,12 +1094,10 @@ async function handleDeletePost(postId: number) {
   transition: all $transition-fast;
 
   &:hover { color: $primary; }
-  &.active { color: #ff4757; }
+  &.active { color: $primary; }
   &.delete-btn { color: $text-muted; }
-  &.delete-btn:hover { color: #ff4757; }
+  &.delete-btn:hover { color: $primary; }
 }
-
-.action-icon { font-size: 18px; }
 
 .empty-state {
   display: flex;

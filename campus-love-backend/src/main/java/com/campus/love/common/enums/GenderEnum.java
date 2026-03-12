@@ -1,10 +1,8 @@
 package com.campus.love.common.enums;
 
-import lombok.AllArgsConstructor;
 import lombok.Getter;
 
 @Getter
-@AllArgsConstructor
 public enum GenderEnum {
 
     UNKNOWN(0, "未知"),
@@ -13,6 +11,11 @@ public enum GenderEnum {
 
     private final Integer code;
     private final String label;
+
+    GenderEnum(Integer code, String label) {
+        this.code = code;
+        this.label = label;
+    }
 
     public static GenderEnum fromCode(Integer code) {
         for (GenderEnum g : values()) {

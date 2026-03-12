@@ -34,6 +34,7 @@ public class FeedPostResponse {
         private String nickname;
         private String avatarUrl;
         private String content;
+        private String images;
         private Long parentId;
         private String repliedToName;  // 被回复的用户昵称
         private String createdAt;

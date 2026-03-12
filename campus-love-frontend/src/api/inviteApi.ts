@@ -28,6 +28,7 @@ export interface Invite {
   invitePeriod: string
   periodConfig: string | null
   inviteTime: string
+  inviteEndTime?: string | null
   location: string | null
   maxParticipants: number | null
   participantCount: number
@@ -65,6 +66,7 @@ export interface InviteCreateRequest {
   invitePeriod: 'ONCE' | 'WEEKLY' | 'MONTHLY'
   periodConfig?: string
   inviteTime: string
+  inviteEndTime?: string
   location?: string
   maxParticipants?: number
   deadlineHours?: number

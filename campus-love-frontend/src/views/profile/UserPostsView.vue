@@ -76,15 +76,15 @@
             :class="['action-btn', { active: post.liked }]"
             @click="handleLike(post)"
           >
-            <span class="action-icon">{{ post.liked ? '❤️' : '🤍' }}</span>
+            <el-icon :size="18"><StarFilled v-if="post.liked" /><Star v-else /></el-icon>
             <span>{{ post.likeCount }}</span>
           </button>
           <button class="action-btn" @click="goPostDetail(post.id)">
-            <span class="action-icon">💬</span>
+            <el-icon :size="18"><ChatDotRound /></el-icon>
             <span>{{ post.commentCount }}</span>
           </button>
           <button class="action-btn" @click="openShareDialog(post)">
-            <span class="action-icon">🔗</span>
+            <el-icon :size="18"><Share /></el-icon>
             <span>分享</span>
           </button>
         </div>
@@ -92,7 +92,7 @@
     </div>
 
     <div v-else class="empty-state">
-      <div class="empty-icon">📭</div>
+      <el-icon class="empty-icon" :size="48"><Document /></el-icon>
       <p>暂无动态</p>
     </div>
 
@@ -443,12 +443,8 @@ onMounted(async () => {
   font-size: 14px;
   color: var(--el-text-color-secondary);
   cursor: pointer;
-  &.active { color: #f43f5e; }
+  &.active { color: $primary; }
   &:hover:not(:disabled) { color: var(--el-color-primary); }
-}
-
-.action-icon {
-  font-size: 18px;
 }
 
 .empty-state {
@@ -457,8 +453,8 @@ onMounted(async () => {
 }
 
 .empty-icon {
-  font-size: 48px;
   margin-bottom: 16px;
+  color: $text-muted;
 }
 
 .empty-state p {

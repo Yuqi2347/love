@@ -119,12 +119,25 @@
         <el-date-picker
           v-model="form.inviteTime"
           type="datetime"
-          placeholder="选择邀约时间"
+          placeholder="选择邀约开始时间"
           :disabled-date="disabledDate"
           :disabled-hours="disabledHours"
           :disabled-minutes="disabledMinutes"
           format="YYYY-MM-DD HH:mm"
           class="full-width"
+        />
+        <p class="form-hint">可选：设置结束时间</p>
+        <el-date-picker
+          v-model="form.inviteEndTime"
+          type="datetime"
+          placeholder="选择邀约结束时间（不选则无结束时间）"
+          :disabled-date="disabledEndDate"
+          :disabled-hours="disabledEndHours"
+          :disabled-minutes="disabledEndMinutes"
+          format="YYYY-MM-DD HH:mm"
+          class="full-width"
+          clearable
+          style="margin-top: 8px"
         />
       </div>
 
@@ -146,6 +159,8 @@
       <div class="form-section">
         <label class="form-label">报名截止</label>
         <el-select v-model="form.deadlineHours" class="full-width">
+          <el-option label="活动开始前" :value="0" />
+          <el-option label="活动结束前" :value="-1" />
           <el-option :label="`活动前1小时`" :value="1" />
           <el-option :label="`活动前2小时`" :value="2" />
           <el-option :label="`活动前4小时`" :value="4" />
@@ -190,7 +205,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { createInvite, type InviteCreateRequest } from '@/api/inviteApi'
+import { createInvite, getInviteDetail, type InviteCreateRequest } from '@/api/inviteApi'
 import { getFollowingList, type FollowUser } from '@/api/followApi'
 import { getUserProfile } from '@/api/userApi'
 import { ElMessage } from 'element-plus'
@@ -220,6 +235,7 @@ const form = ref<InviteCreateRequest>({
   content: '',
   invitePeriod: 'ONCE',
   inviteTime: '',
+  inviteEndTime: undefined,
   location: '',
   maxParticipants: undefined,
   deadlineHours: DEFAULT_DEADLINE_HOURS,
@@ -282,6 +298,40 @@ function disabledMinutes(): number[] {
   return minutes
 }
 
+// 结束时间：不能早于开始时间
+function disabledEndDate(date: Date): boolean {
+  const start = form.value.inviteTime ? new Date(form.value.inviteTime) : null
+  if (!start) return date.getTime() < Date.now() - 24 * 60 * 60 * 1000
+  const startDate = new Date(start.getFullYear(), start.getMonth(), start.getDate())
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
+  return d.getTime() < startDate.getTime()
+}
+
+function disabledEndHours(): number[] {
+  const hours: number[] = []
+  const start = form.value.inviteTime ? new Date(form.value.inviteTime) : null
+  const selectedEnd = form.value.inviteEndTime ? new Date(form.value.inviteEndTime) : null
+  if (!start || !selectedEnd) return hours
+  if (selectedEnd.toDateString() !== start.toDateString()) return hours
+  for (let i = 0; i <= start.getHours(); i++) {
+    hours.push(i)
+  }
+  return hours
+}
+
+function disabledEndMinutes(): number[] {
+  const minutes: number[] = []
+  const start = form.value.inviteTime ? new Date(form.value.inviteTime) : null
+  const selectedEnd = form.value.inviteEndTime ? new Date(form.value.inviteEndTime) : null
+  if (!start || !selectedEnd) return minutes
+  if (selectedEnd.toDateString() !== start.toDateString()) return minutes
+  if (selectedEnd.getHours() !== start.getHours()) return minutes
+  for (let i = 0; i <= start.getMinutes(); i++) {
+    minutes.push(i)
+  }
+  return minutes
+}
+
 // 切换标签
 function toggleTag(tag: string) {
   const index = selectedTags.value.indexOf(tag)
@@ -339,6 +389,7 @@ async function handleSubmit() {
     ...form.value,
     atmosphereTags: selectedTags.value.join(','),
     inviteTime: new Date(form.value.inviteTime!).toISOString(),
+    inviteEndTime: form.value.inviteEndTime ? new Date(form.value.inviteEndTime).toISOString() : undefined,
   }
 
   try {
@@ -351,14 +402,47 @@ async function handleSubmit() {
   }
 }
 
-// 初始化：读取从个人主页跳转过来的目标用户，并加载搜索列表
+// 初始化：读取从个人主页跳转过来的目标用户，或从取消邀约再次发起预填
 onMounted(async () => {
   const target = route.query.target
-  if (target) {
+  const fromId = route.query.from
+  if (target && !fromId) {
     const idNum = Number(target)
     if (!Number.isNaN(idNum)) {
       form.value.inviteMode = InviteMode.PRIVATE
       form.value.targetUserId = idNum
+    }
+  }
+
+  if (fromId) {
+    const idNum = Number(fromId)
+    if (!Number.isNaN(idNum)) {
+      try {
+        const res = await getInviteDetail(idNum)
+        const inv = res.data.data
+        if (inv) {
+          form.value.inviteMode = (inv.inviteMode as 'PUBLIC' | 'PRIVATE') || InviteMode.PUBLIC
+          form.value.targetUserId = inv.targetUserId ?? undefined
+          form.value.inviteType = inv.inviteType || InviteType.DINNER
+          form.value.title = inv.title || ''
+          form.value.content = inv.content || ''
+          form.value.invitePeriod = (inv.invitePeriod as 'ONCE' | 'WEEKLY' | 'MONTHLY') || 'ONCE'
+          form.value.inviteTime = inv.inviteTime ? new Date(inv.inviteTime).toISOString().slice(0, 16) : ''
+          form.value.inviteEndTime = inv.inviteEndTime ? new Date(inv.inviteEndTime).toISOString().slice(0, 16) : undefined
+          form.value.location = inv.location || ''
+          form.value.maxParticipants = inv.maxParticipants ?? undefined
+          form.value.deadlineHours = inv.deadlineHours ?? DEFAULT_DEADLINE_HOURS
+          form.value.isUrgent = inv.isUrgent ?? false
+          if (inv.atmosphereTags) {
+            selectedTags.value = inv.atmosphereTags.split(',').filter(Boolean)
+          }
+          if (inv.targetUserId) {
+            form.value.targetUserId = inv.targetUserId
+          }
+        }
+      } catch {
+        // 加载失败则使用空表单
+      }
     }
   }
 

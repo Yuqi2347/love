@@ -28,6 +28,10 @@ export interface UserProfile {
   profileComplete: boolean
   /** 朋友圈可见性：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见 */
   feedVisibility?: string
+  /** 动态可见时间(天)：3=近三天，30=近一月，180=近半年，-1=全部 */
+  feedVisibilityTime?: number
+  /** 个人主页背景图 URL */
+  coverImageUrl?: string | null
 }
 
 export interface UpdateProfileParams {
@@ -77,12 +81,28 @@ export function updateFeedVisibility(visibility: string) {
   return request.patch<ApiResult<UserProfile>>('/user/feed-visibility', null, { params: { visibility } })
 }
 
+export function updateFeedVisibilityTime(days: number) {
+  return request.patch<ApiResult<UserProfile>>('/user/feed-visibility-time', null, { params: { days } })
+}
+
 export function uploadAvatar(file: File) {
   const form = new FormData()
   form.append('file', file)
   return request.post<ApiResult<string>>('/user/avatar', form, {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
+}
+
+export function uploadCover(file: File) {
+  const form = new FormData()
+  form.append('file', file)
+  return request.put<ApiResult<string>>('/user/cover', form, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  })
+}
+
+export function clearCover() {
+  return request.delete<ApiResult<void>>('/user/cover')
 }
 
 // 发送密码修改验证码

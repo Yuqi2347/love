@@ -51,7 +51,13 @@
       </div>
     </Transition>
 
-    <div v-if="sortedCards.length" class="card-container">
+    <div v-if="!userStore.user?.profileComplete" class="profile-incomplete-hint">
+      <div class="hint-icon">📋</div>
+      <p class="hint-title">请先完善个人信息后进行分析</p>
+      <p class="hint-desc">完善 MBTI、兴趣、学校、专业等信息后可获得更精准的匹配推荐</p>
+      <button class="btn-primary" @click="$router.push('/setup-profile')">去完善</button>
+    </div>
+    <div v-else-if="sortedCards.length" class="card-container">
       <!-- 竖直卡片列表 -->
       <div
         class="cards-wrapper"
@@ -115,7 +121,7 @@
       <div class="card-counter">{{ currentIndex + 1 }} / {{ remainingCount }}</div>
     </div>
 
-    <div v-else class="empty-state">
+    <div v-else-if="userStore.user?.profileComplete" class="empty-state">
       <div class="empty-icon">💫</div>
       <p>今日推荐已看完</p>
       <button class="reset-filter-btn" @click="setGenderFilter('all')">重新筛选</button>
@@ -125,15 +131,19 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
-import { getRecommendations, reportUserAction, updateWeightPreferences, resetWeights, type MatchResult } from '@/api/matchApi'
+import { getRecommendations, reportUserAction, updateWeightPreferences, resetWeights, getWeightStats, type MatchResult } from '@/api/matchApi'
 import { followUser } from '@/api/followApi'
 import { useFollowStore } from '@/store/followStore'
+import { useMatchStore } from '@/store/matchStore'
+import { useUserStore } from '@/store/userStore'
 import { ElMessage } from 'element-plus'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { useRouter } from 'vue-router'
 
 const router = useRouter()
 const followStore = useFollowStore()
+const matchStore = useMatchStore()
+const userStore = useUserStore()
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500"><rect fill="%23f0f2f5" width="400" height="500" rx="24"/><text x="50%" y="45%" text-anchor="middle" fill="%23adb5bd" font-size="80">👤</text></svg>'
 const dimensionLabels = MATCH_DIMENSION_LABELS
@@ -164,6 +174,7 @@ async function handleSaveWeights() {
     await updateWeightPreferences(weightPreferences)
     ElMessage.success('权重已更新')
     showWeightPanel.value = false
+    matchStore.bumpWeightVersion()
     await loadCards()
   } catch {
     ElMessage.error('保存权重失败')
@@ -182,6 +193,7 @@ async function handleResetWeights() {
     weightPreferences.major = 'low'
     weightPreferences.age = 'low'
     ElMessage.success('已恢复默认权重')
+    matchStore.bumpWeightVersion()
     await loadCards()
   } catch {
     ElMessage.error('重置失败')
@@ -270,13 +282,34 @@ async function loadCards() {
   } catch { /* empty */ }
 }
 
+function weightToLevel(w: number): 'high' | 'medium' | 'low' {
+  if (w >= 0.20) return 'high'
+  if (w >= 0.10) return 'medium'
+  return 'low'
+}
+
 onMounted(async () => {
   const userStr = localStorage.getItem('user')
   if (userStr) {
     const user = JSON.parse(userStr)
     currentUserGender.value = user.gender || null
   }
-  await loadCards()
+  if (userStore.user?.profileComplete) {
+    try {
+      const res = await getWeightStats()
+      const data = res.data.data
+      if (data?.weights) {
+        for (const [key, val] of Object.entries(data.weights)) {
+          if (key in weightPreferences) {
+            weightPreferences[key as keyof typeof weightPreferences] = weightToLevel(val as number)
+          }
+        }
+      }
+    } catch {
+      // 忽略，使用默认权重
+    }
+    await loadCards()
+  }
 })
 
 async function setGenderFilter(filter: 'all' | 'same' | 'opposite') {
@@ -861,6 +894,20 @@ function handleViewProfile(userId: number) {
   font-size: 14px;
   color: $text-muted;
   font-weight: 600;
+}
+
+.profile-incomplete-hint {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  padding: 40px 20px;
+  text-align: center;
+  .hint-icon { font-size: 64px; }
+  .hint-title { font-size: 18px; font-weight: 600; color: $text-primary; }
+  .hint-desc { font-size: 14px; color: $text-muted; max-width: 320px; }
 }
 
 .empty-state {

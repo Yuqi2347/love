@@ -388,6 +388,8 @@ public class UserWeightService {
 
         UserWeights weights = getUserWeights(userId);
         weights.updateWeights(normalized);
+        weights.setActionCount(Math.max(weights.getActionCount() != null ? weights.getActionCount() : 0,
+                GlobalWeights.COLD_START_THRESHOLD));
         try {
             userWeightsMapper.updateById(weights);
             log.info("Updated weight preferences for user {}: {}", userId, normalized);

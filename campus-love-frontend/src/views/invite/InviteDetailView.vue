@@ -44,7 +44,7 @@
           </div>
           <div class="meta-row">
             <span class="meta-label">时间:</span>
-            <span class="meta-value">{{ formatDateTime(invite.inviteTime) }}</span>
+            <span class="meta-value">{{ formatInviteTimeRange(invite.inviteTime, invite.inviteEndTime) }}</span>
           </div>
           <div v-if="invite.location" class="meta-row">
             <span class="meta-label">地点:</span>
@@ -83,6 +83,19 @@
           </div>
           <span class="rating-count">({{ invite.ratingCount }}人评价)</span>
         </div>
+
+        <div v-if="invite.status === 'CANCELLED' && isCreator" class="reinit-section">
+          <button class="btn-primary" @click="handleReinit">
+            再次发起
+          </button>
+        </div>
+        <!-- 已结束：评价入口（置顶显示，避免被聊天区遮挡） -->
+        <div v-if="invite.status === 'ENDED' && (isCreator || hasJoined)" class="rating-entry-bar">
+          <span class="rating-entry-label">邀约已结束，快来评价吧</span>
+          <button class="btn-primary" @click="openRatingDialog">
+            评价本次邀约
+          </button>
+        </div>
         </div>
         <!-- 参与者区（同一主卡片内） -->
         <div v-if="invite.inviteMode === 'PUBLIC'" class="participants-section">
@@ -96,7 +109,7 @@
               <span class="participant-name">
                 {{ invite.creator?.nickname || '发起人' }}
                 <span class="participant-tag">发起人</span>
-                <span v-if="invite.creatorId === myId" class="participant-tag">我</span>
+                <span v-if="invite.creatorId === myId" class="participant-tag participant-tag-me">我</span>
               </span>
               <span class="join-time">{{ formatDateTime(invite.inviteTime) }}</span>
             </div>
@@ -110,7 +123,7 @@
               <img :src="p.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
               <span class="participant-name">
                 {{ p.nickname }}
-                <span v-if="p.userId === myId" class="participant-tag">我</span>
+                <span v-if="p.userId === myId" class="participant-tag participant-tag-me">我</span>
               </span>
               <span class="join-time">{{ formatJoinTime(p.joinAt) }}</span>
               <button
@@ -256,11 +269,11 @@
 
         <!-- 底部操作条，仍在主卡片内部 -->
         <div v-if="showActions" class="action-buttons">
-          <!-- 已结束且我参与过：展示评价按钮 -->
+          <!-- 已结束且（发起人或参与者）：展示评价按钮 -->
           <button
-            v-if="invite.status === 'ENDED' && hasJoined"
+            v-if="invite.status === 'ENDED' && (isCreator || hasJoined)"
             class="btn-primary"
-            @click="showRatingDialog = true"
+            @click="openRatingDialog"
           >
             评价本次邀约
           </button>
@@ -294,13 +307,29 @@
       </div>
 
       <!-- Rating Dialog -->
-      <el-dialog v-model="showRatingDialog" title="评价邀约" width="400px" :close-on-click-modal="false">
-        <div class="rating-form">
+      <el-dialog v-model="showRatingDialog" :title="ratingDialogTitle" width="400px" :close-on-click-modal="false" @closed="resetRatingForm">
+        <!-- 发起人：先选择要评价的参与者 -->
+        <div v-if="isCreator && !ratingForm.ratedUserId" class="rating-participant-list">
+          <p class="rating-hint">选择要评价的参与者</p>
+          <div
+            v-for="p in participantsToRate"
+            :key="p.userId"
+            class="rating-participant-item"
+            @click="selectParticipantForRating(p)"
+          >
+            <img :src="p.avatarUrl || defaultAvatar" class="avatar" width="32" height="32" />
+            <span>{{ p.nickname || '用户' }}</span>
+          </div>
+          <p v-if="!participantsToRate.length" class="rating-empty">暂无可评价的参与者</p>
+        </div>
+        <!-- 评价表单（参与者评价发起人 / 发起人已选参与者） -->
+        <div v-else-if="ratingForm.ratedUserId" class="rating-form">
+          <p v-if="ratingTargetNickname" class="rating-target">评价 {{ ratingTargetNickname }}</p>
           <div class="rating-item">
             <label>社交体验</label>
             <el-rate v-model="ratingForm.socialRating" :max="5" allow-half />
           </div>
-          <div v-if="!isParticipant" class="rating-item">
+          <div v-if="ratingForm.ratedUserId === invite?.creatorId" class="rating-item">
             <label>组织能力</label>
             <el-rate v-model="ratingForm.orgRating" :max="5" allow-half />
           </div>
@@ -317,8 +346,10 @@
           </div>
         </div>
         <template #footer>
-          <button class="btn-outline" @click="showRatingDialog = false">取消</button>
-          <button class="btn-primary" @click="submitRating">提交评价</button>
+          <button class="btn-outline" @click="ratingForm.ratedUserId ? (ratingForm.ratedUserId = 0) : (showRatingDialog = false)">
+            {{ ratingForm.ratedUserId ? '返回' : '取消' }}
+          </button>
+          <button v-if="ratingForm.ratedUserId" class="btn-primary" @click="submitRating">提交评价</button>
         </template>
       </el-dialog>
     </div>
@@ -353,6 +384,7 @@ import {
   type Invite,
   type InviteRatingCreateRequest,
   type InviteRejoinRequestItem,
+  type ParticipantInfo,
 } from '@/api/inviteApi'
 import { getChatHistory, getGroupChatHistory, uploadChatImage } from '@/api/chatApi'
 import type { ChatMessage } from '@/api/chatApi'
@@ -366,6 +398,7 @@ import {
   INVITE_STATUS_LABELS,
   INVITE_STATUS_COLORS,
   ATMOSPHERE_TAGS,
+  formatInviteTimeRange,
 } from '@/constants/inviteConst'
 
 const route = useRoute()
@@ -447,19 +480,14 @@ const canKick = computed(() => {
   return s === 'RECRUITING' || s === 'FULL' || s === 'CONFIRMED'
 })
 
-// 是否显示操作按钮
+// 是否显示操作按钮（含评价）
 const showActions = computed(() => {
-  if (isCreator.value) return false
-  if (invite.value?.status === 'ENDED' && hasJoined.value) {
-    // 显示评价按钮
+  // 已结束：发起人或参与者均可评价
+  if (invite.value?.status === 'ENDED' && (isCreator.value || hasJoined.value)) {
     return true
   }
+  if (isCreator.value) return false
   return canJoin.value || hasJoined.value || canRequestRejoin.value
-})
-
-// 是否是参与者（非发起人）
-const isParticipant = computed(() => {
-  return hasJoined.value && !isCreator.value
 })
 
 // 是否展示邀约内嵌聊天（发起人或已加入的参与者）
@@ -694,12 +722,71 @@ async function handleCancel() {
   }
 }
 
+// 再次发起：跳转创建页并预填
+function handleReinit() {
+  if (!invite.value) return
+  router.push({ path: '/invite/create', query: { from: String(invite.value.id) } })
+}
+
+// 发起人可评价的参与者（排除自己）
+const participantsToRate = computed(() => {
+  if (!invite.value?.participants || !userStore.user?.id) return []
+  return invite.value.participants.filter(p => p.userId !== userStore.user!.id)
+})
+
+// 当前评价对象的昵称
+const ratingTargetNickname = computed(() => {
+  if (!ratingForm.value.ratedUserId || !invite.value) return ''
+  if (ratingForm.value.ratedUserId === invite.value.creatorId) {
+    return invite.value.creator?.nickname || '发起人'
+  }
+  const p = invite.value.participants?.find(x => x.userId === ratingForm.value.ratedUserId)
+  return p?.nickname || '用户'
+})
+
+// 评价弹窗标题
+const ratingDialogTitle = computed(() => {
+  if (ratingForm.value.ratedUserId && ratingTargetNickname.value) {
+    return `评价 ${ratingTargetNickname.value}`
+  }
+  return '评价邀约'
+})
+
+// 打开评价弹窗
+function openRatingDialog() {
+  if (!invite.value) return
+  ratingForm.value.inviteId = invite.value.id
+  ratingForm.value.ratedUserId = 0
+  ratingForm.value.socialRating = 5
+  ratingForm.value.orgRating = 5
+  ratingForm.value.content = ''
+  if (isCreator.value && participantsToRate.value.length > 0) {
+    // 发起人：若只有一个参与者则直接选中
+    if (participantsToRate.value.length === 1) {
+      ratingForm.value.ratedUserId = participantsToRate.value[0].userId
+    }
+  } else if (!isCreator.value) {
+    // 参与者：评价发起人
+    ratingForm.value.ratedUserId = invite.value.creatorId
+  }
+  showRatingDialog.value = true
+}
+
+// 发起人选择参与者进行评价
+function selectParticipantForRating(p: ParticipantInfo) {
+  ratingForm.value.ratedUserId = p.userId
+}
+
+// 关闭弹窗时重置
+function resetRatingForm() {
+  ratingForm.value.ratedUserId = 0
+}
+
 // 提交评价
 async function submitRating() {
-  if (!invite.value) return
+  if (!invite.value || !ratingForm.value.ratedUserId) return
 
   ratingForm.value.inviteId = invite.value.id
-  ratingForm.value.ratedUserId = invite.value.creatorId
 
   try {
     await createRating(ratingForm.value)
@@ -1113,6 +1200,71 @@ onMounted(loadInvite)
 .rating-stars { font-size: 14px; font-weight: 600; color: $primary; }
 .rating-count { margin-left: auto; font-size: 12px; color: $text-muted; }
 
+.reinit-section {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid rgba(0, 0, 0, 0.06);
+}
+
+.rating-entry-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 16px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba($primary, 0.08), rgba($primary, 0.04));
+  border: 1px solid rgba($primary, 0.2);
+  border-radius: $radius-md;
+}
+
+.rating-entry-label {
+  font-size: 14px;
+  color: $text-primary;
+  font-weight: 500;
+}
+
+.rating-participant-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.rating-hint {
+  font-size: 14px;
+  color: $text-secondary;
+  margin-bottom: 12px;
+}
+
+.rating-participant-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  border-bottom: 1px solid $border-light;
+  cursor: pointer;
+  border-radius: $radius-md;
+  transition: background 0.2s;
+
+  &:hover {
+    background: rgba($primary, 0.06);
+  }
+}
+
+.rating-empty {
+  font-size: 14px;
+  color: $text-muted;
+  padding: 20px;
+  text-align: center;
+}
+
+.rating-target {
+  font-size: 14px;
+  color: $text-primary;
+  margin-bottom: 12px;
+  font-weight: 600;
+}
+
 .participants-section {
   padding-top: 4px;
   border-top: 1px solid $border-light;
@@ -1163,6 +1315,11 @@ onMounted(loadInvite)
   background: rgba($primary, 0.06);
   color: $primary;
   font-weight: 500;
+}
+
+.participant-tag-me {
+  color: #000;
+  background: rgba(0, 0, 0, 0.08);
 }
 
 .join-time {

@@ -18,14 +18,6 @@
       </button>
     </div>
 
-    <!-- 邀约来源选择器 (仅在"邀约"tab显示) -->
-    <div v-if="activeTab === 'list'" class="source-selector-row">
-      <el-radio-group v-model="inviteSource" @change="handleSourceChange">
-        <el-radio-button value="public">公共邀约</el-radio-button>
-        <el-radio-button value="mine">我创建的邀约</el-radio-button>
-      </el-radio-group>
-    </div>
-
     <div v-if="activeTab === 'list'" class="filters-row">
       <el-select
         v-model="filterType"
@@ -64,13 +56,24 @@
         <el-option label="近一月内" value="month" />
         <el-option label="近一年内" value="year" />
       </el-select>
+
+      <el-select
+        v-model="inviteSource"
+        placeholder="邀约来源"
+        class="source-select"
+        @change="handleSourceChange"
+      >
+        <el-option label="公共邀约" value="public" />
+        <el-option label="我发起的" value="created" />
+        <el-option label="我加入的" value="joined" />
+      </el-select>
     </div>
 
     <div v-if="activeTab === 'list'" class="invite-list">
-      <div v-if="inviteStore.loading && !inviteStore.myListInvites.length" class="loading-hint">
+      <div v-if="inviteStore.loading && !currentList.length" class="loading-hint">
         加载中...
       </div>
-      <div v-else-if="inviteStore.myListInvites.length" class="invite-items">
+      <div v-else-if="currentList.length" class="invite-items">
         <div
           v-for="invite in filteredInvites"
           :key="invite.id"
@@ -118,7 +121,7 @@
             </template>
             <span class="meta-item">
               <el-icon><Clock /></el-icon>
-              {{ formatInviteTime(invite.inviteTime) }}
+              {{ formatInviteTimeRange(invite.inviteTime, invite.inviteEndTime) }}
             </span>
             <span v-if="invite.location" class="meta-item">
               <el-icon><Location /></el-icon>
@@ -288,8 +291,8 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter, useRoute } from 'vue-router'
 import { useInviteStore } from '@/store/inviteStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import {
@@ -313,15 +316,17 @@ import {
   INVITE_STATUS_COLORS,
   INVITE_TYPE_OPTIONS,
   formatInviteTime,
+  formatInviteTimeRange,
 } from '@/constants/inviteConst'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect fill="%23f0f2f5" width="48" height="48" rx="24"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="22">👤</text></svg>'
 const router = useRouter()
+const route = useRoute()
 const inviteStore = useInviteStore()
 const badgeStore = useBadgeStore()
 
 const activeTab = ref<string>('list')
-const inviteSource = ref<'public' | 'mine'>('public') // 新增：邀约来源
+const inviteSource = ref<'public' | 'created' | 'joined'>('public')
 const filterType = ref<string>()
 const filterStatus = ref<string>()
 const filterTimeRange = ref<string>('week')
@@ -343,10 +348,16 @@ const statusOptions = [
   { value: 'TARGET_PENDING', label: '待处理' },
 ]
 
+// 当前来源对应的原始列表
+const currentList = computed(() => {
+  if (inviteSource.value === 'public') return inviteStore.invites
+  if (inviteSource.value === 'created') return inviteStore.createdInvites
+  return inviteStore.joinedInvites
+})
+
 // 过滤后的邀约列表（顺序由后端保证：状态优先级 + 同状态内按发布时间）
 const filteredInvites = computed(() => {
-  // 根据来源选择数据：我创建的邀约用 myListInvites，公共邀约用 invites
-  let list = inviteSource.value === 'mine' ? inviteStore.myListInvites : inviteStore.invites
+  let list = currentList.value
 
   if (filterType.value) {
     list = list.filter(i => i.inviteType === filterType.value)
@@ -380,7 +391,7 @@ async function handleAcceptInviteCard(inviteId: number) {
   try {
     await joinInvite(inviteId)
     ElMessage.success('已接受邀约')
-    await inviteStore.fetchMyInvitesList(filterTimeRange.value)
+    await loadInvitesBySource()
     await router.push(`/invite/${inviteId}`)
   } catch (e: any) {
     const msg = e?.response?.data?.message ?? e?.message ?? '操作失败'
@@ -392,7 +403,7 @@ async function handleDeclineInviteCard(inviteId: number) {
   try {
     await declineInvite(inviteId)
     ElMessage.success('已拒绝')
-    await inviteStore.fetchMyInvitesList(filterTimeRange.value)
+    await loadInvitesBySource()
   } catch (e: any) {
     ElMessage.error(e?.response?.data?.message || '操作失败')
   }
@@ -498,11 +509,12 @@ function handleSourceChange() {
 
 // 根据来源加载邀约
 async function loadInvitesBySource() {
-  if (inviteSource.value === 'mine') {
-    await inviteStore.fetchMyInvitesList(filterTimeRange.value)
+  if (inviteSource.value === 'public') {
+    await inviteStore.fetchInvites(filterType.value, filterStatus.value, filterTimeRange.value, undefined, true)
+  } else if (inviteSource.value === 'created') {
+    await inviteStore.fetchCreatedInvites(filterTimeRange.value)
   } else {
-    // 公共邀约：使用 discover 的邀约列表
-    await inviteStore.fetchInvites(undefined, undefined, 'week', undefined, false)
+    await inviteStore.fetchJoinedInvites(filterTimeRange.value)
   }
 }
 
@@ -531,13 +543,29 @@ async function loadWaitList() {
   }
 }
 
-// 初始化（我的邀约用 my-list，进入页即标记活动已查看）
+// 从路由 query 初始化筛选（如热门看板点击跳转）
+function initFromRouteQuery() {
+  const type = route.query.type as string | undefined
+  const source = route.query.source as string | undefined
+  if (type) filterType.value = type
+  if (source && (source === 'public' || source === 'created' || source === 'joined')) {
+    inviteSource.value = source
+  }
+}
+
+// 初始化（进入页即标记活动已查看）
 onMounted(() => {
   badgeStore.markInviteActivityViewed()
+  initFromRouteQuery()
   loadInvitesBySource()
   inviteStore.fetchStats()
   loadWaitList()
   loadHistory()
+})
+
+watch(() => [route.query.type, route.query.source], () => {
+  initFromRouteQuery()
+  loadInvitesBySource()
 })
 </script>
 
@@ -570,42 +598,6 @@ onMounted(() => {
   margin-bottom: 16px;
   padding-bottom: 16px;
   border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.source-selector-row {
-  display: flex;
-  align-items: center;
-  margin-bottom: 16px;
-  padding: 12px 16px;
-  background: $bg-secondary;
-  border-radius: $radius-lg;
-
-  :deep(.el-radio-group) {
-    display: flex;
-    gap: 8px;
-  }
-
-  :deep(.el-radio-button__inner) {
-    padding: 8px 20px;
-    border-radius: $radius-md;
-    border: 1px solid $border-color;
-    background: white;
-    color: $text-secondary;
-    font-size: 14px;
-    font-weight: 500;
-
-    &:hover {
-      color: $primary;
-      border-color: $primary;
-    }
-  }
-
-  :deep(.el-radio-button__original-radio:checked + .el-radio-button__inner) {
-    background: $primary;
-    border-color: $primary;
-    color: white;
-    box-shadow: 0 2px 8px rgba($primary, 0.3);
-  }
 }
 
 .tab-btn {

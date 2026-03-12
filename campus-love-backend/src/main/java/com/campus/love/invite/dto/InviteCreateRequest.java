@@ -32,6 +32,8 @@ public class InviteCreateRequest {
     @NotNull(message = "邀约时间不能为空")
     private String inviteTime;
 
+    private String inviteEndTime;
+
     private String location;
 
     private Integer maxParticipants;

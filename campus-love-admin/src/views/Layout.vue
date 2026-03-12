@@ -34,6 +34,10 @@
           <el-icon><TrendCharts /></el-icon>
           <span>AI Token 统计</span>
         </el-menu-item>
+        <el-menu-item index="/reports">
+          <el-icon><Flag /></el-icon>
+          <span>举报管理</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -55,7 +59,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
-import { DataAnalysis, User, Calendar, Document, MagicStick, TrendCharts } from '@element-plus/icons-vue'
+import { DataAnalysis, User, Calendar, Document, MagicStick, TrendCharts, Flag } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -69,6 +73,7 @@ const currentTitle = computed(() => {
     '/feeds': '帖子管理',
     '/moment': '心动时刻',
     '/ai-token-stats': 'AI Token 统计',
+    '/reports': '举报管理',
   }
   return map[route.path] || '管理后台'
 })

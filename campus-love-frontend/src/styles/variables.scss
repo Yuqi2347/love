@@ -1,34 +1,34 @@
-// === 校园交友 App 主题变量 ===
+// === 校园交友 App 主题变量（深圳大学主题色）===
 
-// 主色 - 柔和的珊瑚粉渐变 (更具亲和力的社交色彩)
-$primary: #ff6b81;
-$primary-dark: #ff4757;
-$primary-light: #ffb8c6;
-$primary-gradient: linear-gradient(135deg, #ff6b81, #ff9eb5);
+// 主色 - 荔枝红 #C8102E（用于字体、边框，避免大块填充）
+$primary: #C8102E;
+$primary-dark: #A00D24;
+$primary-light: #E8A5AE; // 极浅，仅用于 hover 等
+$primary-gradient: linear-gradient(135deg, rgba($primary, 0.06), rgba($primary, 0.12)); // 极浅荔枝红，避免大块填充
 
 // 辅助色
 $accent: #fbc531;
 $success: #2ed573;
 $warning: #ffa502;
-$danger: #ff4757;
+$danger: #C8102E;
 $info: #70a1ff;
 
-// 中性色
-$text-primary: #2f3542; // 深灰，避免纯黑的沉闷感
-$text-secondary: #747d8c;
-$text-muted: #a4b0be;
+// 中性色（SZU 深灰/浅灰/白）
+$text-primary: #333333; // 深灰
+$text-secondary: #666666;
+$text-muted: #999999;
 $text-inverse: #ffffff;
 
 // 背景色
-$bg-body: #f1f2f6; // 网页底层背景色，与卡片形成空间感对比
-$bg-primary: #ffffff; // 卡片/主内容的纯白背景
-$bg-secondary: #f8f9fa; // 输入框等底层块的底色
-$bg-tertiary: #f1f3f5;
-$bg-dark: #2f3542;
+$bg-body: #F5F5F5; // 浅灰
+$bg-primary: #FFFFFF; // 白色
+$bg-secondary: #F5F5F5;
+$bg-tertiary: #EEEEEE;
+$bg-dark: #333333;
 
-// 边框 (变淡或弃用)
-$border-color: #dfe4ea;
-$border-light: rgba(223, 228, 234, 0.5);
+// 边框
+$border-color: #e0e0e0;
+$border-light: rgba(0, 0, 0, 0.08);
 
 // 圆角 (社交应用特征：大圆角)
 $radius-sm: 8px;
@@ -41,7 +41,7 @@ $radius-full: 9999px;
 $shadow-sm: 0 4px 16px rgba(0, 0, 0, 0.03);
 $shadow-md: 0 8px 24px rgba(0, 0, 0, 0.06);
 $shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.08);
-$shadow-glow: 0 8px 24px rgba(255, 107, 129, 0.25); // 主色发光阴影
+$shadow-glow: 0 8px 24px rgba(200, 16, 46, 0.15); // 主色发光阴影
 
 // 布局
 $sidebar-width: 260px;

@@ -124,6 +124,13 @@ v-for="mbti in mbtiTypes" :key="mbti"
         <button v-if="step === 3" class="btn-primary" :disabled="saving" @click="handleSave">
           {{ saving ? '保存中...' : (isEditMode ? '保存修改' : '完成设置') }}
         </button>
+        <button
+          v-if="step === 1 && !isEditMode"
+          class="btn-skip-all"
+          @click="handleSkipAll"
+        >
+          跳过全部
+        </button>
       </div>
     </div>
   </div>
@@ -174,8 +181,9 @@ const form = reactive({
 
 // 加载用户原有数据
 onMounted(async () => {
-  // 初始化昵称为当前用户昵称
+  // 初始化昵称为当前用户昵称，学校从注册带入
   form.nickname = userStore.user?.nickname ?? ''
+  form.school = userStore.user?.school ?? sessionStorage.getItem('register_school') ?? ''
   if (userStore.user?.profileComplete) {
     isEditMode.value = true
     try {
@@ -248,6 +256,52 @@ async function handleSave() {
     return
   }
 
+  await doSave(totalInterests.join(','))
+}
+
+async function handleSkipAll() {
+  if (!form.nickname?.trim()) {
+    ElMessage.warning('请填写昵称')
+    return
+  }
+  if (!form.gender) {
+    ElMessage.warning('请选择性别')
+    return
+  }
+  if (!form.birthDate) {
+    ElMessage.warning('请选择生日')
+    return
+  }
+  if (!form.grade) {
+    ElMessage.warning('请选择年级')
+    return
+  }
+
+  saving.value = true
+  try {
+    await updateProfile({
+      nickname: form.nickname.trim(),
+      gender: form.gender,
+      birthDate: form.birthDate,
+      birthTime: form.birthTime || undefined,
+      school: form.school || undefined,
+      major: form.major || undefined,
+      grade: form.grade,
+      mbti: '',
+      bio: form.bio || undefined,
+      interests: '',
+    })
+    await userStore.fetchProfile()
+    ElMessage.success('已保存必填信息，可稍后在个人主页完善')
+    router.push('/')
+  } catch {
+    ElMessage.error('保存失败')
+  } finally {
+    saving.value = false
+  }
+}
+
+async function doSave(interests: string) {
   saving.value = true
   try {
     await updateProfile({
@@ -260,12 +314,11 @@ async function handleSave() {
       grade: form.grade,
       mbti: form.mbti,
       bio: form.bio,
-      interests: totalInterests.join(','),
+      interests,
     })
     await userStore.fetchProfile()
     const message = isEditMode.value ? '资料更新成功！' : '资料完善成功！'
     ElMessage.success(message)
-    // 编辑模式返回我的页面，首次完善返回首页
     router.push(isEditMode.value ? '/profile' : '/')
   } finally {
     saving.value = false
@@ -522,6 +575,7 @@ async function handleSave() {
 
 .step-actions {
   display: flex;
+  flex-wrap: wrap;
   justify-content: center;
   gap: 16px;
   margin-top: 36px;
@@ -529,6 +583,21 @@ async function handleSave() {
   .btn-primary, .btn-outline {
     min-width: 140px;
     height: 46px;
+  }
+
+  .btn-skip-all {
+    width: 100%;
+    margin-top: 8px;
+    padding: 10px;
+    font-size: 14px;
+    color: $text-muted;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+
+    &:hover {
+      color: $primary;
+    }
   }
 }
 </style>

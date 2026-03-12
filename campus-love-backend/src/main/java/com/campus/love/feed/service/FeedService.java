@@ -18,6 +18,7 @@ import com.campus.love.feed.mapper.FeedCommentMapper;
 import com.campus.love.feed.mapper.FeedLikeMapper;
 import com.campus.love.feed.mapper.FeedPostMapper;
 import com.campus.love.follow.service.FollowService;
+import com.campus.love.notification.service.NotificationService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import com.campus.love.user.service.ActivityService;
@@ -34,6 +35,7 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.time.LocalDateTime;
 import java.util.*;
+import java.time.temporal.ChronoUnit;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toMap;
@@ -50,6 +52,7 @@ public class FeedService {
     private final FollowService followService;
     private final ActivityService activityService;
     private final MessageMapper messageMapper;
+    private final NotificationService notificationService;
 
     /**
      * 创建朋友圈帖子
@@ -131,7 +134,7 @@ public class FeedService {
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
         List<FeedPost> filtered = posts.stream()
-                .filter(p -> canSeePost(p, currentUserId, authorMap))
+                .filter(p -> canSeePost(p, currentUserId, authorMap) && withinVisibilityTime(p, authorMap))
                 .skip((long) page * size)
                 .limit(size)
                 .collect(Collectors.toList());
@@ -153,6 +156,16 @@ public class FeedService {
         return true;
     }
 
+    /** 按作者 feedVisibilityTime 过滤：-1=全部，3/30/180=近N天 */
+    private boolean withinVisibilityTime(FeedPost post, Map<Long, User> authorMap) {
+        if (post == null || post.getCreatedAt() == null) return true;
+        User author = authorMap != null ? authorMap.get(post.getUserId()) : null;
+        Integer days = author != null ? author.getFeedVisibilityTime() : null;
+        if (days == null || days <= 0) return true;
+        LocalDateTime cutoff = LocalDateTime.now().minus(days, ChronoUnit.DAYS);
+        return !post.getCreatedAt().isBefore(cutoff);
+    }
+
     public Map<String, Object> getUserPostsSummary(Long userId) {
         Long currentUserId = CurrentUser.getId();
         List<FeedPost> all = feedPostMapper.selectList(
@@ -162,7 +175,7 @@ public class FeedService {
                         .last("LIMIT " + FeedConstants.USER_POSTS_SUMMARY_LIMIT));
         Map<Long, User> authorMap = batchLoadAuthors(all);
         List<FeedPost> visible = all.stream()
-                .filter(p -> canSeePost(p, currentUserId, authorMap))
+                .filter(p -> canSeePost(p, currentUserId, authorMap) && withinVisibilityTime(p, authorMap))
                 .toList();
         List<String> recentImageUrls = new ArrayList<>();
         for (FeedPost p : visible) {
@@ -190,7 +203,7 @@ public class FeedService {
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
         return posts.stream()
-                .filter(p -> canSeePost(p, currentUserId, authorMap))
+                .filter(p -> canSeePost(p, currentUserId, authorMap) && withinVisibilityTime(p, authorMap))
                 .skip((long) page * size)
                 .limit(size)
                 .map(p -> toResponse(p, currentUserId, authorMap))
@@ -212,7 +225,7 @@ public class FeedService {
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
         return posts.stream()
-                .filter(p -> canSeePost(p, currentUserId, authorMap))
+                .filter(p -> canSeePost(p, currentUserId, authorMap) && withinVisibilityTime(p, authorMap))
                 .skip((long) page * size)
                 .limit(size)
                 .map(p -> toResponse(p, currentUserId, authorMap))
@@ -234,7 +247,7 @@ public class FeedService {
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
         return posts.stream()
-                .filter(p -> canSeePost(p, currentUserId, authorMap))
+                .filter(p -> canSeePost(p, currentUserId, authorMap) && withinVisibilityTime(p, authorMap))
                 .skip((long) page * size)
                 .limit(size)
                 .map(p -> toResponse(p, currentUserId, authorMap))
@@ -291,6 +304,11 @@ public class FeedService {
     @Transactional
     public void addComment(FeedCommentRequest request) {
         Long userId = CurrentUser.getId();
+        String content = request.getContent() != null ? request.getContent().trim() : "";
+        String images = request.getImages() != null ? request.getImages().trim() : "";
+        if ((content.isEmpty() && images.isEmpty())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "评论内容或图片不能为空");
+        }
         FeedPost post = feedPostMapper.selectById(request.getPostId());
         if (post == null) throw new BusinessException(ResultCode.FEED_NOT_FOUND);
 
@@ -306,7 +324,8 @@ public class FeedService {
         FeedComment comment = new FeedComment();
         comment.setPostId(request.getPostId());
         comment.setUserId(userId);
-        comment.setContent(request.getContent());
+        comment.setContent(content);
+        comment.setImages(images.isEmpty() ? null : images);
         comment.setParentId(request.getParentId());
         comment.setRepliedUserId(repliedUserId);
         feedCommentMapper.insert(comment);
@@ -314,9 +333,15 @@ public class FeedService {
         post.setCommentCount(post.getCommentCount() + 1);
         feedPostMapper.updateById(post);
 
-        // TODO: 创建通知功能
-        // 如果回复的是其他人的评论，通知被回复的用户
-        // 如果是直接评论动态，且不是自己的动态，通知动态作者
+        User sender = userMapper.selectById(userId);
+        String senderNickname = sender != null ? sender.getNickname() : null;
+        String contentPreview = StringUtils.truncate(content, 50);
+
+        if (repliedUserId != null && !repliedUserId.equals(userId)) {
+            notificationService.notifyCommentReply(repliedUserId, userId, post.getId(), senderNickname, contentPreview);
+        } else if (request.getParentId() == null && !post.getUserId().equals(userId)) {
+            notificationService.notifyCommentOnPost(post.getUserId(), userId, post.getId(), senderNickname, contentPreview);
+        }
     }
 
     /**
@@ -528,6 +553,7 @@ public class FeedService {
                     .nickname(u != null ? u.getNickname() : "")
                     .avatarUrl(u != null ? u.getAvatarUrl() : "")
                     .content(isDeleted ? "该评论已删除" : c.getContent())
+                    .images(c.getImages())
                     .parentId(c.getParentId())
                     .repliedToName(repliedToName)
                     .createdAt(c.getCreatedAt() != null ? c.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")

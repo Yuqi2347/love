@@ -1,10 +1,13 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
+import { useUserStore } from '@/store/userStore'
 import {
   getInviteList,
   getMyInvitesList,
   getMyInviteWaits,
   getInviteStats,
+  getMyCreatedInvites,
+  getMyJoinedInvites,
   type Invite,
   type InviteStats,
   type InviteWait
@@ -22,14 +25,20 @@ export const useInviteStore = defineStore('invite', () => {
   const currentTimeRange = ref<string | undefined>(undefined)
   /** 我的邀约列表（我发起的 + 我参与的，含已退出） */
   const myListInvites = ref<Invite[]>([])
+  /** 我发起的邀约列表 */
+  const createdInvites = ref<Invite[]>([])
+  /** 我加入的邀约列表 */
+  const joinedInvites = ref<Invite[]>([])
 
   // 计算属性
   const recruitingInvites = computed(() =>
     invites.value.filter(i => i.status === InviteStatus.RECRUITING)
   )
-  const myInvites = computed(() =>
-    invites.value.filter(i => i.creatorId === 0) // TODO: 替换为实际用户ID
-  )
+  const myInvites = computed(() => {
+    const uid = useUserStore().user?.id
+    if (uid == null) return []
+    return invites.value.filter(i => i.creatorId === uid)
+  })
 
   // 获取邀约列表
   async function fetchInvites(type?: string, status?: string, timeRange?: string, keyword?: string, publicOnly?: boolean) {
@@ -83,6 +92,38 @@ export const useInviteStore = defineStore('invite', () => {
     } catch (error) {
       console.error('获取我的邀约列表失败:', error)
       myListInvites.value = []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 获取我发起的邀约
+  async function fetchCreatedInvites(timeRange?: string) {
+    loading.value = true
+    currentTimeRange.value = timeRange
+    const range = (timeRange === 'year' ? 'all' : timeRange || 'week') as 'week' | 'month' | 'all'
+    try {
+      const res = await getMyCreatedInvites(range)
+      createdInvites.value = res.data.data || []
+    } catch (error) {
+      console.error('获取我发起的邀约失败:', error)
+      createdInvites.value = []
+    } finally {
+      loading.value = false
+    }
+  }
+
+  // 获取我加入的邀约
+  async function fetchJoinedInvites(timeRange?: string) {
+    loading.value = true
+    currentTimeRange.value = timeRange
+    const range = (timeRange === 'year' ? 'all' : timeRange || 'week') as 'week' | 'month' | 'all'
+    try {
+      const res = await getMyJoinedInvites(range)
+      joinedInvites.value = res.data.data || []
+    } catch (error) {
+      console.error('获取我加入的邀约失败:', error)
+      joinedInvites.value = []
     } finally {
       loading.value = false
     }
@@ -179,6 +220,8 @@ export const useInviteStore = defineStore('invite', () => {
     currentStatus,
     currentTimeRange,
     myListInvites,
+    createdInvites,
+    joinedInvites,
 
     // 计算属性
     recruitingInvites,
@@ -189,6 +232,8 @@ export const useInviteStore = defineStore('invite', () => {
     loadMoreInvites,
     refreshInvites,
     fetchMyInvitesList,
+    fetchCreatedInvites,
+    fetchJoinedInvites,
     fetchInviteWaits,
     fetchStats,
     updateInviteStatus,

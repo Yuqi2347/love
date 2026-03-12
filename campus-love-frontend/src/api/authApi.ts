@@ -4,6 +4,8 @@ import type { ApiResult } from './request'
 export interface SchoolItem {
   name: string
   domain: string
+  /** 邮箱后缀，用于注册校验（如 szu.edu.cn） */
+  emailSuffix?: string
 }
 
 export interface RegisterParams {
@@ -11,6 +13,7 @@ export interface RegisterParams {
   verifyCode: string
   password: string
   nickname: string
+  school?: string
 }
 
 export interface LoginParams {

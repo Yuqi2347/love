@@ -7,7 +7,8 @@ import com.campus.love.common.utils.JwtUtil;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
-import lombok.extern.slf4j.Slf4j;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.*;
 import org.springframework.web.socket.handler.TextWebSocketHandler;
@@ -17,10 +18,11 @@ import java.io.IOException;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-@Slf4j
 @Component
 @RequiredArgsConstructor
 public class ChatWebSocketHandler extends TextWebSocketHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(ChatWebSocketHandler.class);
 
     private final JwtUtil jwtUtil;
     private final ChatService chatService;

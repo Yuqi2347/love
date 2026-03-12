@@ -90,6 +90,31 @@ export function getDashboardStats() {
   return request.get<ApiResult<DashboardStats>>('/admin/stats')
 }
 
+// ==================== 举报管理 ====================
+
+export interface ReportItem {
+  id: number
+  reporterId: number
+  reporterNickname: string
+  targetType: string
+  targetId: number
+  targetSummary: string
+  violationTypes: string
+  reason: string | null
+  status: string
+  adminNote: string | null
+  createdAt: string
+  reviewedAt: string | null
+}
+
+export function getReportList(params: { page?: number; size?: number; status?: string; targetId?: number }) {
+  return request.get<ApiResult<ReportItem[]>>('/report/list', { params })
+}
+
+export function reviewReport(id: number, data: { adminNote?: string; status?: string }) {
+  return request.put<ApiResult<void>>(`/report/${id}/review`, data)
+}
+
 // ==================== AI Token 统计 ====================
 
 export interface AiTokenDailyStat {

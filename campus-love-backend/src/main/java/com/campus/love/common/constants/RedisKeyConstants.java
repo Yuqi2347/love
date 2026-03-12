@@ -32,6 +32,13 @@ public final class RedisKeyConstants {
         return CHAT_DAILY_COUNT_PREFIX + senderId + ":" + receiverId + ":" + date;
     }
 
+    /** 未互关时 A 发给 B 的待回复标记，B 回复后清除 */
+    public static final String CHAT_NONMUTUAL_SENT_PREFIX = "chat:nonmutual:sent:";
+
+    public static String chatNonMutualSent(Long fromId, Long toId) {
+        return CHAT_NONMUTUAL_SENT_PREFIX + fromId + ":" + toId;
+    }
+
     public static String matchRecommend(Long userId) {
         return MATCH_RECOMMEND_PREFIX + userId;
     }

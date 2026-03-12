@@ -5,6 +5,8 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 
+import java.util.List;
+
 @Data
 public class ReportRequest {
 
@@ -14,7 +16,10 @@ public class ReportRequest {
     @NotNull(message = "目标ID不能为空")
     private Long targetId;
 
-    @NotBlank(message = "举报理由不能为空")
+    /** 违规类型列表（多选） */
+    private List<String> violationTypes;
+
+    /** 举报理由（选填） */
     @Size(max = 500, message = "举报理由不能超过500字")
     private String reason;
 }

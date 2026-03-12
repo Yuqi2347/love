@@ -26,7 +26,6 @@ import com.campus.love.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.redis.core.RedisTemplate;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -53,14 +52,21 @@ public class ChatService {
     private final ChatGroupService chatGroupService;
     private final FileUploadService fileUploadService;
 
-    @Value("${app.follow.daily-chat-limit}")
-    private int dailyChatLimit;
-
     /**
      * 上传聊天图片，返回可访问的 URL（供 msgType=3 图片消息使用，msgType=2 保留给邀约链接）
      */
     public String uploadChatImage(MultipartFile file) throws IOException {
         return fileUploadService.uploadImage(file, "chat_");
+    }
+
+    /**
+     * 检查当前用户对目标用户是否还能发送消息（未互关时仅允许发一条，对方回复前不能继续发）
+     */
+    public boolean canSendTo(Long currentUserId, Long otherUserId) {
+        if (currentUserId == null || otherUserId == null) return false;
+        if (followService.isMutual(currentUserId, otherUserId)) return true;
+        String sentKey = RedisKeyConstants.chatNonMutualSent(currentUserId, otherUserId);
+        return !Boolean.TRUE.equals(redisTemplate.hasKey(sentKey));
     }
 
     public ChatMessageResponse sendMessage(Long senderId, Long receiverId, String content, Integer msgType) {
@@ -73,12 +79,9 @@ public class ChatService {
         boolean mutual = followService.isMutual(senderId, receiverId);
 
         if (!mutual) {
-            String key = RedisKeyConstants.chatDailyCount(senderId, receiverId, LocalDate.now().toString());
-            Long count = redisTemplate.opsForValue().increment(key);
-            if (count != null && count == 1) {
-                redisTemplate.expire(key, 1, TimeUnit.DAYS);
-            }
-            if (count != null && count > dailyChatLimit) {
+            String sentKey = RedisKeyConstants.chatNonMutualSent(senderId, receiverId);
+            Boolean hasSent = redisTemplate.hasKey(sentKey);
+            if (Boolean.TRUE.equals(hasSent)) {
                 throw new BusinessException(ResultCode.CHAT_LIMIT_EXCEEDED);
             }
         }
@@ -93,6 +96,14 @@ public class ChatService {
         // 确保数据库与 WebSocket 回执中都有一致的创建时间（使用北京时间）
         message.setCreatedAt(ZonedDateTime.now(ZoneId.of("Asia/Shanghai")).toLocalDateTime());
         messageMapper.insert(message);
+
+        if (!mutual) {
+            String sentKey = RedisKeyConstants.chatNonMutualSent(senderId, receiverId);
+            redisTemplate.opsForValue().set(sentKey, "1", 30, TimeUnit.DAYS);
+        } else {
+            String replyKey = RedisKeyConstants.chatNonMutualSent(receiverId, senderId);
+            redisTemplate.delete(replyKey);
+        }
 
         User sender = userMapper.selectById(senderId);
         return ChatMessageResponse.builder()
@@ -203,6 +214,12 @@ public class ChatService {
                     .msgType(lastMsg.getMsgType())
                     .build();
         }).collect(Collectors.toList());
+    }
+
+    /** 取消关注时清除未互关消息限制（双方方向，供 FollowService 调用） */
+    public void clearNonMutualChatLimit(Long userId1, Long userId2) {
+        redisTemplate.delete(RedisKeyConstants.chatNonMutualSent(userId1, userId2));
+        redisTemplate.delete(RedisKeyConstants.chatNonMutualSent(userId2, userId1));
     }
 
     /** 当前用户私聊未读消息总数（用于导航红点） */

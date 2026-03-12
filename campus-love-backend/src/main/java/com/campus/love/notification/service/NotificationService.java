@@ -74,6 +74,15 @@ public class NotificationService {
     @Transactional
     public void createNotification(Long userId, Long senderId, Long inviteId,
                                    NotificationTypeEnum type, String title, String content) {
+        createNotification(userId, senderId, inviteId, null, type, title, content);
+    }
+
+    /**
+     * 创建通用通知（支持 postId）
+     */
+    @Transactional
+    public void createNotification(Long userId, Long senderId, Long inviteId, Long postId,
+                                   NotificationTypeEnum type, String title, String content) {
         if (userId == null || type == null) {
             throw new IllegalArgumentException("userId and type are required");
         }
@@ -81,11 +90,47 @@ public class NotificationService {
         notification.setUserId(userId);
         notification.setSenderId(senderId);
         notification.setInviteId(inviteId);
+        notification.setPostId(postId);
         notification.setType(type.name());
         notification.setTitle(title);
         notification.setContent(content);
         notification.setIsRead(false);
         notificationMapper.insert(notification);
+    }
+
+    /**
+     * 有人回复了你的评论
+     */
+    public void notifyCommentReply(Long repliedUserId, Long senderId, Long postId,
+                                   String senderNickname, String contentPreview) {
+        if (repliedUserId == null || senderId == null || repliedUserId.equals(senderId)) {
+            return;
+        }
+        String title = "有人回复了你的评论";
+        String content = (senderNickname != null ? senderNickname : "有人") + "回复了你"
+                + (contentPreview != null && !contentPreview.isBlank() ? "：" + truncate(contentPreview, 50) : "");
+        createNotification(repliedUserId, senderId, null, postId,
+                NotificationTypeEnum.COMMENT_REPLY, title, content);
+    }
+
+    /**
+     * 有人评论了你的动态
+     */
+    public void notifyCommentOnPost(Long postAuthorId, Long senderId, Long postId,
+                                    String senderNickname, String contentPreview) {
+        if (postAuthorId == null || senderId == null || postAuthorId.equals(senderId)) {
+            return;
+        }
+        String title = "有人评论了你的动态";
+        String content = (senderNickname != null ? senderNickname : "有人") + "评论了你的动态"
+                + (contentPreview != null && !contentPreview.isBlank() ? "：" + truncate(contentPreview, 50) : "");
+        createNotification(postAuthorId, senderId, null, postId,
+                NotificationTypeEnum.COMMENT_ON_POST, title, content);
+    }
+
+    private static String truncate(String s, int maxLen) {
+        if (s == null || s.length() <= maxLen) return s;
+        return s.substring(0, maxLen) + "...";
     }
 
     /**
@@ -270,6 +315,7 @@ public class NotificationService {
                 .userId(notification.getUserId())
                 .senderId(notification.getSenderId())
                 .inviteId(notification.getInviteId())
+                .postId(notification.getPostId())
                 .type(notification.getType())
                 .title(notification.getTitle())
                 .content(notification.getContent())

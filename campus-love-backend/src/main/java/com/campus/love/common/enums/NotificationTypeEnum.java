@@ -56,7 +56,17 @@ public enum NotificationTypeEnum {
     /**
      * 新举报（发送给管理员）
      */
-    REPORT("新举报");
+    REPORT("新举报"),
+
+    /**
+     * 有人回复了你的评论（发送给被回复用户）
+     */
+    COMMENT_REPLY("回复了你的评论"),
+
+    /**
+     * 有人评论了你的动态（发送给动态作者）
+     */
+    COMMENT_ON_POST("评论了你的动态");
 
     private final String description;
 

@@ -15,6 +15,7 @@ public class ReportItemResponse {
     private String targetType;
     private Long targetId;
     private String targetSummary;
+    private String violationTypes;
     private String reason;
     private String status;
     private String adminNote;

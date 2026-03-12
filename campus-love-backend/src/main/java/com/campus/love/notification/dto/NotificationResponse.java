@@ -20,6 +20,8 @@ public class NotificationResponse {
 
     private Long inviteId;
 
+    private Long postId;
+
     private String type;
 
     private String title;

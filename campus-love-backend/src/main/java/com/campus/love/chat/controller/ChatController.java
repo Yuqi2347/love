@@ -3,6 +3,7 @@ package com.campus.love.chat.controller;
 import com.campus.love.chat.dto.ChatGroupItemResponse;
 import com.campus.love.chat.dto.ChatMessageResponse;
 import com.campus.love.chat.dto.ConversationResponse;
+import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.chat.service.ChatService;
 import com.campus.love.common.result.Result;
 import io.swagger.v3.oas.annotations.Operation;
@@ -33,6 +34,12 @@ public class ChatController {
     @GetMapping("/unread-total")
     public Result<Integer> getUnreadTotal() {
         return Result.success(chatService.getTotalUnreadCount());
+    }
+
+    @Operation(summary = "检查是否可向对方发送消息（未互关时仅允许发一条）")
+    @GetMapping("/can-send/{otherUserId}")
+    public Result<Boolean> canSendTo(@PathVariable Long otherUserId) {
+        return Result.success(chatService.canSendTo(CurrentUser.getId(), otherUserId));
     }
 
     @Operation(summary = "获取聊天记录")

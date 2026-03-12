@@ -52,11 +52,12 @@ public class AiService {
 
         try {
             String bodyJson = objectMapper.writeValueAsString(body);
+            int timeoutSec = aiConfig.getTimeoutSeconds() > 0 ? aiConfig.getTimeoutSeconds() : 90;
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json; charset=UTF-8")
                     .header("Authorization", "Bearer " + aiConfig.getApiKey())
-                    .timeout(java.time.Duration.ofSeconds(30))
+                    .timeout(java.time.Duration.ofSeconds(timeoutSec))
                     .POST(HttpRequest.BodyPublishers.ofString(bodyJson, StandardCharsets.UTF_8))
                     .build();
 

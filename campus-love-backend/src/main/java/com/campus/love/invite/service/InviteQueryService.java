@@ -25,6 +25,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -122,9 +123,10 @@ public class InviteQueryService {
         IPage<Invite> invitePage = inviteMapper.selectPage(pageInfo, wrapper);
         List<Invite> records = invitePage.getRecords();
         Map<Long, User> creatorMap = batchLoadCreators(records);
+        Map<Long, Integer> participantCountMap = getParticipantCountMap(records.stream().map(Invite::getId).collect(Collectors.toList()));
         IPage<InviteResponse> responsePage = new Page<>(current, pageSize, invitePage.getTotal());
         responsePage.setRecords(records.stream()
-                .map(inv -> buildInviteResponse(inv, creatorMap))
+                .map(inv -> buildInviteResponse(inv, creatorMap, participantCountMap))
                 .collect(Collectors.toList()));
         return responsePage;
     }
@@ -149,8 +151,9 @@ public class InviteQueryService {
         IPage<Invite> invitePage = inviteMapper.selectPage(pageInfo, wrapper);
         List<Invite> records = invitePage.getRecords();
         Map<Long, User> creatorMap = batchLoadCreators(records);
+        Map<Long, Integer> participantCountMap = getParticipantCountMap(records.stream().map(Invite::getId).collect(Collectors.toList()));
         return records.stream()
-                .map(inv -> buildInviteResponse(inv, creatorMap))
+                .map(inv -> buildInviteResponse(inv, creatorMap, participantCountMap))
                 .collect(Collectors.toList());
     }
 
@@ -172,8 +175,9 @@ public class InviteQueryService {
 
         List<Invite> list = inviteMapper.selectList(wrapper);
         Map<Long, User> creatorMap = batchLoadCreators(list);
+        Map<Long, Integer> participantCountMap = getParticipantCountMap(list.stream().map(Invite::getId).collect(Collectors.toList()));
         return list.stream()
-                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "CREATOR", null, null))
+                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "CREATOR", null, null, participantCountMap))
                 .collect(Collectors.toList());
     }
 
@@ -205,13 +209,14 @@ public class InviteQueryService {
 
         List<Invite> list = inviteMapper.selectList(wrapper);
         Map<Long, User> creatorMap = batchLoadCreators(list);
+        Map<Long, Integer> participantCountMap = getParticipantCountMap(list.stream().map(Invite::getId).collect(Collectors.toList()));
         return list.stream()
                 .map(inv -> {
                     InviteParticipant p = inviteIdToMyParticipant.get(inv.getId());
                     String role = p != null && p.getLeftAt() != null ? "LEFT" : "PARTICIPANT";
                     LocalDateTime leftAt = p != null ? p.getLeftAt() : null;
                     String leaveReason = p != null && p.getLeftAt() != null ? p.getLeftReason() : null;
-                    return buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), role, leftAt, leaveReason);
+                    return buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), role, leftAt, leaveReason, participantCountMap);
                 })
                 .collect(Collectors.toList());
     }
@@ -249,8 +254,9 @@ public class InviteQueryService {
                 .collect(Collectors.toList());
         if (pending.isEmpty()) return List.of();
         Map<Long, User> creatorMap = batchLoadCreators(pending);
+        Map<Long, Integer> participantCountMap = getParticipantCountMap(pending.stream().map(Invite::getId).collect(Collectors.toList()));
         return pending.stream()
-                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "TARGET_PENDING", null, null))
+                .map(inv -> buildInviteResponseWithCreator(inv, creatorMap.get(inv.getCreatorId()), "TARGET_PENDING", null, null, participantCountMap))
                 .collect(Collectors.toList());
     }
 
@@ -366,6 +372,20 @@ public class InviteQueryService {
         return users != null ? users.stream().filter(Objects::nonNull).collect(toMap(User::getId, u -> u, (a, b) -> a)) : Map.of();
     }
 
+    /** 批量获取邀约的实际参与者数量（未退出的） */
+    private Map<Long, Integer> getParticipantCountMap(List<Long> inviteIds) {
+        if (inviteIds == null || inviteIds.isEmpty()) return Map.of();
+        Map<Long, Integer> result = new HashMap<>();
+        for (Long id : inviteIds) {
+            Long c = participantMapper.selectCount(
+                    new LambdaQueryWrapper<InviteParticipant>()
+                            .eq(InviteParticipant::getInviteId, id)
+                            .isNull(InviteParticipant::getLeftAt));
+            result.put(id, c != null ? c.intValue() : 0);
+        }
+        return result;
+    }
+
     private InviteResponse buildInviteResponse(Invite invite) {
         User creator = userMapper.selectById(invite.getCreatorId());
         return buildInviteResponseWithCreator(invite, creator);
@@ -376,11 +396,20 @@ public class InviteQueryService {
         return buildInviteResponseWithCreator(invite, creator);
     }
 
+    private InviteResponse buildInviteResponse(Invite invite, Map<Long, User> creatorMap, Map<Long, Integer> participantCountMap) {
+        User creator = creatorMap != null ? creatorMap.get(invite.getCreatorId()) : null;
+        return buildInviteResponseWithCreator(invite, creator, null, null, null, participantCountMap);
+    }
+
     private InviteResponse buildInviteResponseWithCreator(Invite invite, User creator) {
-        return buildInviteResponseWithCreator(invite, creator, null, null, null);
+        return buildInviteResponseWithCreator(invite, creator, null, null, null, null);
     }
 
     private InviteResponse buildInviteResponseWithCreator(Invite invite, User creator, String myRole, LocalDateTime myLeftAt, String myLeaveReason) {
+        return buildInviteResponseWithCreator(invite, creator, myRole, myLeftAt, myLeaveReason, null);
+    }
+
+    private InviteResponse buildInviteResponseWithCreator(Invite invite, User creator, String myRole, LocalDateTime myLeftAt, String myLeaveReason, Map<Long, Integer> participantCountMap) {
         InviteResponse.CreatorInfo targetUserInfo = null;
         if (invite.getTargetUserId() != null) {
             User target = userMapper.selectById(invite.getTargetUserId());
@@ -393,6 +422,9 @@ public class InviteQueryService {
                         .build();
             }
         }
+        int participantCount = (participantCountMap != null && participantCountMap.containsKey(invite.getId()))
+                ? participantCountMap.get(invite.getId())
+                : (invite.getParticipantCount() != null ? invite.getParticipantCount() : 0);
         return InviteResponse.builder()
                 .id(invite.getId())
                 .creatorId(invite.getCreatorId())
@@ -404,9 +436,10 @@ public class InviteQueryService {
                 .invitePeriod(invite.getInvitePeriod())
                 .periodConfig(invite.getPeriodConfig())
                 .inviteTime(invite.getInviteTime())
+                .inviteEndTime(invite.getInviteEndTime())
                 .location(invite.getLocation())
                 .maxParticipants(invite.getMaxParticipants())
-                .participantCount(invite.getParticipantCount())
+                .participantCount(participantCount)
                 .status(invite.getStatus())
                 .deadlineHours(invite.getDeadlineHours())
                 .atmosphereTags(invite.getAtmosphereTags())
@@ -459,6 +492,8 @@ public class InviteQueryService {
                     .build();
         }).collect(Collectors.toList());
         response.setParticipants(participantInfos);
+        // 以实际参与者列表为准，避免 participantCount 与数据库不一致
+        response.setParticipantCount(participantInfos.size());
         return response;
     }
 }

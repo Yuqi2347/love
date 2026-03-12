@@ -72,10 +72,12 @@ ai:
   # qwen3.5-flash 需用 compatible-mode；原生 api/v1 text-generation 不支持该模型
   base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
   model: ${AI_MODEL:qwen3-max}
-  max-tokens: 1000
+  max-tokens: 4096
+  # 调用 AI API 的超时秒数（缘分解析等长文本生成建议 90 秒以上）
+  timeout-seconds: ${AI_TIMEOUT:90}
   # 缘分解析冷却：-1=永久缓存（一经解析永不重复调用），0=每次调用AI，>0=冷却N小时
   # 调试时设为 0 可强制每次调用 AI，便于排查问题
-  yuanfen-cooldown-hours: ${YUANFEN_COOLDOWN:1}
+  yuanfen-cooldown-hours: ${YUANFEN_COOLDOWN:0}
 
 springdoc:
   api-docs:

@@ -66,6 +66,12 @@ public class UserController {
         return Result.success(userService.updateFeedVisibility(visibility));
     }
 
+    @Operation(summary = "更新动态可见时间")
+    @PatchMapping("/feed-visibility-time")
+    public Result<UserProfileResponse> updateFeedVisibilityTime(@RequestParam Integer days) {
+        return Result.success(userService.updateFeedVisibilityTime(days));
+    }
+
     @Operation(summary = "上传头像")
     @PostMapping("/avatar")
     public Result<String> uploadAvatar(@RequestParam("file") MultipartFile file) {
@@ -75,6 +81,24 @@ public class UserController {
             log.warn("头像上传失败: {}", e.getMessage());
             return Result.error(ResultCode.INTERNAL_ERROR, "头像上传失败，请稍后重试");
         }
+    }
+
+    @Operation(summary = "上传个人主页背景图")
+    @PutMapping("/cover")
+    public Result<String> uploadCover(@RequestParam("file") MultipartFile file) {
+        try {
+            return Result.success("背景上传成功", userService.uploadCover(file));
+        } catch (Exception e) {
+            log.warn("背景上传失败: {}", e.getMessage());
+            return Result.error(ResultCode.INTERNAL_ERROR, "背景上传失败，请稍后重试");
+        }
+    }
+
+    @Operation(summary = "清除个人主页背景图")
+    @DeleteMapping("/cover")
+    public Result<Void> clearCover() {
+        userService.clearCover();
+        return Result.success();
     }
 
     @Operation(summary = "发送密码修改验证码到邮箱")

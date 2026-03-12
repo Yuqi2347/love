@@ -45,6 +45,11 @@ const router = createRouter({
           name: 'AiTokenStats',
           component: () => import('@/views/AiTokenStatsView.vue'),
         },
+        {
+          path: 'reports',
+          name: 'Reports',
+          component: () => import('@/views/ReportListView.vue'),
+        },
       ],
     },
   ],

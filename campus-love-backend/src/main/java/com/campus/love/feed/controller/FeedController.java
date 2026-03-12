@@ -119,6 +119,14 @@ public class FeedController {
         return Result.success();
     }
 
+    @Operation(summary = "获取我点赞的帖子列表")
+    @GetMapping("/liked-posts")
+    public Result<List<FeedPostResponse>> getLikedPosts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return Result.success(feedService.getLikedPosts(page, size));
+    }
+
     @Operation(summary = "获取帖子详情", description = "单条帖子及完整评论列表（爬楼式）")
     @GetMapping("/{postId}")
     public Result<FeedPostResponse> getPostDetail(@PathVariable Long postId) {
@@ -183,14 +191,6 @@ public class FeedController {
     @GetMapping("/social-notifications")
     public Result<List<java.util.Map<String, Object>>> getSocialNotifications() {
         return Result.success(feedService.getSocialNotifications(CurrentUser.getId()));
-    }
-
-    @Operation(summary = "获取我点赞的帖子列表")
-    @GetMapping("/liked-posts")
-    public Result<List<FeedPostResponse>> getLikedPosts(
-            @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "20") int size) {
-        return Result.success(feedService.getLikedPosts(page, size));
     }
 
     @Operation(summary = "分享帖子", description = "将帖子分享给一个或多个互关朋友")

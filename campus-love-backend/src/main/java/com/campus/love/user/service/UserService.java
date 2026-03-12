@@ -138,6 +138,16 @@ public class UserService {
         return toProfileResponse(user, true);
     }
 
+    public UserProfileResponse updateFeedVisibilityTime(Integer days) {
+        Long userId = CurrentUser.getId();
+        User user = userMapper.selectById(userId);
+        if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        int d = (days != null && (days == 3 || days == 30 || days == 180 || days == -1)) ? days : -1;
+        user.setFeedVisibilityTime(d);
+        userMapper.updateById(user);
+        return toProfileResponse(user, true);
+    }
+
     public String uploadAvatar(MultipartFile file) throws IOException {
         Long userId = CurrentUser.getId();
         String avatarUrl = fileUploadService.uploadImage(file, "avatar_" + userId + "_", 5L * 1024 * 1024);
@@ -147,6 +157,26 @@ public class UserService {
         userMapper.updateById(user);
 
         return avatarUrl;
+    }
+
+    public String uploadCover(MultipartFile file) throws IOException {
+        Long userId = CurrentUser.getId();
+        String coverUrl = fileUploadService.uploadImage(file, "cover_" + userId + "_", 5L * 1024 * 1024);
+
+        User user = userMapper.selectById(userId);
+        user.setCoverImageUrl(coverUrl);
+        userMapper.updateById(user);
+
+        return coverUrl;
+    }
+
+    public void clearCover() {
+        Long userId = CurrentUser.getId();
+        User user = userMapper.selectById(userId);
+        if (user != null) {
+            user.setCoverImageUrl(null);
+            userMapper.updateById(user);
+        }
     }
 
     /**
@@ -202,10 +232,12 @@ public class UserService {
                 .zodiac(user.getZodiac())
                 .bazi(bazi)
                 .avatarUrl(user.getAvatarUrl())
+                .coverImageUrl(user.getCoverImageUrl())
                 .bio(user.getBio())
                 .interests(user.getInterests())
                 .profileComplete(user.getProfileComplete())
                 .feedVisibility(user.getFeedVisibility() != null ? user.getFeedVisibility() : VisibilityConstants.ALL)
+                .feedVisibilityTime(user.getFeedVisibilityTime() != null ? user.getFeedVisibilityTime() : -1)
                 .build();
     }
 }

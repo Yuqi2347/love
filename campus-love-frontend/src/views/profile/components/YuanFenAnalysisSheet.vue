@@ -119,6 +119,7 @@
 
 <script setup lang="ts">
 import { ref, computed, watch } from 'vue'
+import { ElMessage } from 'element-plus'
 import { getYuanFenAnalysis, type YuanFenAnalysisResult } from '@/api/aiApi'
 
 const props = defineProps<{
@@ -172,13 +173,39 @@ async function fetchAnalysis() {
 }
 
 async function copyQuote() {
-  if (!result.value?.exclusiveQuote) return
+  const text = result.value?.exclusiveQuote
+  if (!text) return
   try {
-    await navigator.clipboard.writeText(result.value.exclusiveQuote)
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text)
+    } else {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+    }
     copied.value = true
     setTimeout(() => { copied.value = false }, 2000)
   } catch {
-    // fallback
+    // 降级：尝试 execCommand
+    try {
+      const ta = document.createElement('textarea')
+      ta.value = text
+      ta.style.position = 'fixed'
+      ta.style.opacity = '0'
+      document.body.appendChild(ta)
+      ta.select()
+      document.execCommand('copy')
+      document.body.removeChild(ta)
+      copied.value = true
+      setTimeout(() => { copied.value = false }, 2000)
+    } catch {
+      ElMessage.error('复制失败')
+    }
   }
 }
 </script>

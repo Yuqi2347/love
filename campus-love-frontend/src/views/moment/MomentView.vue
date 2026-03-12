@@ -25,10 +25,16 @@
           <span class="stat-number">{{ participantCount }}</span>
           <span class="stat-label">人已报名本周活动</span>
         </div>
-        <button class="btn-hero" :disabled="!enrollmentOpen" @click="$router.push('/moment/enroll')">
+        <button
+          class="btn-hero"
+          :disabled="!enrollmentOpen || !profileComplete"
+          :title="!profileComplete ? '请先完善个人信息后进行分析' : ''"
+          @click="profileComplete ? $router.push('/moment/enroll') : null"
+        >
           {{ enrollmentOpen ? '参加本周活动' : '本周报名已截止' }}
         </button>
-        <p class="hero-tip">{{ enrollmentOpen ? '填写约 5 分钟的匿名问卷，即可参与匹配' : '请等待下周活动开放' }}</p>
+        <p v-if="!profileComplete" class="hero-tip profile-incomplete">请先完善个人信息后进行分析</p>
+        <p v-else class="hero-tip">{{ enrollmentOpen ? '填写约 5 分钟的匿名问卷，即可参与匹配' : '请等待下周活动开放' }}</p>
       </div>
     </div>
 
@@ -113,6 +119,7 @@ import { useUserStore } from '@/store/userStore'
 
 const userStore = useUserStore()
 const isAdmin = computed(() => userStore.user?.isAdmin || false)
+const profileComplete = computed(() => !!userStore.user?.profileComplete)
 
 const loading = ref(true)
 const status = ref<string>('NOT_ENROLLED')
@@ -356,6 +363,9 @@ onMounted(fetchStatus)
   margin-top: 16px;
   font-size: 13px;
   color: $text-muted;
+}
+.hero-tip.profile-incomplete {
+  color: var(--el-color-warning);
 }
 
 // ==================== 等待中 ====================

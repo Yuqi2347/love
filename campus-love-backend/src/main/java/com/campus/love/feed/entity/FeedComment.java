@@ -15,6 +15,8 @@ public class FeedComment {
     private Long postId;
     private Long userId;
     private String content;
+    /** 评论图片URL，逗号分隔 */
+    private String images;
     private Long parentId;
 
     /** 被回复的用户ID（用于显示"回复 @用户名"） */

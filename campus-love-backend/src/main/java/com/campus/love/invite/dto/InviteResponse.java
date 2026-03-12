@@ -24,6 +24,7 @@ public class InviteResponse {
     private String invitePeriod;
     private String periodConfig;
     private LocalDateTime inviteTime;
+    private LocalDateTime inviteEndTime;
     private String location;
     private Integer maxParticipants;
     private Integer participantCount;

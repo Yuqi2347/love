@@ -105,6 +105,11 @@ const router = createRouter({
           name: 'UserPosts',
           component: () => import('@/views/profile/UserPostsView.vue'),
         },
+        {
+          path: 'admin/reports',
+          name: 'AdminReports',
+          component: () => import('@/views/admin/AdminReportView.vue'),
+        },
       ],
     },
   ],

@@ -7,6 +7,7 @@ export interface FeedComment {
   nickname: string
   avatarUrl: string | null
   content: string
+  images?: string | null
   parentId: number | null
   repliedToName?: string | null  // 被回复的用户昵称
   repliedUserId?: number | null  // 被回复的用户ID
@@ -103,7 +104,7 @@ export function unlikePost(postId: number) {
   return request.delete<ApiResult<void>>(`/feed/like/${postId}`)
 }
 
-export function addComment(data: { postId: number; content: string; parentId?: number; repliedUserId?: number }) {
+export function addComment(data: { postId: number; content: string; images?: string; parentId?: number; repliedUserId?: number }) {
   return request.post<ApiResult<void>>('/feed/comment', data)
 }
 

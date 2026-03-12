@@ -1,7 +1,7 @@
 <template>
   <div class="message-page">
     <div class="page-header">
-      <h2 class="page-title">消息</h2>
+      <h2 class="page-title">私信</h2>
     </div>
 
     <!-- 通知类型 Tabs -->
@@ -12,7 +12,7 @@
         :class="['notify-tab', { active: activeTab === tab.key }]"
         @click="activeTab = tab.key"
       >
-        <span class="tab-icon">{{ tab.icon }}</span>
+        <el-icon class="tab-icon" :size="20"><component :is="tab.icon" /></el-icon>
         <span class="tab-label">{{ tab.label }}</span>
         <span v-if="tab.count > 0" class="tab-badge">{{ tab.count > 99 ? '99+' : tab.count }}</span>
       </button>
@@ -38,7 +38,7 @@
             </div>
             <!-- 帖子分享卡片 -->
             <div v-if="conv.msgType === 5" class="conv-msg-share-card" @click.stop="$router.push(`/feed/${getPostIdFromShare(conv.lastMessage)}`)">
-              <span class="share-icon">🔗</span>
+              <el-icon class="share-icon" :size="16"><Share /></el-icon>
               <span class="share-text">{{ getShareContent(conv.lastMessage) }}</span>
             </div>
             <p v-else class="conv-msg text-ellipsis">{{ displayLastMessage(conv.lastMessage, conv.msgType) }}</p>
@@ -46,13 +46,13 @@
         </div>
       </div>
       <div v-else class="empty-state">
-        <div class="empty-icon">💬</div>
+        <el-icon class="empty-icon" :size="48"><ChatDotRound /></el-icon>
         <p>暂无消息</p>
         <p class="empty-hint">关注感兴趣的人，开始聊天吧</p>
       </div>
     </div>
 
-    <!-- 赞和收藏 -->
+    <!-- 赞 -->
     <div v-if="activeTab === 'likes'" class="notify-list">
       <div v-if="likeNotifications.length">
         <div
@@ -70,8 +70,8 @@ v-for="item in likeNotifications" :key="item.id"
         </div>
       </div>
       <div v-else class="empty-state">
-        <div class="empty-icon">❤️</div>
-        <p>暂无赞和收藏</p>
+        <el-icon class="empty-icon" :size="48"><StarFilled /></el-icon>
+        <p>暂无赞</p>
       </div>
     </div>
 
@@ -98,7 +98,7 @@ v-for="item in followerNotifications" :key="item.id"
         </div>
       </div>
       <div v-else class="empty-state">
-        <div class="empty-icon">👥</div>
+        <el-icon class="empty-icon" :size="48"><UserFilled /></el-icon>
         <p>暂无新增关注</p>
       </div>
     </div>
@@ -121,7 +121,7 @@ v-for="item in commentNotifications" :key="item.id"
         </div>
       </div>
       <div v-else class="empty-state">
-        <div class="empty-icon">💬</div>
+        <el-icon class="empty-icon" :size="48"><ChatDotRound /></el-icon>
         <p>暂无评论和@</p>
       </div>
     </div>
@@ -209,10 +209,10 @@ const unreadCommentCount = computed(() =>
 
 const notifyTabs = computed(() => {
   return [
-    { key: 'chat', label: '消息', icon: '💬', count: conversations.value.reduce((s, c) => s + (c.unreadCount || 0), 0) },
-    { key: 'likes', label: '赞和收藏', icon: '❤️', count: unreadLikeCount.value },
-    { key: 'followers', label: '新增关注', icon: '👥', count: unreadFollowerCount.value },
-    { key: 'comments', label: '评论@', icon: '💬', count: unreadCommentCount.value },
+    { key: 'chat', label: '消息', icon: 'ChatDotRound', count: conversations.value.reduce((s, c) => s + (c.unreadCount || 0), 0) },
+    { key: 'likes', label: '赞', icon: 'StarFilled', count: unreadLikeCount.value },
+    { key: 'followers', label: '新增关注', icon: 'UserFilled', count: unreadFollowerCount.value },
+    { key: 'comments', label: '评论@', icon: 'ChatDotRound', count: unreadCommentCount.value },
   ]
 })
 
@@ -507,7 +507,7 @@ async function loadFollowers() {
   }
 
   .share-icon {
-    font-size: 16px;
+    flex-shrink: 0;
   }
 
   .share-text {

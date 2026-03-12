@@ -1,7 +1,7 @@
 package com.campus.love.match.service;
 
+import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 
 import java.util.*;
@@ -18,7 +18,10 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Service
+@RequiredArgsConstructor
 public class InterestMatcher {
+
+    private final TagWeightCache tagWeightCache;
 
     /**
      * 计算兴趣匹配度（基础版本，无IDF权重）
@@ -114,14 +117,8 @@ public class InterestMatcher {
      * @return 标签 -> 权重映射
      */
     private Map<String, Double> toWeightMap(Set<String> tags) {
-        // TODO: 集成TagWeightCache后使用IDF权重
-        // 目前暂时使用统一权重1.0
-        Map<String, Double> weights = new HashMap<>();
-        for (String tag : tags) {
-            weights.put(tag, 1.0);
-            // 未来使用: weights.put(tag, TagWeightCache.getIdfWeight(tag));
-        }
-        return weights;
+        if (tags == null || tags.isEmpty()) return Map.of();
+        return tagWeightCache.batchGetIdfWeights(tags);
     }
 
     /**

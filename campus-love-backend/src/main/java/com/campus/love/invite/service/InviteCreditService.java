@@ -131,7 +131,7 @@ public class InviteCreditService {
     }
 
     /**
-     * 调整用户信用分
+     * 调整用户信用分。加分时不超过 {@link InviteCreditConstants#CREDIT_MAX}，扣分时不低于 0。
      */
     public void adjustCreditScore(Long userId, int delta) {
         if (userId == null || delta == 0) {
@@ -142,7 +142,13 @@ public class InviteCreditService {
             return;
         }
         int current = user.getCreditScoreOrDefault();
-        user.setCreditScore(current + delta);
+        int newScore = current + delta;
+        if (delta > 0 && newScore > InviteCreditConstants.CREDIT_MAX) {
+            newScore = InviteCreditConstants.CREDIT_MAX;
+        } else if (delta < 0 && newScore < 0) {
+            newScore = 0;
+        }
+        user.setCreditScore(newScore);
         userMapper.updateById(user);
     }
 

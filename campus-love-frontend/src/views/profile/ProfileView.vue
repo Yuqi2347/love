@@ -1,7 +1,7 @@
 <template>
   <div class="profile-page">
     <div class="profile-header">
-      <div class="profile-cover">
+      <div class="profile-cover" :style="coverStyle">
         <!-- Back button for navigation -->
         <button v-if="showBackButton" class="profile-back-btn" @click="goBack">
           <el-icon><ArrowLeft /></el-icon>
@@ -16,6 +16,9 @@
               <el-dropdown-menu>
                 <el-dropdown-item @click="$router.push('/setup-profile')">
                   <el-icon><Edit /></el-icon> 编辑资料
+                </el-dropdown-item>
+                <el-dropdown-item @click="showCoverSettings = true">
+                  <el-icon><Picture /></el-icon> 背景设置
                 </el-dropdown-item>
                 <el-dropdown-item @click="showPrivacySettings = true">
                   <el-icon><Lock /></el-icon> 隐私设置
@@ -54,6 +57,13 @@
               <span v-if="profile.isAdmin" class="admin-badge">管理员</span>
             </div>
           </div>
+          <button
+            v-if="!isMe && followStatus === 'MUTUAL'"
+            class="profile-remark-btn"
+            @click="openRemarkEditor({ userId: profileId!, nickname: profile.nickname, remark: followStore.getRemarkByUserId(profileId!) })"
+          >
+            备注
+          </button>
           <p v-if="isMe && profile.email" class="profile-email">{{ profile.email }}</p>
         </div>
       </div>
@@ -239,7 +249,8 @@
       >
         <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
         <div class="user-list-info">
-          <div class="user-list-name">{{ user.nickname }}</div>
+          <div class="user-list-name">{{ isMe ? followStore.getDisplayName(user.userId, user.remark || user.nickname) : (user.remark || user.nickname) }}</div>
+          <div v-if="(isMe ? followStore.getRemarkByUserId(user.userId) : user.remark)" class="user-list-original-name">昵称: {{ user.nickname }}</div>
           <div v-if="user.isMutual" class="user-list-relation">互相关注</div>
         </div>
         <button
@@ -257,19 +268,12 @@
   <!-- 朋友列表弹窗 -->
   <el-dialog :title="isMe ? '我的朋友' : `${profile?.nickname || 'TA'}的朋友`" width="500px" :model-value="showMutual" @update:model-value="showMutual = false">
     <div v-if="mutualList.length" class="user-list">
-      <div v-for="user in mutualList" :key="user.userId" class="user-list-item-with-action" @click="goToUserProfile(user.userId)">
+      <div v-for="user in mutualList" :key="user.userId" class="user-list-item" @click="goToUserProfile(user.userId)">
         <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
         <div class="user-list-info">
           <div class="user-list-name">{{ user.remark || user.nickname }}</div>
           <div v-if="user.remark" class="user-list-original-name">昵称: {{ user.nickname }}</div>
         </div>
-        <button
-          v-if="isMe"
-          class="user-list-action-btn remark-btn"
-          @click.stop="openRemarkEditor(user)"
-        >
-          {{ user.remark ? '改备注' : '设备注' }}
-        </button>
       </div>
     </div>
     <div v-else class="empty-hint">{{ isMe ? '暂无朋友' : 'TA暂无朋友' }}</div>
@@ -301,18 +305,46 @@
     @analyzed="onYuanFenAnalyzed"
   />
 
+  <!-- 背景设置弹窗 -->
+  <el-dialog title="背景设置" width="420px" :model-value="showCoverSettings" @update:model-value="onCoverDialogClose">
+    <div class="cover-settings-form">
+      <div class="cover-preview" :style="coverPreviewStyle">
+        <span v-if="!coverPreviewUrl" class="cover-placeholder">选择图片作为个人主页背景</span>
+      </div>
+      <div class="cover-actions">
+        <input ref="coverInput" type="file" accept="image/*" style="display: none" @change="handleCoverChange" />
+        <button class="btn-outline" @click="coverInput?.click()">选择图片</button>
+        <button v-if="coverPreviewUrl" class="btn-primary" style="margin-left: 8px" :disabled="coverUploading" @click="saveCover">
+          {{ coverUploading ? '上传中...' : '保存' }}
+        </button>
+        <button v-if="displayCoverUrl" class="btn-outline danger" style="margin-left: 8px" :disabled="coverUploading" @click="clearCover">
+          清除背景
+        </button>
+      </div>
+    </div>
+  </el-dialog>
+
   <!-- 隐私设置弹窗 -->
   <el-dialog title="隐私设置" width="420px" :model-value="showPrivacySettings" @update:model-value="showPrivacySettings = false">
     <div class="privacy-settings-form">
       <div class="setting-item">
         <div class="setting-label">谁可以看我的动态</div>
-        <el-radio-group v-model="feedVisibility" class="privacy-radio-group" @change="saveFeedVisibility">
-          <el-radio label="ALL">所有人可见</el-radio>
-          <el-radio label="FOLLOWING">我关注的人可见</el-radio>
-          <el-radio label="FOLLOWERS">关注我的人可见</el-radio>
-          <el-radio label="FRIENDS">朋友可见（互相关注）</el-radio>
-          <el-radio label="SELF">仅自己可见</el-radio>
-        </el-radio-group>
+        <el-select v-model="feedVisibility" placeholder="请选择" class="privacy-select" @change="saveFeedVisibility">
+          <el-option label="所有人可见" value="ALL" />
+          <el-option label="我关注的人可见" value="FOLLOWING" />
+          <el-option label="关注我的人可见" value="FOLLOWERS" />
+          <el-option label="朋友可见（互相关注）" value="FRIENDS" />
+          <el-option label="仅自己可见" value="SELF" />
+        </el-select>
+      </div>
+      <div class="setting-item">
+        <div class="setting-label">可见时间</div>
+        <el-select v-model="feedVisibilityTime" placeholder="请选择" class="privacy-select" @change="saveFeedVisibilityTime">
+          <el-option label="展示全部" :value="-1" />
+          <el-option label="近三天" :value="3" />
+          <el-option label="近一月" :value="30" />
+          <el-option label="近半年" :value="180" />
+        </el-select>
       </div>
       <div class="privacy-hint">
         <el-icon><InfoFilled /></el-icon>
@@ -396,16 +428,16 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { useFollowStore } from '@/store/followStore'
-import { getUserProfile, updateFeedVisibility, type UserProfile } from '@/api/userApi'
+import { getUserProfile, updateFeedVisibility, updateFeedVisibilityTime, type UserProfile } from '@/api/userApi'
 import { getMatchDetail, type MatchResult } from '@/api/matchApi'
 import { getInviteStats, getUserInviteStats, type InviteStats } from '@/api/inviteApi'
 import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, setUserRemark, type FollowUser } from '@/api/followApi'
 import { getUserPostsSummary } from '@/api/feedApi'
 import { ElMessage } from 'element-plus'
-import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton, InfoFilled, ArrowLeft } from '@element-plus/icons-vue'
+import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton, InfoFilled, ArrowLeft, Picture } from '@element-plus/icons-vue'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { FOLLOW_STATUS_LABELS, FollowStatus } from '@/constants/followConst'
-import { uploadAvatar, sendPasswordCode, resetPassword as resetPasswordApi } from '@/api/userApi'
+import { uploadAvatar, uploadCover, clearCover as clearCoverApi, sendPasswordCode, resetPassword as resetPasswordApi } from '@/api/userApi'
 import { getYuanFenCooldown } from '@/api/aiApi'
 import YuanFenAnalysisSheet from './components/YuanFenAnalysisSheet.vue'
 
@@ -446,6 +478,10 @@ const yuanfenCooldown = ref(0)
 let cooldownTimer: ReturnType<typeof setInterval> | null = null
 
 function openYuanFen() {
+  if (!userStore.user?.profileComplete) {
+    ElMessage.warning('请先完善个人信息后进行分析')
+    return
+  }
   // 冷却期间仍允许打开弹窗查看上次解析结果；是否重新调用 AI 由后端+冷却策略控制
   showYuanFen.value = true
 }
@@ -471,9 +507,83 @@ const followerList = ref<FollowUser[]>([])
 const mutualList = ref<FollowUser[]>([])
 const avatarInput = ref<HTMLInputElement | null>(null)
 
+// 背景设置
+const showCoverSettings = ref(false)
+const coverInput = ref<HTMLInputElement | null>(null)
+const coverPreviewUrl = ref<string>('')
+const coverFileToUpload = ref<File | null>(null)
+const coverUploading = ref(false)
+const displayCoverUrl = computed(() => profile.value?.coverImageUrl || userStore.user?.coverImageUrl || '')
+const coverStyle = computed(() => {
+  const url = displayCoverUrl.value
+  if (url) return { backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+  return {}
+})
+const coverPreviewStyle = computed(() => {
+  const url = coverPreviewUrl.value || displayCoverUrl.value
+  if (url) return { backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
+  return {}
+})
+
+function handleCoverChange(e: Event) {
+  const target = e.target as HTMLInputElement
+  const file = target.files?.[0]
+  if (!file || !file.type.startsWith('image/')) return
+  coverFileToUpload.value = file
+  coverPreviewUrl.value = URL.createObjectURL(file)
+  if (target) target.value = ''
+}
+
+async function saveCover() {
+  const file = coverFileToUpload.value
+  if (!file) return
+  coverUploading.value = true
+  try {
+    const res = await uploadCover(file)
+    const url = res.data.data
+    if (url && profile.value) profile.value.coverImageUrl = url
+    if (url && userStore.user) userStore.user.coverImageUrl = url
+    ElMessage.success('背景已更新')
+    showCoverSettings.value = false
+    resetCoverPreview()
+  } catch {
+    ElMessage.error('背景上传失败')
+  } finally {
+    coverUploading.value = false
+  }
+}
+
+async function clearCover() {
+  coverUploading.value = true
+  try {
+    await clearCoverApi()
+    if (profile.value) profile.value.coverImageUrl = null
+    if (userStore.user) userStore.user.coverImageUrl = null
+    ElMessage.success('背景已清除')
+    showCoverSettings.value = false
+    resetCoverPreview()
+  } catch {
+    ElMessage.error('清除背景失败')
+  } finally {
+    coverUploading.value = false
+  }
+}
+
+function resetCoverPreview() {
+  if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
+  coverPreviewUrl.value = ''
+  coverFileToUpload.value = null
+}
+
+function onCoverDialogClose() {
+  showCoverSettings.value = false
+  resetCoverPreview()
+}
+
 // 隐私设置
 const showPrivacySettings = ref(false)
 const feedVisibility = ref<string>('ALL')
+const feedVisibilityTime = ref<number>(-1)
 
 // 备注编辑
 const showRemarkEditor = ref(false)
@@ -500,6 +610,18 @@ async function saveFeedVisibility(val: string | number | boolean) {
     ElMessage.success('隐私设置已保存')
   } catch (e) {
     console.error('保存隐私设置失败:', e)
+  }
+}
+
+async function saveFeedVisibilityTime(val: number) {
+  try {
+    const res = await updateFeedVisibilityTime(val)
+    if (userStore.user && res.data.data) {
+      userStore.user.feedVisibilityTime = res.data.data.feedVisibilityTime
+    }
+    ElMessage.success('可见时间已保存')
+  } catch (e) {
+    console.error('保存可见时间失败:', e)
   }
 }
 
@@ -556,6 +678,10 @@ async function handleResetPassword() {
 
 watch(() => userStore.user?.feedVisibility, (v) => {
   if (v) feedVisibility.value = v
+}, { immediate: true })
+watch(() => userStore.user?.feedVisibilityTime, (v) => {
+  if (v !== undefined && v !== null) feedVisibilityTime.value = v
+  else feedVisibilityTime.value = -1
 }, { immediate: true })
 
 // 昵称编辑
@@ -726,6 +852,7 @@ watch(showFollowing, async (val) => {
 watch(showFollowers, async (val) => {
   if (val) {
     try {
+      if (isMe.value) await followStore.loadFollowedIds()
       const res = isMe.value ? await getFollowerList() : await getUserFollowers(profileId.value!)
       followerList.value = res.data.data || []
     } catch (err) {
@@ -812,10 +939,12 @@ function openRemarkEditor(user: FollowUser) {
 
 async function saveRemark() {
   try {
-    await setUserRemark(remarkTargetUserId.value, remarkInput.value.trim())
-    ElMessage.success(remarkInput.value.trim() ? '备注已设置' : '备注已清除')
+    const remark = remarkInput.value.trim()
+    await setUserRemark(remarkTargetUserId.value, remark)
+    followStore.setRemark(remarkTargetUserId.value, remark)
+    ElMessage.success(remark ? '备注已设置' : '备注已清除')
     showRemarkEditor.value = false
-    // 刷新朋友列表
+    await followStore.loadFollowedIds()
     if (showMutual.value) {
       const [fing, fers] = await Promise.all([getFollowingList(), getFollowerList()])
       const fingList = fing.data.data || []
@@ -1065,6 +1194,22 @@ async function handleAvatarChange(event: Event) {
   margin-left: 4px;
 }
 
+.profile-remark-btn {
+  margin-top: 4px;
+  padding: 2px 10px;
+  font-size: 12px;
+  color: $text-muted;
+  background: transparent;
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
+  cursor: pointer;
+  align-self: flex-start;
+
+  &:hover {
+    color: $primary;
+    border-color: $primary;
+  }
+}
 
 .level-display {
   display: flex;
@@ -1651,6 +1796,41 @@ async function handleAvatarChange(event: Event) {
     box-shadow: none;
   }
 }
+.cover-settings-form {
+  padding: 10px 0;
+
+  .cover-preview {
+    height: 120px;
+    border-radius: $radius-lg;
+    background: $bg-secondary;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+
+    .cover-placeholder {
+      font-size: 14px;
+      color: $text-muted;
+    }
+  }
+
+  .cover-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+
+    .btn-outline.danger {
+      color: var(--el-color-danger);
+      border-color: var(--el-color-danger);
+
+      &:hover:not(:disabled) {
+        background: rgba(var(--el-color-danger-rgb), 0.1);
+      }
+    }
+  }
+}
+
 .privacy-settings-form {
   padding: 10px 0;
 }
@@ -1664,6 +1844,10 @@ async function handleAvatarChange(event: Event) {
     color: $text-primary;
     margin-bottom: 12px;
   }
+}
+
+.privacy-select {
+  width: 100%;
 }
 
 .privacy-radio-group {

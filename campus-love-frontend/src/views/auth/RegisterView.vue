@@ -30,6 +30,26 @@
             <el-input v-model="form.nickname" placeholder="昵称" prefix-icon="User" />
           </el-form-item>
 
+          <el-form-item prop="school" label="学校">
+            <el-select
+              v-model="form.school"
+              filterable
+              remote
+              placeholder="搜索或选择学校"
+              :remote-method="searchSchools"
+              :loading="schoolLoading"
+              clearable
+              style="width: 100%"
+            >
+              <el-option
+                v-for="s in schoolOptions"
+                :key="s.name"
+                :label="s.name"
+                :value="s.name"
+              />
+            </el-select>
+          </el-form-item>
+
           <!-- 邮箱输入 -->
           <el-form-item prop="email" label="邮箱">
             <div class="email-input-wrapper">
@@ -42,7 +62,7 @@
               <button
                 type="button"
                 class="btn-send-code"
-                :disabled="sendCodeCooldown > 0 || sendingCode"
+                :disabled="sendCodeCooldown > 0 || sendingCode || !isEmailValid"
                 @click="handleSendCode"
               >
                 {{ sendCodeCooldown > 0 ? `${sendCodeCooldown}s后重发` : (sendingCode ? '发送中...' : '发送验证码') }}
@@ -82,10 +102,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
-import { register, sendVerifyCode } from '@/api/authApi'
+import { register, sendVerifyCode, searchSchools as searchSchoolsApi, type SchoolItem } from '@/api/authApi'
 import { useUserStore } from '@/store/userStore'
 
 const router = useRouter()
@@ -98,11 +118,46 @@ let cooldownTimer: ReturnType<typeof setInterval> | null = null
 
 const form = reactive({
   nickname: '',
+  school: '',
   email: '',
   verifyCode: '',
   password: '',
   confirmPassword: '',
 })
+
+const schoolOptions = ref<SchoolItem[]>([])
+const schoolLoading = ref(false)
+
+function checkEmailSuffix(email: string, suffix: string): boolean {
+  const domain = email.split('@')[1]?.toLowerCase() || ''
+  const s = suffix.trim().toLowerCase()
+  return domain === s || domain.endsWith('.' + s)
+}
+
+const isEmailValid = computed(() => {
+  const email = form.email?.trim() || ''
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false
+  if (!form.school?.trim()) return false
+  const school = schoolOptions.value.find(s => s.name === form.school.trim())
+  if (!school?.emailSuffix) return true
+  return checkEmailSuffix(email, school.emailSuffix)
+})
+
+async function searchSchools(query: string) {
+  if (!query || query.length < 2) {
+    schoolOptions.value = []
+    return
+  }
+  schoolLoading.value = true
+  try {
+    const res = await searchSchoolsApi(query)
+    schoolOptions.value = res.data.data || []
+  } catch {
+    schoolOptions.value = []
+  } finally {
+    schoolLoading.value = false
+  }
+}
 
 const validateConfirm = (
   _rule: unknown,
@@ -127,6 +182,13 @@ const validateEmail = (
     callback(new Error('请输入正确的邮箱格式'))
     return
   }
+  if (form.school?.trim()) {
+    const school = schoolOptions.value.find(s => s.name === form.school.trim())
+    if (school?.emailSuffix && !checkEmailSuffix(email, school.emailSuffix)) {
+      callback(new Error(`请使用该校邮箱（@${school.emailSuffix}）`))
+      return
+    }
+  }
   callback()
 }
 
@@ -134,7 +196,7 @@ const rules = {
   nickname: [{ required: true, message: '请输入昵称', trigger: 'blur' }],
   email: [
     { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { validator: validateEmail, trigger: 'blur' },
+    { validator: validateEmail, trigger: ['blur', 'change'] },
   ],
   verifyCode: [
     { required: true, message: '请输入验证码', trigger: 'blur' },
@@ -191,7 +253,11 @@ async function handleRegister() {
       verifyCode: form.verifyCode,
       password: form.password,
       nickname: form.nickname,
+      school: form.school?.trim() || undefined,
     })
+    if (form.school?.trim()) {
+      sessionStorage.setItem('register_school', form.school.trim())
+    }
     await userStore.setAuth(res.data.data)
     ElMessage.success('注册成功，请完善个人资料')
     router.push('/setup-profile')

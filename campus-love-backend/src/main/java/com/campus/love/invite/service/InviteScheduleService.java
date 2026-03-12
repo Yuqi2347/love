@@ -179,7 +179,16 @@ public class InviteScheduleService {
             if (participantCount == 0 && InviteStatusEnum.RECRUITING.name().equals(status)) {
                 Integer deadlineHours = invite.getDeadlineHours();
                 if (deadlineHours != null) {
-                    LocalDateTime deadlineTime = inviteTime.minusHours(deadlineHours);
+                    LocalDateTime deadlineTime;
+                    if (deadlineHours == 0) {
+                        deadlineTime = inviteTime;
+                    } else if (deadlineHours == -1 && invite.getInviteEndTime() != null) {
+                        deadlineTime = invite.getInviteEndTime();
+                    } else if (deadlineHours > 0) {
+                        deadlineTime = inviteTime.minusHours(deadlineHours);
+                    } else {
+                        deadlineTime = inviteTime;
+                    }
                     if (now.isAfter(deadlineTime)) {
                         invite.setStatus(InviteStatusEnum.CANCELLED.name());
                         changed = true;
@@ -195,7 +204,9 @@ public class InviteScheduleService {
 
             // 活动进行中 / 已结束（仅在存在参与者时才有意义）
             if (!changed && participantCount > 0) {
-                LocalDateTime endTime = inviteTime.plusHours(DEFAULT_EVENT_DURATION_HOURS);
+                LocalDateTime endTime = invite.getInviteEndTime() != null
+                        ? invite.getInviteEndTime()
+                        : inviteTime.plusHours(DEFAULT_EVENT_DURATION_HOURS);
 
                 if ((InviteStatusEnum.RECRUITING.name().equals(status)
                         || InviteStatusEnum.FULL.name().equals(status)

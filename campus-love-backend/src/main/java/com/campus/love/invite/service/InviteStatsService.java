@@ -60,8 +60,20 @@ public class InviteStatsService {
                 new LambdaQueryWrapper<InviteParticipant>()
                         .eq(InviteParticipant::getInviteId, request.getInviteId())
                         .eq(InviteParticipant::getUserId, currentUserId));
-        if (participant == null) {
+        boolean isCreator = currentUserId.equals(invite.getCreatorId());
+        if (participant == null && !isCreator) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "未参与该邀约，无法评价");
+        }
+        // 被评价人必须是发起人或邀约参与者
+        if (!request.getRatedUserId().equals(invite.getCreatorId())) {
+            InviteParticipant rated = participantMapper.selectOne(
+                    new LambdaQueryWrapper<InviteParticipant>()
+                            .eq(InviteParticipant::getInviteId, request.getInviteId())
+                            .eq(InviteParticipant::getUserId, request.getRatedUserId())
+                            .isNull(InviteParticipant::getLeftAt));
+            if (rated == null) {
+                throw new BusinessException(ResultCode.BAD_REQUEST, "被评价人不是该邀约的参与者");
+            }
         }
 
         InviteRating existing = ratingMapper.selectOne(

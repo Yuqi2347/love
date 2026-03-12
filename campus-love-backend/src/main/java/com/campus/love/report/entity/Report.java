@@ -19,6 +19,8 @@ public class Report {
     private Long reporterId;
     private String targetType;
     private Long targetId;
+    /** 违规类型，逗号分隔 */
+    private String violationTypes;
     private String reason;
     private String status;
     private String adminNote;

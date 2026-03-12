@@ -34,6 +34,8 @@ public class Invite {
 
     private LocalDateTime inviteTime;
 
+    private LocalDateTime inviteEndTime;
+
     private String location;
 
     private Integer maxParticipants;

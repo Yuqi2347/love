@@ -19,12 +19,14 @@
 ## 开发
 
 ```bash
-# 安装依赖
+# 首次运行必须先安装依赖
 npm install
 
 # 启动开发（端口 5174，代理到后端 8080）
 npm run dev
 ```
+
+若出现 `vite 不是内部或外部命令`，请先执行 `npm install` 安装依赖。
 
 **前提**：后端 `campus-love-backend` 已启动（默认 8080），且数据库中至少有一个管理员账号（`t_user.is_admin = 1`）。
 

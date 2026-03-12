@@ -23,4 +23,6 @@ public final class InviteCreditConstants {
     public static final int CREDIT_NO_SHOW = -10;
     /** 默认信用分（新用户或未设置时） */
     public static final int DEFAULT_CREDIT_SCORE = 100;
+    /** 信用分上限，达到后不再上升 */
+    public static final int CREDIT_MAX = 100;
 }

@@ -40,10 +40,26 @@ service.interceptors.response.use(
     return response
   },
   (error) => {
-    let msg = error.response?.data?.message || error.message || '网络错误'
-    if (error.code === 'ECONNABORTED' || error.message?.includes('timeout')) {
-      msg = '请求超时，请检查网络或稍后重试（外网访问可能较慢）'
+    const isNetworkError = !error.response && (error.code === 'ERR_NETWORK' || error.message?.includes('Network Error'))
+    const isTimeout = error.code === 'ECONNABORTED' || error.message?.includes('timeout')
+    if (isTimeout) {
+      ElMessage.error('请求超时，请检查网络或稍后重试')
+      return Promise.reject(error)
     }
+    if (isNetworkError) {
+      ElMessage.error('网络连接已断开')
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      window.location.href = '/login'
+      return Promise.reject(error)
+    }
+    if (error.response?.status === 401) {
+      localStorage.removeItem('access_token')
+      localStorage.removeItem('refresh_token')
+      window.location.href = '/login'
+      return Promise.reject(error)
+    }
+    const msg = error.response?.data?.message || error.message || '请求失败'
     ElMessage.error(msg)
     return Promise.reject(error)
   },

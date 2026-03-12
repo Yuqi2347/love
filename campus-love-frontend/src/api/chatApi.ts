@@ -29,6 +29,11 @@ export function getConversations() {
   return request.get<ApiResult<Conversation[]>>('/chat/conversations')
 }
 
+/** 检查是否可向对方发送消息（未互关时仅允许发一条，对方回复前不能继续发） */
+export function canSendTo(otherUserId: number) {
+  return request.get<ApiResult<boolean>>(`/chat/can-send/${otherUserId}`)
+}
+
 export function getChatHistory(otherUserId: number, page = 0, size = 20) {
   return request.get<ApiResult<ChatMessage[]>>(`/chat/history/${otherUserId}`, { params: { page, size } })
 }

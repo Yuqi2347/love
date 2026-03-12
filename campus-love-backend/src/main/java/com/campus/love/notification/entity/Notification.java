@@ -35,6 +35,11 @@ public class Notification {
     private Long inviteId;
 
     /**
+     * 关联的动态ID（评论/回复通知）
+     */
+    private Long postId;
+
+    /**
      * 通知类型
      */
     private String type;

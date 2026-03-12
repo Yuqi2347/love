@@ -29,13 +29,12 @@
           height="36"
           @click="$router.push(`/profile/${msg.senderId}`)"
         />
-        <div class="message-bubble">
-          <!-- 邀约消息（msgType=4 或 content 含 INVITE#）：展示卡片可同意/拒绝，或跳转/提示去我的邀约 -->
-          <template v-if="msg.deleted">
-            <p class="msg-content msg-recalled">{{ msg.content }}</p>
-            <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
-          </template>
-          <template v-else-if="isInviteMessage(msg)">
+        <!-- 邀约/帖子分享：独立卡片，不用气泡包裹 -->
+        <div
+          v-if="!msg.deleted && (isInviteMessage(msg) || msg.msgType === 5)"
+          class="message-card-wrapper"
+        >
+          <template v-if="isInviteMessage(msg)">
             <div v-if="parsedInvite(msg.content)" class="invite-card-in-chat">
               <div class="invite-card-title">{{ parsedInvite(msg.content)?.title || '邀约邀请' }}</div>
               <div v-if="parsedInvite(msg.content)?.timeStr" class="invite-card-meta">
@@ -71,10 +70,36 @@
               </el-button>
               <p class="invite-fallback-hint">请到「我的邀约」查看并处理</p>
             </div>
+          </template>
+          <div v-else class="post-share-card" @click="goToSharedPost(msg.content)">
+            <div class="share-card-header">
+              <el-icon :size="16"><Share /></el-icon>
+              <span class="share-label">帖子分享</span>
+            </div>
+            <div class="share-card-author">
+              {{ getSharedPostInfo(msg.content).nickname }}
+            </div>
+            <div class="share-card-content">
+              {{ getSharedPostInfo(msg.content).content }}
+            </div>
+            <div v-if="getSharedPostInfo(msg.content).images" class="share-card-images">
+              <img
+                v-for="(img, idx) in getSharedPostInfo(msg.content).images.slice(0, 3)"
+                :key="idx"
+                :src="img"
+                class="share-card-img"
+              />
+            </div>
+          </div>
+          <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
+        </div>
+        <!-- 文本/图片/已撤回：气泡包裹 -->
+        <div v-else class="message-bubble">
+          <template v-if="msg.deleted">
+            <p class="msg-content msg-recalled">{{ msg.content }}</p>
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
-          <!-- 图片消息（msgType=2 或 3，且 content 为图片路径） -->
-          <template v-else-if="!msg.deleted && isImageMessage(msg)">
+          <template v-else-if="isImageMessage(msg)">
             <el-image
               :src="imageUrl(msg.content)"
               :preview-src-list="[imageUrl(msg.content)]"
@@ -84,63 +109,31 @@
             />
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
-          <!-- 帖子分享消息（msgType=5） -->
-          <template v-else-if="!msg.deleted && msg.msgType === 5">
-            <div class="post-share-card" @click="goToSharedPost(msg.content)">
-              <div class="share-card-header">
-                <span class="share-icon">🔗</span>
-                <span class="share-label">帖子分享</span>
-              </div>
-              <div class="share-card-author">
-                {{ getSharedPostInfo(msg.content).nickname }}
-              </div>
-              <div class="share-card-content">
-                {{ getSharedPostInfo(msg.content).content }}
-              </div>
-              <div v-if="getSharedPostInfo(msg.content).images" class="share-card-images">
-                <img
-                  v-for="(img, idx) in getSharedPostInfo(msg.content).images.slice(0, 3)"
-                  :key="idx"
-                  :src="img"
-                  class="share-card-img"
-                />
-              </div>
-            </div>
-            <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
-          </template>
-          <!-- 普通文本消息 / 已撤回 -->
           <template v-else>
             <p class="msg-content" :class="{ 'msg-recalled': msg.deleted }">{{ msg.content }}</p>
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
-          <button
-            v-if="canRecall(msg)"
-            class="recall-btn"
-            title="撤回"
-            @click.stop="handleRecall(msg.id)"
-          >
-            撤回
-          </button>
         </div>
       </div>
     </div>
 
     <div class="chat-input-area">
+      <div v-if="!canSend" class="chat-limit-hint">未回复前只能发送两条消息</div>
       <input
         ref="imageInputRef"
         type="file"
-        accept="image/png,image/jpeg,image/gif,image/webp"
+        accept="image/*"
         class="hidden-file-input"
-        @change="handleImageSelect"
+        @change="handleMediaSelect"
       />
-      <div class="input-row">
-        <button type="button" class="icon-btn" title="发送图片" @click="triggerImageInput">
+      <div class="input-row" :class="{ disabled: !canSend }">
+        <button type="button" class="icon-btn" title="图片/视频" :disabled="!canSend" @click="canSend && triggerImageInput()">
           <el-icon :size="20"><Picture /></el-icon>
         </button>
         <EmojiPicker @insert="insertEmoji" />
-        <el-input ref="inputRef" v-model="inputText" placeholder="输入消息..." size="large" @keyup.enter="handleSend">
+        <el-input ref="inputRef" v-model="inputText" :placeholder="canSend ? '输入消息...' : '未回复前只能发送两条消息，等待对方回复后可继续发送'" size="large" :disabled="!canSend" @keyup.enter="handleSend">
           <template #append>
-            <button class="send-btn" :disabled="!inputText.trim()" @click="handleSend">
+            <button class="send-btn" :disabled="!inputText.trim() || !canSend" @click="handleSend">
               <el-icon :size="20"><Promotion /></el-icon>
             </button>
           </template>
@@ -157,7 +150,7 @@ import { useChatStore } from '@/store/chatStore'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { useFollowStore } from '@/store/followStore'
-import { getChatHistory, markAsRead, uploadChatImage, recallMessage } from '@/api/chatApi'
+import { getChatHistory, markAsRead, uploadChatImage, canSendTo } from '@/api/chatApi'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { joinInvite, declineInvite } from '@/api/inviteApi'
 import { storeToRefs } from 'pinia'
@@ -185,6 +178,8 @@ const noMoreHistory = ref(false)
 const loadingHistory = ref(false)
 const imageInputRef = ref<HTMLInputElement | null>(null)
 const inputRef = ref<{ $el: HTMLElement } | null>(null)
+/** 未互关时仅允许发一条，对方回复前不能继续发；互关则始终可发。初始 false，等 canSendTo 返回后再设 */
+const canSend = ref(false)
 
 const messages = computed(() => {
   const filtered = currentMessages.value.filter(m =>
@@ -224,6 +219,8 @@ onMounted(async () => {
     )
     await markAsRead(otherUserId.value)
     badgeStore.fetchBadges()
+    const canRes = await canSendTo(otherUserId.value)
+    canSend.value = canRes.data?.data ?? true
     scrollToBottom()
   } catch { /* handled */ }
 })
@@ -268,15 +265,23 @@ async function loadMoreHistory() {
 
 watch(messages, () => { nextTick(scrollToBottom) }, { deep: true })
 
+// 收到对方消息时，未互关限制解除，可再次发送
+watch(messages, (list) => {
+  const fromThem = list.some(m => m.senderId === otherUserId.value && m.receiverId === myId.value)
+  if (fromThem && !canSend.value) {
+    canSend.value = true
+  }
+}, { deep: true })
+
 function scrollToBottom() {
   if (messageListRef.value) {
     messageListRef.value.scrollTop = messageListRef.value.scrollHeight
   }
 }
 
-function handleSend() {
+async function handleSend() {
   const text = inputText.value.trim()
-  if (!text) return
+  if (!text || !canSend.value) return
   const now = formatLocalDateTime()
   chatStore.pushOptimisticMessage(
     {
@@ -295,6 +300,11 @@ function handleSend() {
   chatStore.sendMessage(otherUserId.value, text)
   inputText.value = ''
   nextTick(scrollToBottom)
+  // 发送后刷新是否还能发（未互关时发一条后变为 false）
+  try {
+    const res = await canSendTo(otherUserId.value)
+    canSend.value = res.data?.data ?? false
+  } catch { /* ignore */ }
 }
 
 /** 是否为邀约类消息：后端 msgType=4 或 content 含 INVITE# */
@@ -402,27 +412,6 @@ function imageUrl(url: string) {
   return '/api' + (url.startsWith('/') ? url : '/' + url)
 }
 
-function canRecall(msg: { senderId?: number; id?: number; createdAt?: string; deleted?: boolean }) {
-  if (!msg || msg.senderId !== myId.value || msg.deleted) return false
-  if (msg.id && typeof msg.id === 'number' && msg.id < 0) return false
-  if (!msg.createdAt) return false
-  const created = new Date(msg.createdAt).getTime()
-  return Date.now() - created < 3600 * 1000
-}
-
-async function handleRecall(messageId: number) {
-  try {
-    await recallMessage(messageId)
-    const idx = messages.value.findIndex(m => m.id === messageId)
-    if (idx >= 0) {
-      chatStore.updateMessageRecall(messageId)
-    }
-    ElMessage.success('已撤回')
-  } catch (e: any) {
-    ElMessage.error(e?.response?.data?.message || '撤回失败')
-  }
-}
-
 function triggerImageInput() {
   imageInputRef.value?.click()
 }
@@ -445,11 +434,15 @@ function insertEmoji(emoji: string) {
   }
 }
 
-async function handleImageSelect(e: Event) {
+async function handleMediaSelect(e: Event) {
   const input = e.target as HTMLInputElement
   const file = input.files?.[0]
-  if (!file) return
+  if (!file || !canSend.value) return
   input.value = ''
+  if (file.type.startsWith('video/')) {
+    ElMessage.info('聊天暂不支持发送视频，请使用图片')
+    return
+  }
   try {
     const res = await uploadChatImage(file)
     const imageUrlVal = res.data.data
@@ -471,6 +464,8 @@ async function handleImageSelect(e: Event) {
     )
     chatStore.sendMessage(otherUserId.value, imageUrlVal, 3)
     nextTick(scrollToBottom)
+    const canRes = await canSendTo(otherUserId.value)
+    canSend.value = canRes.data?.data ?? false
   } catch {
     ElMessage.error('图片上传失败')
   }
@@ -533,10 +528,11 @@ async function handleImageSelect(e: Event) {
     flex-direction: row-reverse;
 
     .message-bubble {
-      background: $primary;
-      color: white;
+      background: rgba($primary, 0.06);
+      border: 1px solid $primary;
+      color: $text-primary;
 
-      .msg-time { color: rgba(white, 0.7); }
+      .msg-time { color: $text-muted; }
     }
   }
 }
@@ -544,11 +540,33 @@ async function handleImageSelect(e: Event) {
 .msg-avatar { flex-shrink: 0; }
 .clickable-avatar { cursor: pointer; }
 
+// 邀约/帖子分享：独立卡片，无气泡
+.message-card-wrapper {
+  position: relative;
+  max-width: 100%;
+
+  .msg-time { font-size: 11px; color: $text-muted; display: block; text-align: right; margin-top: 4px; }
+  .recall-btn {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    font-size: 11px;
+    color: var(--el-color-danger);
+    background: none;
+    border: none;
+    cursor: pointer;
+    padding: 2px 6px;
+    opacity: 0.8;
+  }
+  .recall-btn:hover { opacity: 1; }
+}
+
 .message-bubble {
   position: relative;
   padding: 10px 14px;
   border-radius: $radius-lg;
-  background: $bg-tertiary;
+  background: $bg-primary;
+  border: 1px solid $border-light;
   max-width: 100%;
 
   .msg-content { font-size: 14px; line-height: 1.5; word-wrap: break-word; }
@@ -576,8 +594,11 @@ async function handleImageSelect(e: Event) {
 }
 
 .invite-card-in-chat {
-  padding: 4px 0;
+  padding: 12px 14px;
   min-width: 160px;
+  background: $bg-primary;
+  border: 1px solid $border-light;
+  border-radius: $radius-md;
 
   .invite-card-title {
     font-size: 14px;
@@ -624,17 +645,19 @@ async function handleImageSelect(e: Event) {
   display: block;
 }
 
-// 帖子分享卡片
+// 帖子分享卡片（独立展示，白底）
 .post-share-card {
-  background: $bg-tertiary;
+  background: $bg-primary;
+  border: 1px solid $border-light;
   border-radius: $radius-md;
   padding: 10px 12px;
   max-width: 240px;
   cursor: pointer;
-  transition: background 0.2s;
+  transition: background 0.2s, border-color 0.2s;
 
   &:hover {
-    background: #e8eaed;
+    background: $bg-secondary;
+    border-color: rgba($primary, 0.3);
   }
 
   .share-card-header {
@@ -642,10 +665,6 @@ async function handleImageSelect(e: Event) {
     align-items: center;
     gap: 6px;
     margin-bottom: 8px;
-
-    .share-icon {
-      font-size: 16px;
-    }
 
     .share-label {
       font-size: 12px;
@@ -690,6 +709,17 @@ async function handleImageSelect(e: Event) {
   background: $bg-primary;
   flex-shrink: 0;
 
+  .chat-limit-hint {
+    font-size: 12px;
+    color: var(--el-color-warning);
+    margin-bottom: 8px;
+  }
+
+  .input-row.disabled {
+    opacity: 0.6;
+    pointer-events: none;
+  }
+
   .input-row {
     display: flex;
     align-items: center;
@@ -719,12 +749,14 @@ async function handleImageSelect(e: Event) {
   .send-btn {
     width: 44px; height: 44px;
     display: flex; align-items: center; justify-content: center;
-    background: $primary-gradient;
-    color: white;
+    background: rgba($primary, 0.06);
+    color: $primary;
+    border: 1.5px solid $primary;
     border-radius: $radius-full;
-    transition: opacity $transition-fast;
+    transition: opacity $transition-fast, background $transition-fast;
     cursor: pointer;
 
+    &:hover:not(:disabled) { background: rgba($primary, 0.12); }
     &:disabled { opacity: 0.4; cursor: not-allowed; }
   }
 }
