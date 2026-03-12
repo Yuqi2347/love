@@ -123,6 +123,10 @@ export function getPostDetail(postId: number) {
   return request.get<ApiResult<FeedPost>>(`/feed/${postId}`)
 }
 
+export function getLikedPosts(page = 0, size = 20) {
+  return request.get<ApiResult<FeedPost[]>>('/feed/liked-posts', { params: { page, size } })
+}
+
 export interface UserLevelInfo {
   score: number
   level: number
@@ -132,4 +136,8 @@ export interface UserLevelInfo {
 
 export function getLevelInfo() {
   return request.get<ApiResult<UserLevelInfo>>('/feed/level-info')
+}
+
+export function sharePost(postId: number, receiverIds: number[]) {
+  return request.post<ApiResult<void>>('/feed/share', { postId, receiverIds })
 }

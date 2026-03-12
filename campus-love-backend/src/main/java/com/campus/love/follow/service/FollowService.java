@@ -15,7 +15,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -146,6 +150,47 @@ public class FollowService {
                                 .eq(Follow::getIsMutual, true))
                 .stream()
                 .map(Follow::getFollowingId)
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 获取互关朋友列表（带详细信息）
+     * 互关 = 我关注的 ∩ 关注我的（取交集）
+     */
+    public List<FollowResponse> getMutualFriendList(Long userId) {
+        // 我关注的用户
+        List<Follow> following = followMapper.selectList(
+                new LambdaQueryWrapper<Follow>()
+                        .eq(Follow::getFollowerId, userId));
+        Set<Long> followingIds = following.stream()
+                .map(Follow::getFollowingId)
+                .collect(Collectors.toSet());
+
+        // 关注我的用户（粉丝）
+        List<Follow> followers = followMapper.selectList(
+                new LambdaQueryWrapper<Follow>()
+                        .eq(Follow::getFollowingId, userId));
+        Set<Long> followerIds = followers.stream()
+                .map(Follow::getFollowerId)
+                .collect(Collectors.toSet());
+
+        // 取交集：即互关的用户
+        Set<Long> mutualIds = new java.util.HashSet<>(followingIds);
+        mutualIds.retainAll(followerIds);
+
+        if (mutualIds.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 获取互关用户的详细信息
+        List<Follow> mutualFollows = followMapper.selectList(
+                new LambdaQueryWrapper<Follow>()
+                        .eq(Follow::getFollowerId, userId)
+                        .in(Follow::getFollowingId, mutualIds));
+
+        return mutualFollows.stream()
+                .map(f -> buildFollowResponse(f.getFollowingId(), true, f.getRemark()))
+                .filter(Objects::nonNull)
                 .collect(Collectors.toList());
     }
 

@@ -49,3 +49,8 @@ export function getUserDisplayName(user: FollowUser | null | undefined): string 
   if (!user) return ''
   return user.remark && user.remark.trim() ? user.remark : user.nickname
 }
+
+// 获取互关朋友列表（用于分享帖子等场景）
+export function getMutualFriends() {
+  return request.get<ApiResult<FollowUser[]>>('/follow/mutual')
+}

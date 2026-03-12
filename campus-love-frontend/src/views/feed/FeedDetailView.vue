@@ -51,6 +51,17 @@
           />
         </div>
 
+        <!-- 视频展示 -->
+        <div v-if="post.videos" class="post-videos">
+          <video
+            v-for="(video, idx) in post.videos.split(',')"
+            :key="idx"
+            :src="videoUrl(video)"
+            class="post-video"
+            controls
+          />
+        </div>
+
         <div class="post-actions">
           <button
             :class="['action-btn', { active: post.liked }]"
@@ -62,6 +73,10 @@
           <button class="action-btn" disabled>
             <span class="action-icon">💬</span>
             <span>{{ post.commentCount }}</span>
+          </button>
+          <button class="action-btn" @click="openShareDialog">
+            <span class="action-icon">🔗</span>
+            <span>分享</span>
           </button>
         </div>
       </div>
@@ -185,6 +200,13 @@
       <p>帖子不存在或已被删除</p>
       <button class="btn-outline" @click="goBack">返回</button>
     </div>
+
+    <!-- 分享弹窗 -->
+    <ShareDialog
+      v-model:show="showShareDialog"
+      :post="post"
+      @success="handleShareSuccess"
+    />
   </div>
 </template>
 
@@ -205,6 +227,7 @@ import {
 import { submitReport } from '@/api/reportApi'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Delete, Flag } from '@element-plus/icons-vue'
+import ShareDialog from '@/components/ShareDialog.vue'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect fill="%23f0f2f5" width="44" height="44" rx="22"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="20">👤</text></svg>'
 
@@ -218,6 +241,17 @@ const loading = ref(true)
 const commentText = ref('')
 const submitting = ref(false)
 const commentInputRef = ref()
+
+// 分享相关状态
+const showShareDialog = ref(false)
+
+function openShareDialog() {
+  showShareDialog.value = true
+}
+
+function handleShareSuccess() {
+  console.log('分享成功')
+}
 
 // 回复状态：rootCommentId 用于 parentId（始终指向根评论），repliedUserId/nickname 用于标记实际被回复人
 const replyingTo = ref<{
@@ -294,6 +328,12 @@ function toggleExpandReplies(threadId: number) {
 }
 
 function imageUrl(url: string) {
+  if (!url) return ''
+  if (url.startsWith('http') || url.startsWith('/api')) return url
+  return '/api' + (url.startsWith('/') ? url : '/' + url)
+}
+
+function videoUrl(url: string) {
   if (!url) return ''
   if (url.startsWith('http') || url.startsWith('/api')) return url
   return '/api' + (url.startsWith('/') ? url : '/' + url)
@@ -579,6 +619,20 @@ onMounted(async () => {
   height: 120px;
   border-radius: 8px;
   cursor: pointer;
+}
+
+.post-videos {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.post-video {
+  width: 100%;
+  max-width: 400px;
+  border-radius: 8px;
+  background-color: #000;
 }
 
 .post-actions {

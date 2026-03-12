@@ -21,7 +21,7 @@
           专为不善主动的你设计，填写问卷后由系统帮你找到最契合的人。<br>
           你可以自由选择想要匹配的<strong>对象类型</strong>，包容所有可能。
         </p>
-        <div class="hero-stats" v-if="participantCount > 0">
+        <div v-if="participantCount > 0" class="hero-stats">
           <span class="stat-number">{{ participantCount }}</span>
           <span class="stat-label">人已报名本周活动</span>
         </div>

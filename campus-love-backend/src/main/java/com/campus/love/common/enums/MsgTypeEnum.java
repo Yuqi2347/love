@@ -11,7 +11,9 @@ public enum MsgTypeEnum {
     IMAGE(2, "图片"),
     EMOJI(3, "表情"),
     /** 邀约消息（用于一对一邀约推送） */
-    INVITE(4, "邀约");
+    INVITE(4, "邀约"),
+    /** 帖子转发 */
+    POST_SHARE(5, "帖子转发");
 
     private final Integer code;
     private final String label;

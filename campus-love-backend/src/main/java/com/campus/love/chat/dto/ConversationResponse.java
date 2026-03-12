@@ -13,4 +13,5 @@ public class ConversationResponse {
     private String lastMessage;
     private String lastTime;
     private Integer unreadCount;
+    private Integer msgType;
 }

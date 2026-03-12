@@ -36,9 +36,9 @@
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
           <template v-else-if="isInviteMessage(msg)">
-            <div class="invite-card-in-chat" v-if="parsedInvite(msg.content)">
+            <div v-if="parsedInvite(msg.content)" class="invite-card-in-chat">
               <div class="invite-card-title">{{ parsedInvite(msg.content)?.title || '邀约邀请' }}</div>
-              <div class="invite-card-meta" v-if="parsedInvite(msg.content)?.timeStr">
+              <div v-if="parsedInvite(msg.content)?.timeStr" class="invite-card-meta">
                 <el-icon><Clock /></el-icon>
                 {{ parsedInvite(msg.content)?.timeStr }}
               </div>
@@ -82,6 +82,30 @@
               class="chat-image"
               preview-teleported
             />
+            <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
+          </template>
+          <!-- 帖子分享消息（msgType=5） -->
+          <template v-else-if="!msg.deleted && msg.msgType === 5">
+            <div class="post-share-card" @click="goToSharedPost(msg.content)">
+              <div class="share-card-header">
+                <span class="share-icon">🔗</span>
+                <span class="share-label">帖子分享</span>
+              </div>
+              <div class="share-card-author">
+                {{ getSharedPostInfo(msg.content).nickname }}
+              </div>
+              <div class="share-card-content">
+                {{ getSharedPostInfo(msg.content).content }}
+              </div>
+              <div v-if="getSharedPostInfo(msg.content).images" class="share-card-images">
+                <img
+                  v-for="(img, idx) in getSharedPostInfo(msg.content).images.slice(0, 3)"
+                  :key="idx"
+                  :src="img"
+                  class="share-card-img"
+                />
+              </div>
+            </div>
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
           <!-- 普通文本消息 / 已撤回 -->
@@ -284,6 +308,42 @@ function isImageMessage(msg: { msgType?: number; content?: string }): boolean {
   const c = msg.content && String(msg.content).trim()
   if (!c) return false
   return c.startsWith('/uploads') || c.startsWith('/api/uploads') || c.startsWith('http')
+}
+
+/** 解析帖子分享内容 */
+function getSharedPostInfo(content: string | undefined): { nickname: string; content: string; images: string[] } {
+  if (!content) {
+    return { nickname: '', content: '', images: [] }
+  }
+  try {
+    const data = JSON.parse(content)
+    return {
+      nickname: data.postNickname || '',
+      content: data.postContent || '',
+      images: data.postImages ? data.postImages.split(',').filter(Boolean) : []
+    }
+  } catch {
+    return { nickname: '', content: '', images: [] }
+  }
+}
+
+/** 获取帖子分享中的 postId */
+function getSharedPostId(content: string | undefined): number | null {
+  if (!content) return null
+  try {
+    const data = JSON.parse(content)
+    return data.postId || null
+  } catch {
+    return null
+  }
+}
+
+/** 跳转到分享的帖子 */
+function goToSharedPost(content: string | undefined) {
+  const postId = getSharedPostId(content)
+  if (postId) {
+    router.push(`/feed/${postId}`)
+  }
 }
 
 /** 解析邀约消息 content：邀约邀请：标题｜时间 xx:xx｜INVITE#id */
@@ -562,6 +622,66 @@ async function handleImageSelect(e: Event) {
   border-radius: $radius-md;
   cursor: pointer;
   display: block;
+}
+
+// 帖子分享卡片
+.post-share-card {
+  background: $bg-tertiary;
+  border-radius: $radius-md;
+  padding: 10px 12px;
+  max-width: 240px;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #e8eaed;
+  }
+
+  .share-card-header {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 8px;
+
+    .share-icon {
+      font-size: 16px;
+    }
+
+    .share-label {
+      font-size: 12px;
+      color: $text-muted;
+    }
+  }
+
+  .share-card-author {
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-primary;
+    margin-bottom: 4px;
+  }
+
+  .share-card-content {
+    font-size: 13px;
+    color: $text-secondary;
+    line-height: 1.4;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .share-card-images {
+    display: flex;
+    gap: 4px;
+    margin-top: 8px;
+
+    .share-card-img {
+      width: 50px;
+      height: 50px;
+      object-fit: cover;
+      border-radius: 4px;
+    }
+  }
 }
 
 .chat-input-area {

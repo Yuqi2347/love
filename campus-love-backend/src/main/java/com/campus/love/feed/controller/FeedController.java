@@ -7,6 +7,7 @@ import com.campus.love.common.service.FileUploadService;
 import com.campus.love.feed.dto.FeedCommentRequest;
 import com.campus.love.feed.dto.FeedPostRequest;
 import com.campus.love.feed.dto.FeedPostResponse;
+import com.campus.love.feed.dto.FeedShareRequest;
 import com.campus.love.feed.service.FeedService;
 import com.campus.love.user.service.ActivityService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -182,5 +183,20 @@ public class FeedController {
     @GetMapping("/social-notifications")
     public Result<List<java.util.Map<String, Object>>> getSocialNotifications() {
         return Result.success(feedService.getSocialNotifications(CurrentUser.getId()));
+    }
+
+    @Operation(summary = "获取我点赞的帖子列表")
+    @GetMapping("/liked-posts")
+    public Result<List<FeedPostResponse>> getLikedPosts(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size) {
+        return Result.success(feedService.getLikedPosts(page, size));
+    }
+
+    @Operation(summary = "分享帖子", description = "将帖子分享给一个或多个互关朋友")
+    @PostMapping("/share")
+    public Result<Void> sharePost(@Valid @RequestBody FeedShareRequest request) {
+        feedService.sharePost(request.getPostId(), request.getReceiverIds());
+        return Result.success();
     }
 }

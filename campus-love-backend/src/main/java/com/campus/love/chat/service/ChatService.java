@@ -181,10 +181,18 @@ public class ChatService {
             Message lastMsg = entry.getValue();
             User otherUser = userMap.get(otherUserId);
             int inviteMsgType = com.campus.love.common.enums.MsgTypeEnum.INVITE.getCode();
+            int postShareMsgType = com.campus.love.common.enums.MsgTypeEnum.POST_SHARE.getCode();
             boolean lastDeleted = lastMsg.getDeleted() != null && lastMsg.getDeleted() == Message.DELETED;
-            String lastMsgText = lastDeleted ? "[消息已撤回]"
-                    : (lastMsg.getMsgType() != null && lastMsg.getMsgType().intValue() == inviteMsgType)
-                    ? "[邀约邀请]" : (lastMsg.getContent() != null ? lastMsg.getContent() : "");
+            String lastMsgText;
+            if (lastDeleted) {
+                lastMsgText = "[消息已撤回]";
+            } else if (lastMsg.getMsgType() != null && lastMsg.getMsgType().intValue() == inviteMsgType) {
+                lastMsgText = "[邀约邀请]";
+            } else if (lastMsg.getMsgType() != null && lastMsg.getMsgType().intValue() == postShareMsgType) {
+                lastMsgText = "[帖子分享]";
+            } else {
+                lastMsgText = lastMsg.getContent() != null ? lastMsg.getContent() : "";
+            }
             return ConversationResponse.builder()
                     .userId(otherUserId)
                     .nickname(otherUser != null ? otherUser.getNickname() : "")
@@ -192,6 +200,7 @@ public class ChatService {
                     .lastMessage(lastMsgText)
                     .lastTime(lastMsg.getCreatedAt() != null ? lastMsg.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                     .unreadCount(unreadCounts.getOrDefault(otherUserId, 0))
+                    .msgType(lastMsg.getMsgType())
                     .build();
         }).collect(Collectors.toList());
     }

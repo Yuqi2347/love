@@ -22,6 +22,7 @@ export interface Conversation {
   lastMessage: string
   lastTime: string
   unreadCount: number
+  msgType?: number
 }
 
 export function getConversations() {

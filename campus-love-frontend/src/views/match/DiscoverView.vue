@@ -39,6 +39,12 @@
         >
           关注
         </button>
+        <button
+          :class="['tab-btn', { active: activeTab === 'liked' }]"
+          @click="switchTab('liked')"
+        >
+          点赞
+        </button>
       </div>
     </div>
 
@@ -80,7 +86,16 @@
               <span>删除</span>
             </button>
           </div>
-          <div class="feed-content">{{ item.post.content }}</div>
+          <div class="feed-content">
+            <template v-if="shouldCollapse(item.post.content)">
+              <span v-if="isExpanded(item.post.id)">{{ item.post.content }}</span>
+              <span v-else>{{ getDisplayContent(item.post.content, item.post.id) }}</span>
+              <button class="expand-btn" @click="toggleExpand(item.post.id)">
+                {{ isExpanded(item.post.id) ? '收起' : '显示更多' }}
+              </button>
+            </template>
+            <span v-else>{{ item.post.content }}</span>
+          </div>
           <div v-if="item.post.images" class="feed-images" @click.stop>
             <img
               v-for="(img, idx) in item.post.images.split(',').slice(0, 3)"
@@ -120,6 +135,10 @@
             <button class="action-btn" @click="goPostDetail(item.post.id)">
               <span class="action-icon">💬</span>
               <span>{{ item.post.commentCount }}</span>
+            </button>
+            <button class="action-btn" @click="openShareDialog(item.post)">
+              <span class="action-icon">🔗</span>
+              <span>分享</span>
             </button>
           </div>
         </div>
@@ -222,6 +241,13 @@
       <div class="empty-icon">📭</div>
       <p>暂无内容</p>
     </div>
+
+    <!-- 分享弹窗 -->
+    <ShareDialog
+      v-model:show="showShareDialog"
+      :post="currentSharePost"
+      @success="handleShareSuccess"
+    />
   </div>
 </template>
 
@@ -231,6 +257,7 @@ import { useRoute, useRouter } from 'vue-router'
 import {
   getDiscoveryPosts,
   getTimeline,
+  getLikedPosts,
   likePost,
   unlikePost,
   getLevelInfo,
@@ -247,15 +274,7 @@ import { useInviteStore } from '@/store/inviteStore'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, Search, Flag } from '@element-plus/icons-vue'
 import type { Invite } from '@/api/inviteApi'
-import {
-  InviteType,
-  InviteStatus,
-  InviteMode,
-  INVITE_TYPE_LABELS,
-  INVITE_STATUS_LABELS,
-  INVITE_STATUS_COLORS,
-  formatInviteTime,
-} from '@/constants/inviteConst'
+import ShareDialog from '@/components/ShareDialog.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -264,9 +283,15 @@ const inviteStore = useInviteStore()
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
 const posts = ref<FeedPost[]>([])
 const followingPosts = ref<FeedPost[]>([])
+const likedPosts = ref<FeedPost[]>([])
+// 帖子展开状态 Map
+const expandedPosts = ref<Map<number, boolean>>(new Map())
+// 文字内容折叠配置
+const CONTENT_MAX_LENGTH = 100
+
 const levelInfo = ref<UserLevelInfo | null>(null)
 const searchKeyword = ref('')
-const activeTab = ref<'recommend' | 'post' | 'following'>('recommend')
+const activeTab = ref<'recommend' | 'post' | 'following' | 'liked'>('recommend')
 const showPostDialog = ref(false)
 const postContent = ref('')
 const postVisibility = ref('ALL')
@@ -280,6 +305,20 @@ const linkUrlInput = ref('')
 const showLinkInput = ref(false)
 const imageInputRef = ref<HTMLInputElement>()
 const videoInputRef = ref<HTMLInputElement>()
+
+// 分享相关状态
+const showShareDialog = ref(false)
+const currentSharePost = ref<FeedPost | null>(null)
+
+function openShareDialog(post: FeedPost) {
+  currentSharePost.value = post
+  showShareDialog.value = true
+}
+
+function handleShareSuccess() {
+  // 分享成功后的回调，可以刷新页面等
+  console.log('分享成功')
+}
 
 function goPostDetail(postId: number) {
   router.push(`/feed/${postId}`)
@@ -298,7 +337,7 @@ function getInviteTypeFromRoute(): string | undefined {
   return typeof t === 'string' && t ? t : undefined
 }
 
-function switchTab(tab: 'recommend' | 'post' | 'following') {
+function switchTab(tab: 'recommend' | 'post' | 'following' | 'liked') {
   activeTab.value = tab
   loadByTab()
 }
@@ -313,9 +352,18 @@ async function loadByTab() {
     await loadPosts(kw)
   } else if (activeTab.value === 'following') {
     await loadFollowingPosts()
+  } else if (activeTab.value === 'liked') {
+    await loadLikedPosts()
   } else {
     await loadPosts(kw)
   }
+}
+
+async function loadLikedPosts() {
+  try {
+    const res = await getLikedPosts(0, 20)
+    likedPosts.value = res.data.data || []
+  } catch { /* empty */ }
 }
 
 onMounted(async () => {
@@ -333,7 +381,14 @@ type TimelineItem =
   | { kind: 'post'; post: FeedPost; time: string; key: string }
 
 const timelineItems = computed<TimelineItem[]>(() => {
-  const postList = activeTab.value === 'following' ? followingPosts.value : posts.value
+  let postList: FeedPost[] = []
+  if (activeTab.value === 'following') {
+    postList = followingPosts.value
+  } else if (activeTab.value === 'liked') {
+    postList = likedPosts.value
+  } else {
+    postList = posts.value
+  }
   const postItems: TimelineItem[] = postList.map(post => ({
     kind: 'post',
     post,
@@ -348,17 +403,6 @@ const timelineItems = computed<TimelineItem[]>(() => {
   })
 })
 
-// 邀约类型对应的主色，供邀请卡片使用
-function getTypeColor(type: string): string {
-  const colors: Record<string, string> = {
-    DINNER: '#ff6b9d',
-    SPORT: '#52c41a',
-    STUDY: '#1890ff',
-    DRAMA: '#722ed1',
-    OTHER: '#8c8c8c',
-  }
-  return colors[type] || '#8c8c8c'
-}
 
 async function loadPosts(keyword?: string) {
   try {
@@ -394,6 +438,7 @@ async function loadLevelInfo() {
 function findPostById(postId: number): FeedPost | undefined {
   return posts.value.find(p => p.id === postId)
     || followingPosts.value.find(p => p.id === postId)
+    || likedPosts.value.find(p => p.id === postId)
 }
 
 async function handleLike(postId: number, liked: boolean) {
@@ -404,6 +449,10 @@ async function handleLike(postId: number, liked: boolean) {
       if (post) {
         post.liked = false
         post.likeCount--
+      }
+      // 从点赞列表中移除
+      if (activeTab.value === 'liked') {
+        likedPosts.value = likedPosts.value.filter(p => p.id !== postId)
       }
     } else {
       await likePost(postId)
@@ -571,6 +620,30 @@ function getMediaUrl(url: string | null): string {
   }
   // 添加 /api 前缀
   return '/api' + (url.startsWith('/') ? url : '/' + url)
+}
+
+// 检查帖子是否已展开
+function isExpanded(postId: number): boolean {
+  return expandedPosts.value.get(postId) || false
+}
+
+// 切换帖子展开/折叠状态
+function toggleExpand(postId: number) {
+  const current = expandedPosts.value.get(postId) || false
+  expandedPosts.value.set(postId, !current)
+}
+
+// 获取帖子显示内容
+function getDisplayContent(content: string, postId: number): string {
+  if (isExpanded(postId) || content.length <= CONTENT_MAX_LENGTH) {
+    return content
+  }
+  return content.slice(0, CONTENT_MAX_LENGTH) + '...'
+}
+
+// 检查帖子内容是否需要折叠
+function shouldCollapse(content: string): boolean {
+  return content.length > CONTENT_MAX_LENGTH
 }
 
 async function handleReport(targetId: number, targetType: string) {
@@ -910,6 +983,22 @@ async function handleDeletePost(postId: number) {
   line-height: 1.6;
   color: $text-primary;
   margin-bottom: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.expand-btn {
+  color: #6366f1;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  cursor: pointer;
+  margin-left: 4px;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .feed-images {
@@ -1130,7 +1219,9 @@ async function handleDeletePost(postId: number) {
   text-decoration: none;
   transition: all 0.2s;
 
-  &:hover { background: color.adjust($bg-tertiary, $lightness: -5%); }
+  &:hover {
+    background: #e8eaed;
+  }
 }
 
 .link-image {

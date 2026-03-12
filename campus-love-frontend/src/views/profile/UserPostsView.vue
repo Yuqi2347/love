@@ -35,7 +35,16 @@
             <span>删除</span>
           </button>
         </div>
-        <div class="feed-content">{{ post.content }}</div>
+        <div class="feed-content">
+          <template v-if="shouldCollapse(post.content)">
+            <span v-if="isExpanded(post.id)">{{ post.content }}</span>
+            <span v-else>{{ getDisplayContent(post.content, post.id) }}</span>
+            <button class="expand-btn" @click="toggleExpand(post.id)">
+              {{ isExpanded(post.id) ? '收起' : '显示更多' }}
+            </button>
+          </template>
+          <span v-else>{{ post.content }}</span>
+        </div>
         <div v-if="post.images" class="feed-images" @click.stop>
           <img
             v-for="(img, idx) in post.images.split(',')"
@@ -74,6 +83,10 @@
             <span class="action-icon">💬</span>
             <span>{{ post.commentCount }}</span>
           </button>
+          <button class="action-btn" @click="openShareDialog(post)">
+            <span class="action-icon">🔗</span>
+            <span>分享</span>
+          </button>
         </div>
       </div>
     </div>
@@ -82,6 +95,13 @@
       <div class="empty-icon">📭</div>
       <p>暂无动态</p>
     </div>
+
+    <!-- 分享弹窗 -->
+    <ShareDialog
+      v-model:show="showShareDialog"
+      :post="currentSharePost"
+      @success="handleShareSuccess"
+    />
   </div>
 </template>
 
@@ -99,6 +119,7 @@ import {
 } from '@/api/feedApi'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Delete } from '@element-plus/icons-vue'
+import ShareDialog from '@/components/ShareDialog.vue'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect fill="%23f0f2f5" width="44" height="44" rx="22"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="20">👤</text></svg>'
 
@@ -109,12 +130,53 @@ const userStore = useUserStore()
 const userId = computed(() => Number(route.params.userId))
 const profile = ref<UserProfile | null>(null)
 const posts = ref<FeedPost[]>([])
+// 帖子展开状态 Map
+const expandedPosts = ref<Map<number, boolean>>(new Map())
+// 文字内容折叠配置
+const CONTENT_MAX_LENGTH = 100
 const loading = ref(true)
+
+// 分享相关状态
+const showShareDialog = ref(false)
+const currentSharePost = ref<FeedPost | null>(null)
+
+function openShareDialog(post: FeedPost) {
+  currentSharePost.value = post
+  showShareDialog.value = true
+}
+
+function handleShareSuccess() {
+  console.log('分享成功')
+}
 
 function getMediaUrl(url: string | null): string {
   if (!url) return ''
   if (url.startsWith('http') || url.startsWith('/api')) return url
   return '/api' + (url.startsWith('/') ? url : '/' + url)
+}
+
+// 检查帖子是否已展开
+function isExpanded(postId: number): boolean {
+  return expandedPosts.value.get(postId) || false
+}
+
+// 切换帖子展开/折叠状态
+function toggleExpand(postId: number) {
+  const current = expandedPosts.value.get(postId) || false
+  expandedPosts.value.set(postId, !current)
+}
+
+// 获取帖子显示内容
+function getDisplayContent(content: string, postId: number): string {
+  if (isExpanded(postId) || content.length <= CONTENT_MAX_LENGTH) {
+    return content
+  }
+  return content.slice(0, CONTENT_MAX_LENGTH) + '...'
+}
+
+// 检查帖子内容是否需要折叠
+function shouldCollapse(content: string): boolean {
+  return content.length > CONTENT_MAX_LENGTH
 }
 
 function formatTime(timeStr: string): string {
@@ -294,6 +356,20 @@ onMounted(async () => {
   line-height: 1.6;
   margin-bottom: 12px;
   white-space: pre-wrap;
+}
+
+.expand-btn {
+  color: #6366f1;
+  background: none;
+  border: none;
+  padding: 0;
+  font-size: 14px;
+  cursor: pointer;
+  margin-left: 4px;
+
+  &:hover {
+    text-decoration: underline;
+  }
 }
 
 .feed-images {

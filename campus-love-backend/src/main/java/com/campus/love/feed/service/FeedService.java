@@ -21,11 +21,14 @@ import com.campus.love.follow.service.FollowService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import com.campus.love.user.service.ActivityService;
+import com.campus.love.chat.mapper.MessageMapper;
+import com.campus.love.chat.entity.Message;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.campus.love.common.constants.DateTimeConstants;
+import com.campus.love.common.enums.MsgTypeEnum;
 import com.campus.love.common.utils.StringUtils;
 import lombok.extern.slf4j.Slf4j;
 
@@ -46,6 +49,7 @@ public class FeedService {
     private final UserMapper userMapper;
     private final FollowService followService;
     private final ActivityService activityService;
+    private final MessageMapper messageMapper;
 
     /**
      * 创建朋友圈帖子
@@ -549,5 +553,101 @@ public class FeedService {
                 .createdAt(post.getCreatedAt() != null ? post.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                 .comments(commentItems)
                 .build();
+    }
+
+    /**
+     * 分享帖子给朋友（批量发送给多个互关朋友）
+     * @param postId 帖子ID
+     * @param receiverIds 接收人ID列表
+     */
+    @Transactional
+    public void sharePost(Long postId, List<Long> receiverIds) {
+        Long senderId = CurrentUser.getId();
+
+        // 获取帖子信息
+        FeedPost post = feedPostMapper.selectById(postId);
+        if (post == null) {
+            throw new BusinessException(ResultCode.FEED_NOT_FOUND);
+        }
+
+        // 获取帖子作者信息
+        User postAuthor = userMapper.selectById(post.getUserId());
+        String postNickname = postAuthor != null ? postAuthor.getNickname() : "";
+
+        // 构建帖子转发内容（JSON格式）
+        String postContent = post.getContent();
+        if (postContent != null && postContent.length() > 100) {
+            postContent = postContent.substring(0, 100) + "...";
+        }
+
+        String shareContent = String.format(
+                "{\"postId\":%d,\"postUserId\":%d,\"postNickname\":\"%s\",\"postContent\":\"%s\",\"postImages\":\"%s\",\"postCreatedAt\":\"%s\"}",
+                postId,
+                post.getUserId(),
+                postNickname != null ? postNickname.replace("\"", "\\\"") : "",
+                postContent != null ? postContent.replace("\"", "\\\"").replace("\n", " ") : "",
+                post.getImages() != null ? post.getImages().replace("\"", "\\\"") : "",
+                post.getCreatedAt() != null ? post.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : ""
+        );
+
+        // 批量发送给每个朋友
+        for (Long receiverId : receiverIds) {
+            Message message = new Message();
+            message.setSenderId(senderId);
+            message.setReceiverId(receiverId);
+            message.setGroupId(null);
+            message.setContent(shareContent);
+            message.setMsgType(MsgTypeEnum.POST_SHARE.getCode());
+            message.setIsRead(false);
+            message.setCreatedAt(java.time.LocalDateTime.now());
+            messageMapper.insert(message);
+        }
+
+        log.info("用户{}分享帖子{}给{}位朋友", senderId, postId, receiverIds.size());
+    }
+
+    /**
+     * 获取当前用户点赞的帖子列表
+     */
+    public List<FeedPostResponse> getLikedPosts(int page, int size) {
+        Long userId = CurrentUser.getId();
+
+        // 获取用户点赞的帖子ID列表
+        List<FeedLike> likes = feedLikeMapper.selectList(
+                new LambdaQueryWrapper<FeedLike>()
+                        .eq(FeedLike::getUserId, userId)
+                        .orderByDesc(FeedLike::getCreatedAt));
+
+        if (likes.isEmpty()) {
+            return new ArrayList<>();
+        }
+
+        // 分页
+        int fromIndex = page * size;
+        if (fromIndex >= likes.size()) {
+            return new ArrayList<>();
+        }
+        int toIndex = Math.min(fromIndex + size, likes.size());
+        List<Long> postIds = likes.subList(fromIndex, toIndex).stream()
+                .map(FeedLike::getPostId)
+                .collect(Collectors.toList());
+
+        // 获取帖子详情
+        List<FeedPost> posts = feedPostMapper.selectBatchIds(postIds);
+        // 按点赞时间排序
+        Map<Long, FeedPost> postMap = posts.stream()
+                .collect(Collectors.toMap(FeedPost::getId, p -> p, (a, b) -> a));
+        List<FeedPost> orderedPosts = new ArrayList<>();
+        for (Long postId : postIds) {
+            FeedPost post = postMap.get(postId);
+            if (post != null) {
+                orderedPosts.add(post);
+            }
+        }
+
+        Map<Long, User> authorMap = batchLoadAuthors(orderedPosts);
+        return orderedPosts.stream()
+                .map(p -> toResponse(p, userId, authorMap))
+                .collect(Collectors.toList());
     }
 }

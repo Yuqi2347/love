@@ -23,7 +23,7 @@
                 <el-dropdown-item @click="showAccountSecurity = true">
                   <el-icon><Lock /></el-icon> 账号安全
                 </el-dropdown-item>
-                <el-dropdown-item divided @click="handleLogout" class="text-danger">
+                <el-dropdown-item divided class="text-danger" @click="handleLogout">
                   <el-icon><SwitchButton /></el-icon> 退出登录
                 </el-dropdown-item>
               </el-dropdown-menu>
@@ -306,7 +306,7 @@
     <div class="privacy-settings-form">
       <div class="setting-item">
         <div class="setting-label">谁可以看我的动态</div>
-        <el-radio-group v-model="feedVisibility" @change="saveFeedVisibility" class="privacy-radio-group">
+        <el-radio-group v-model="feedVisibility" class="privacy-radio-group" @change="saveFeedVisibility">
           <el-radio label="ALL">所有人可见</el-radio>
           <el-radio label="FOLLOWING">我关注的人可见</el-radio>
           <el-radio label="FOLLOWERS">关注我的人可见</el-radio>
@@ -445,11 +445,6 @@ const showYuanFen = ref(false)
 const yuanfenCooldown = ref(0)
 let cooldownTimer: ReturnType<typeof setInterval> | null = null
 
-const yuanfenCooldownText = computed(() => {
-  const m = Math.ceil(yuanfenCooldown.value / 60)
-  return `${m}分钟后可再次解析`
-})
-
 function openYuanFen() {
   // 冷却期间仍允许打开弹窗查看上次解析结果；是否重新调用 AI 由后端+冷却策略控制
   showYuanFen.value = true
@@ -503,7 +498,8 @@ async function saveFeedVisibility(val: string | number | boolean) {
       userStore.user.feedVisibility = res.data.data.feedVisibility
     }
     ElMessage.success('隐私设置已保存')
-  } catch {
+  } catch (e) {
+    console.error('保存隐私设置失败:', e)
   }
 }
 
@@ -705,17 +701,6 @@ function getMediaUrl(url: string | null): string {
   return '/api' + (url.startsWith('/') ? url : '/' + url)
 }
 
-function formatTime(timeStr: string): string {
-  const date = new Date(timeStr)
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
-
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return Math.floor(diff / 60) + '分钟前'
-  if (diff < 86400) return Math.floor(diff / 3600) + '小时前'
-  if (diff < 604800) return Math.floor(diff / 86400) + '天前'
-  return timeStr.split(' ')[0] || timeStr
-}
 
 // 跳转到用户主页并关闭弹窗
 function goToUserProfile(userId: number) {

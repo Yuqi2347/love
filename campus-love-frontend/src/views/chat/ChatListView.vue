@@ -36,7 +36,12 @@
               <span class="conv-name text-ellipsis">{{ followStore.getDisplayName(conv.userId, conv.nickname) }}</span>
               <span class="conv-time">{{ formatConvTime(conv.lastTime) }}</span>
             </div>
-            <p class="conv-msg text-ellipsis">{{ displayLastMessage(conv.lastMessage) }}</p>
+            <!-- 帖子分享卡片 -->
+            <div v-if="conv.msgType === 5" class="conv-msg-share-card" @click.stop="$router.push(`/feed/${getPostIdFromShare(conv.lastMessage)}`)">
+              <span class="share-icon">🔗</span>
+              <span class="share-text">{{ getShareContent(conv.lastMessage) }}</span>
+            </div>
+            <p v-else class="conv-msg text-ellipsis">{{ displayLastMessage(conv.lastMessage, conv.msgType) }}</p>
           </div>
         </div>
       </div>
@@ -50,7 +55,8 @@
     <!-- 赞和收藏 -->
     <div v-if="activeTab === 'likes'" class="notify-list">
       <div v-if="likeNotifications.length">
-        <div v-for="item in likeNotifications" :key="item.id"
+        <div
+v-for="item in likeNotifications" :key="item.id"
           :class="['notify-item', { 'is-read': readIds.has(item.id) }]"
           @click="handleNotifyClick(item, 'post')"
         >
@@ -72,7 +78,8 @@
     <!-- 新增关注 -->
     <div v-if="activeTab === 'followers'" class="notify-list">
       <div v-if="followerNotifications.length">
-        <div v-for="item in followerNotifications" :key="item.id"
+        <div
+v-for="item in followerNotifications" :key="item.id"
           :class="['notify-item', { 'is-read': readIds.has(item.id) }]"
           @click="handleNotifyClick(item, 'profile')"
         >
@@ -99,7 +106,8 @@
     <!-- 评论和@ -->
     <div v-if="activeTab === 'comments'" class="notify-list">
       <div v-if="commentNotifications.length">
-        <div v-for="item in commentNotifications" :key="item.id"
+        <div
+v-for="item in commentNotifications" :key="item.id"
           :class="['notify-item', { 'is-read': readIds.has(item.id) }]"
           @click="handleNotifyClick(item, 'post')"
         >
@@ -250,10 +258,6 @@ function goToProfile(userId: number) {
   router.push(`/profile/${userId}`)
 }
 
-function goToPost(postId?: number) {
-  if (postId) router.push(`/feed/${postId}`)
-}
-
 // 点击单条通知时标记已读 + 跳转
 function handleNotifyClick(item: SocialNotification, target: 'post' | 'profile') {
   readIds.value.add(item.id)
@@ -303,9 +307,35 @@ function formatByDate(date: Date): string {
   return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
-function displayLastMessage(text: string | undefined): string {
+function displayLastMessage(text: string | undefined, msgType?: number): string {
   if (!text) return ''
+  // msgType 5 是帖子分享，已经在模板中单独处理
+  if (msgType === 5) return ''
   return text.includes('INVITE#') ? '[邀约邀请]' : text
+}
+
+// 从帖子分享内容中提取 postId
+function getPostIdFromShare(content: string | undefined): number | null {
+  if (!content) return null
+  try {
+    const data = JSON.parse(content)
+    return data.postId || null
+  } catch {
+    return null
+  }
+}
+
+// 从帖子分享内容中提取显示文本
+function getShareContent(content: string | undefined): string {
+  if (!content) return '[帖子分享]'
+  try {
+    const data = JSON.parse(content)
+    const nickname = data.postNickname || ''
+    const postContent = data.postContent || ''
+    return `${nickname}：${postContent.substring(0, 30)}${postContent.length > 30 ? '...' : ''}`
+  } catch {
+    return '[帖子分享]'
+  }
 }
 
 onMounted(() => {
@@ -458,6 +488,35 @@ async function loadFollowers() {
 .conv-name { font-size: 15px; font-weight: 600; }
 .conv-time { font-size: 12px; color: $text-muted; flex-shrink: 0; }
 .conv-msg { font-size: 13px; color: $text-secondary; }
+
+// 帖子分享卡片
+.conv-msg-share-card {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: $text-secondary;
+  background: $bg-tertiary;
+  padding: 8px 12px;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: #e8eaed;
+  }
+
+  .share-icon {
+    font-size: 16px;
+  }
+
+  .share-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+}
 
 .text-ellipsis {
   overflow: hidden;

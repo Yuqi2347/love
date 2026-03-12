@@ -88,4 +88,10 @@ public class FollowController {
         followService.setRemark(targetUserId, remark);
         return Result.success();
     }
+
+    @Operation(summary = "我的互关朋友列表", description = "返回当前用户互相关注的朋友列表，用于分享帖子等场景")
+    @GetMapping("/mutual")
+    public Result<List<FollowResponse>> getMutualFriends() {
+        return Result.success(followService.getMutualFriendList(CurrentUser.getId()));
+    }
 }

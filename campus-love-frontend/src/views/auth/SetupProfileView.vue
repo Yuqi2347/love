@@ -97,8 +97,8 @@ v-for="mbti in mbtiTypes" :key="mbti"
               placeholder="输入自定义兴趣标签"
               maxlength="10"
               show-word-limit
-              @keyup.enter="addCustomInterest"
               class="custom-interest-input"
+              @keyup.enter="addCustomInterest"
             />
             <button class="btn-add-interest" @click="addCustomInterest">
               添加

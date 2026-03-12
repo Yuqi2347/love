@@ -61,8 +61,8 @@
       <QuestionCard
         v-for="q in STEP1_QUESTIONS" :key="q.key"
         :question="q"
-        :modelValue="(form as any)[q.key]"
-        @update:modelValue="(v: string) => (form as any)[q.key] = v"
+        :model-value="(form as any)[q.key]"
+        @update:model-value="(v: string) => (form as any)[q.key] = v"
       />
     </div>
 
@@ -92,8 +92,8 @@
         v-for="q in STEP2_QUESTIONS.filter(q => q.key !== 'ageRangePreference')"
         :key="q.key"
         :question="q"
-        :modelValue="(form as any)[q.key]"
-        @update:modelValue="(v: string) => (form as any)[q.key] = v"
+        :model-value="(form as any)[q.key]"
+        @update:model-value="(v: string) => (form as any)[q.key] = v"
       >
         <!-- Q6 特殊提示 -->
         <template v-if="q.key === 'appearanceRequirement' && form.appearanceRequirement === 'A'" #hint>
@@ -129,8 +129,8 @@
       <QuestionCard
         v-for="q in STEP3_QUESTIONS" :key="q.key"
         :question="q"
-        :modelValue="(form as any)[q.key]"
-        @update:modelValue="(v: string) => (form as any)[q.key] = v"
+        :model-value="(form as any)[q.key]"
+        @update:model-value="(v: string) => (form as any)[q.key] = v"
       />
 
       <!-- 确认提交区 -->
