@@ -4,6 +4,8 @@ import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.auth.service.EmailVerifyService;
 import com.campus.love.common.result.Result;
 import com.campus.love.common.result.ResultCode;
+import com.campus.love.user.dto.AiDisclosureSettingsRequest;
+import com.campus.love.user.dto.UserAiProfileResponse;
 import com.campus.love.user.dto.UserProfileRequest;
 import com.campus.love.user.dto.UserProfileResponse;
 import com.campus.love.user.dto.UserSearchItemResponse;
@@ -32,6 +34,12 @@ public class UserController {
     @GetMapping("/me")
     public Result<UserProfileResponse> getMyProfile() {
         return Result.success(userService.getProfile(CurrentUser.getId()));
+    }
+
+    @Operation(summary = "获取当前用户 AI 画像（性格画像页）")
+    @GetMapping("/ai-profile")
+    public Result<UserAiProfileResponse> getMyAiProfile() {
+        return Result.success(userService.getMyAiProfile());
     }
 
     @Operation(summary = "按昵称搜索用户")
@@ -64,6 +72,18 @@ public class UserController {
     @PatchMapping("/feed-visibility")
     public Result<UserProfileResponse> updateFeedVisibility(@RequestParam String visibility) {
         return Result.success(userService.updateFeedVisibility(visibility));
+    }
+
+    @Operation(summary = "开启/关闭破冰功能（全局，所有互关好友可用）")
+    @PatchMapping("/ice-break")
+    public Result<UserProfileResponse> updateIceBreakEnabled(@RequestParam boolean enabled) {
+        return Result.success(userService.updateIceBreakEnabled(enabled));
+    }
+
+    @Operation(summary = "更新 AI 信息公开授权设置")
+    @PatchMapping("/ai-disclosure")
+    public Result<UserProfileResponse> updateAiDisclosureSettings(@RequestBody AiDisclosureSettingsRequest request) {
+        return Result.success(userService.updateAiDisclosureSettings(request.getSettings()));
     }
 
     @Operation(summary = "更新动态可见时间")

@@ -59,6 +59,12 @@
         <div v-if="result.bio" class="card-bio">{{ result.bio }}</div>
       </div>
 
+      <!-- AI 配对总结 -->
+      <div v-if="result.summary" class="summary-section">
+        <h3 class="summary-title">💫 配对解读</h3>
+        <p class="summary-text">{{ result.summary }}</p>
+      </div>
+
       <!-- 四维度分数 -->
       <div v-if="result.scoreDetail" class="score-detail">
         <h3 class="detail-title">匹配维度</h3>
@@ -342,6 +348,29 @@ onMounted(async () => {
   line-height: 1.6;
   padding-top: 12px;
   border-top: 1px solid $border-light;
+}
+
+// AI 配对总结
+.summary-section {
+  background: linear-gradient(135deg, rgba($primary, 0.06), rgba($primary, 0.02));
+  border: 1px solid rgba($primary, 0.15);
+  border-radius: $radius-xl;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.summary-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: $primary;
+  margin-bottom: 12px;
+}
+
+.summary-text {
+  font-size: 14px;
+  color: $text-secondary;
+  line-height: 1.8;
+  white-space: pre-wrap;
 }
 
 // 四维度分数

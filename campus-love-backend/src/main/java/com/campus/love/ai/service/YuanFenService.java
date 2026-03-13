@@ -19,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
+import java.util.Optional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 
@@ -120,6 +121,31 @@ public class YuanFenService {
         }
 
         return result;
+    }
+
+    /**
+     * 获取缘分分析缓存（仅读取，不触发 AI）
+     * 供破冰、心动时刻等 Agent 复用缘分分析结果
+     */
+    public Optional<YuanFenAnalysisResponse> getCachedAnalysis(Long userAId, Long userBId) {
+        if (userAId == null || userBId == null || userAId.equals(userBId)) return Optional.empty();
+        long minId = Math.min(userAId, userBId);
+        long maxId = Math.max(userAId, userBId);
+        try {
+            YuanFenAnalysisLog cachedLog = logMapper.selectOne(
+                    new LambdaQueryWrapper<YuanFenAnalysisLog>()
+                            .eq(YuanFenAnalysisLog::getUserIdA, minId)
+                            .eq(YuanFenAnalysisLog::getUserIdB, maxId)
+                            .orderByDesc(YuanFenAnalysisLog::getCreatedAt)
+                            .last("LIMIT 1"));
+            if (cachedLog != null && cachedLog.getAiResult() != null) {
+                YuanFenAnalysisResponse r = objectMapper.readValue(cachedLog.getAiResult(), YuanFenAnalysisResponse.class);
+                return Optional.of(r);
+            }
+        } catch (Exception e) {
+            log.warn("getCachedAnalysis failed: {}", e.getMessage());
+        }
+        return Optional.empty();
     }
 
     /**

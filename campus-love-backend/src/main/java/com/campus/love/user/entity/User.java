@@ -1,7 +1,9 @@
 package com.campus.love.user.entity;
 
 import com.baomidou.mybatisplus.annotation.*;
+import lombok.AccessLevel;
 import lombok.Data;
+import lombok.Getter;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -71,6 +73,16 @@ public class User {
     /** 动态可见时间(天)：3=近三天，30=近一月，180=近半年，-1=全部 */
     private Integer feedVisibilityTime;
 
+    /** V24：生辰时辰是否不知道（八字权重清零） */
+    @Getter(AccessLevel.NONE)
+    @TableField("bazi_unknown")
+    private Boolean baziUnknown;
+    /** V24：是否开启破冰功能 */
+    @TableField("ice_break_enabled")
+    private Boolean iceBreakEnabled;
+    /** V24：AI信息公开授权设置 JSON */
+    private String aiDisclosureSettings;
+
     /** 信用分默认值 100，用于邀约等模块 */
     public static final int DEFAULT_CREDIT_SCORE = 100;
 
@@ -85,4 +97,10 @@ public class User {
     public int getInviteCountOrDefault() {
         return inviteCount != null ? inviteCount : 0;
     }
+
+    /** 任一方 bazi_unknown=true 时八字不参与计算 */
+    public Boolean getBaziUnknown() {
+        return baziUnknown;
+    }
+
 }

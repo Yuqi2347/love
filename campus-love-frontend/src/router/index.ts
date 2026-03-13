@@ -96,6 +96,11 @@ const router = createRouter({
           component: () => import('@/views/profile/ProfileView.vue'),
         },
         {
+          path: 'profile/insight',
+          name: 'ProfileInsight',
+          component: () => import('@/views/profile/ProfileInsightView.vue'),
+        },
+        {
           path: 'profile/:userId',
           name: 'UserProfile',
           component: () => import('@/views/profile/ProfileView.vue'),
@@ -109,6 +114,11 @@ const router = createRouter({
           path: 'admin/reports',
           name: 'AdminReports',
           component: () => import('@/views/admin/AdminReportView.vue'),
+        },
+        {
+          path: 'admin/profile',
+          name: 'AdminProfile',
+          component: () => import('@/views/admin/AdminProfileView.vue'),
         },
       ],
     },

@@ -46,6 +46,7 @@ public class MatchService {
     private final UserWeightService userWeightService;
     private final InterestMatcher interestMatcher;
     private final MajorCategoryMatcher majorCategoryMatcher;
+    private final MatchSummaryService matchSummaryService;
 
     /**
      * 获取推荐用户列表
@@ -116,26 +117,40 @@ public class MatchService {
 
     /**
      * 计算匹配度（使用个性化权重）
+     * V1.1.0：双方任一 bazi_unknown=true 时八字权重清零，使用 WITHOUT_BAZI 配置
      */
     private MatchResultResponse calculateMatch(User self, User target, Map<String, Double> weights) {
         int interestScore = calculateInterestScore(self.getInterests(), target.getInterests());
         int mbtiScore = MbtiCompatibilityMatrix.getCompatibility(self.getMbti(), target.getMbti());
         int zodiacScore = ZodiacCompatibilityTable.getCompatibility(self.getZodiac(), target.getZodiac());
-        // 八字合婚：同性交友时使用中性分数（不参与合婚评分）
+        // 八字：任一方 bazi_unknown 则不参与计算；同性用中性分
+        boolean baziAvailable = !Boolean.TRUE.equals(self.getBaziUnknown()) && !Boolean.TRUE.equals(target.getBaziUnknown());
         boolean isSameSex = self.getGender() != null && self.getGender().equals(target.getGender());
-        int baziScore = isSameSex ? 50 : calculateBaziScore(self.getBirthDate(), self.getBirthTime(), target.getBirthDate(), target.getBirthTime());
+        int baziScore = !baziAvailable ? 50 : (isSameSex ? 50 : calculateBaziScore(self.getBirthDate(), self.getBirthTime(), target.getBirthDate(), target.getBirthTime()));
         int majorScore = calculateMajorScore(self.getMajor(), target.getMajor());
         int ageScore = calculateAgeScore(self.getBirthDate(), target.getBirthDate());
 
-        // 使用个性化权重计算总分
+        // bazi_unknown 时使用 WITHOUT_BAZI 权重
+        Map<String, Double> effectiveWeights = baziAvailable ? weights : GlobalWeights.WITHOUT_BAZI;
+
         int totalScore = (int) (
-                interestScore * weights.getOrDefault("interest", GlobalWeights.getDefaultWeight("interest")) +
-                mbtiScore * weights.getOrDefault("mbti", GlobalWeights.getDefaultWeight("mbti")) +
-                zodiacScore * weights.getOrDefault("zodiac", GlobalWeights.getDefaultWeight("zodiac")) +
-                baziScore * weights.getOrDefault("bazi", GlobalWeights.getDefaultWeight("bazi")) +
-                majorScore * weights.getOrDefault("major", GlobalWeights.getDefaultWeight("major")) +
-                ageScore * weights.getOrDefault("age", GlobalWeights.getDefaultWeight("age"))
+                interestScore * effectiveWeights.getOrDefault("interest", GlobalWeights.getDefaultWeight("interest")) +
+                mbtiScore * effectiveWeights.getOrDefault("mbti", GlobalWeights.getDefaultWeight("mbti")) +
+                zodiacScore * effectiveWeights.getOrDefault("zodiac", GlobalWeights.getDefaultWeight("zodiac")) +
+                baziScore * effectiveWeights.getOrDefault("bazi", GlobalWeights.getDefaultWeight("bazi")) +
+                majorScore * effectiveWeights.getOrDefault("major", GlobalWeights.getDefaultWeight("major")) +
+                ageScore * effectiveWeights.getOrDefault("age", GlobalWeights.getDefaultWeight("age"))
         );
+
+        MatchResultResponse.MatchDetail detail = MatchResultResponse.MatchDetail.builder()
+                .interestScore(interestScore)
+                .mbtiScore(mbtiScore)
+                .zodiacScore(zodiacScore)
+                .baziScore(baziAvailable ? baziScore : null)
+                .majorScore(majorScore)
+                .ageScore(ageScore)
+                .build();
+        String aiSummary = matchSummaryService.generateOneLiner(detail, self.getInterests(), target.getInterests());
 
         return MatchResultResponse.builder()
                 .userId(target.getId())
@@ -150,14 +165,8 @@ public class MatchService {
                 .bio(target.getBio())
                 .interests(target.getInterests())
                 .matchScore(totalScore)
-                .detail(MatchResultResponse.MatchDetail.builder()
-                        .interestScore(interestScore)
-                        .mbtiScore(mbtiScore)
-                        .zodiacScore(zodiacScore)
-                        .baziScore(baziScore)
-                        .majorScore(majorScore)
-                        .ageScore(ageScore)
-                        .build())
+                .aiSummary(aiSummary)
+                .detail(detail)
                 .build();
     }
 

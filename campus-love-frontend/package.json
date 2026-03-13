@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:restart": "npx -y kill-port 5179 && npm run dev",
     "tunnel": "npx -y lt --port 5173",
     "tunnel:ngrok": "npx -y ngrok http 5173",
     "dev:public": "concurrently -n dev,ngrok -c blue,green \"npm run dev\" \"npx -y ngrok http 5173\"",

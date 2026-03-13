@@ -6,6 +6,7 @@ import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.common.service.FileUploadService;
+import com.campus.love.ai.agent.MomentSummaryReActAgent;
 import com.campus.love.moment.dto.MomentEnrollRequest;
 import com.campus.love.moment.dto.MomentResultResponse;
 import com.campus.love.moment.dto.MomentStatusResponse;
@@ -45,6 +46,7 @@ public class MomentService {
     private final ObjectMapper objectMapper;
     private final FileUploadService fileUploadService;
     private final MomentEnrollmentState enrollmentState;
+    private final MomentSummaryReActAgent momentSummaryAgent;
 
     /**
      * 判断本周报名是否仍开放：
@@ -268,6 +270,14 @@ public class MomentService {
             age = Period.between(matchedUser.getBirthDate(), LocalDate.now()).getYears();
         }
 
+        String summary = null;
+        try {
+            java.math.BigDecimal score = matchResult.getTotalScore();
+            summary = momentSummaryAgent.generateSummary(userId, matchedUserId, score != null ? score.doubleValue() : null);
+        } catch (Exception e) {
+            log.warn("心动配对总结生成失败: {}", e.getMessage());
+        }
+
         return MomentResultResponse.builder()
                 .matched(true)
                 .weekTag(weekTag)
@@ -284,6 +294,7 @@ public class MomentService {
                 .age(age)
                 .totalScore(matchResult.getTotalScore())
                 .scoreDetail(scoreDetail)
+                .summary(summary)
                 .build();
     }
 
@@ -333,18 +344,40 @@ public class MomentService {
 
     private void copyProfileFromRequest(MomentProfile profile, MomentEnrollRequest req) {
         profile.setTargetGender(req.getTargetGender());
+        profile.setAppearanceScore(BigDecimal.valueOf(req.getSelfScore()));
         profile.setSocialStyle(req.getSocialStyle());
         profile.setLifeRhythm(req.getLifeRhythm());
-        profile.setCompanionshipStyle(req.getCompanionshipStyle());
+        profile.setPersonalityBase(req.getPersonalityBase());
+        profile.setCampusFocus(req.getCampusFocus());
+        profile.setEmotionStyle(req.getEmotionStyle());
         profile.setAppearanceRequirement(req.getAppearanceRequirement());
+        profile.setAgeRangePreference(req.getAgeRangePreference());
+        profile.setAgePreferenceMin(req.getAgePreferenceMin());
+        profile.setAgePreferenceMax(req.getAgePreferenceMax());
+        profile.setGradeRangePreference(req.getGradeRangePreference());
+        profile.setGradeRangeMin(req.getGradeRangeMin());
+        profile.setGradeRangeMax(req.getGradeRangeMax());
         profile.setPartnerPersonality(req.getPartnerPersonality());
         profile.setMajorPreference(req.getMajorPreference());
-        profile.setAgeRangePreference(req.getAgeRangePreference());
+        profile.setCareerAmbitionPref(req.getCareerAmbitionPref());
+        profile.setCompanionshipStyle(req.getCompanionshipStyle());
         profile.setDateStyle(req.getDateStyle());
         profile.setIntimacyPace(req.getIntimacyPace());
-        profile.setLoyaltyValue(req.getLoyaltyValue());
+        profile.setHonestyLevel(req.getHonestyLevel());
         profile.setPremaritalCohabitation(req.getPremaritalCohabitation());
-        profile.setFutureLifestyle(req.getFutureLifestyle());
+        profile.setPremaritalSex(req.getPremaritalSex());
         profile.setRelationshipCoreValue(req.getRelationshipCoreValue());
+        profile.setConflictStyle(req.getConflictStyle());
+        profile.setSocialBoundary(req.getSocialBoundary());
+        profile.setFutureLifestyle(req.getFutureLifestyle());
+        profile.setCampusLovePlan(req.getCampusLovePlan());
+        profile.setIdolRole(req.getIdolRole());
+        profile.setTemptationResponse(req.getTemptationResponse());
+        profile.setRealityCondition(req.getRealityCondition());
+        profile.setHumanNatureView(req.getHumanNatureView());
+        profile.setBreakupView(req.getBreakupView());
+        profile.setCareerLoveConflict(req.getCareerLoveConflict());
+        profile.setEmotionPriority(req.getEmotionPriority());
+        profile.setLifeGoalPriority(req.getLifeGoalPriority());
     }
 }

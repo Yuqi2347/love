@@ -22,6 +22,7 @@ export interface UserProfile {
   mbti: string | null
   zodiac: string | null
   bazi: string | null
+  baziUnknown?: boolean
   avatarUrl: string | null
   bio: string | null
   interests: string | null
@@ -32,6 +33,10 @@ export interface UserProfile {
   feedVisibilityTime?: number
   /** 个人主页背景图 URL */
   coverImageUrl?: string | null
+  /** V24：是否开启破冰功能 */
+  iceBreakEnabled?: boolean | null
+  /** V24：AI 信息公开授权设置 JSON */
+  aiDisclosureSettings?: string | null
 }
 
 export interface UpdateProfileParams {
@@ -39,6 +44,8 @@ export interface UpdateProfileParams {
   gender: number
   birthDate: string
   birthTime?: string
+  /** 不知道时辰时八字权重清零 */
+  baziUnknown?: boolean
   school?: string
   major?: string
   grade?: string
@@ -51,6 +58,21 @@ export interface UpdateProfileParams {
 
 export function getMyProfile() {
   return request.get<ApiResult<UserProfile>>('/user/me')
+}
+
+export interface UserAiProfile {
+  userId: number
+  hasRealOcean: boolean
+  oceanO: number | null
+  oceanC: number | null
+  oceanE: number | null
+  oceanA: number | null
+  oceanN: number | null
+  naturalLanguageTags: string[]
+}
+
+export function getMyAiProfile() {
+  return request.get<ApiResult<UserAiProfile>>('/user/ai-profile')
 }
 
 export function getUserProfile(userId: number) {
@@ -83,6 +105,50 @@ export function updateFeedVisibility(visibility: string) {
 
 export function updateFeedVisibilityTime(days: number) {
   return request.patch<ApiResult<UserProfile>>('/user/feed-visibility-time', null, { params: { days } })
+}
+
+export function updateIceBreakEnabled(enabled: boolean) {
+  return request.patch<ApiResult<UserProfile>>('/user/ice-break', null, { params: { enabled } })
+}
+
+/** 破冰功能状态（用于聊天框「💡 破冰灵感」按钮及「允许对方使用破冰」开关） */
+export interface IceBreakStatus {
+  canShow: boolean
+  targetEnabled: boolean
+  allowedByMe: boolean
+  canAllow: boolean
+}
+
+export function getIceBreakStatus(targetUserId: number) {
+  return request.get<ApiResult<IceBreakStatus>>(`/chat/ice-break-status/${targetUserId}`)
+}
+
+/** 破冰灵感：先分析聊天记录，再给话题建议（需互关且对方已允许） */
+export interface IceBreakTopicsResponse {
+  analysis: string
+  topics: string[]
+}
+export function getIceBreakTopics(targetUserId: number) {
+  return request.get<ApiResult<IceBreakTopicsResponse>>(`/chat/ice-break-topics/${targetUserId}`)
+}
+
+/** 按好友单独设置：允许/禁止对方获取破冰灵感（需互关） */
+export function updateIceBreakAllow(targetUserId: number, allowed: boolean) {
+  return request.patch<ApiResult<void>>(`/chat/ice-break-allow/${targetUserId}`, null, { params: { allowed } })
+}
+
+export interface AiDisclosureSettings {
+  mbti?: boolean
+  zodiac?: boolean
+  majorCategory?: boolean
+  interestTags?: boolean
+  naturalLangTags?: boolean
+  baziInfo?: boolean
+  questionnaireHints?: boolean
+}
+
+export function updateAiDisclosureSettings(settings: AiDisclosureSettings) {
+  return request.patch<ApiResult<UserProfile>>('/user/ai-disclosure', { settings } as { settings: Record<string, boolean> })
 }
 
 export function uploadAvatar(file: File) {

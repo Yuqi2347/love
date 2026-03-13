@@ -14,6 +14,8 @@ import com.campus.love.feed.dto.FeedPostResponse;
 import com.campus.love.feed.entity.FeedComment;
 import com.campus.love.feed.entity.FeedLike;
 import com.campus.love.feed.entity.FeedPost;
+import com.campus.love.ai.skill.FeedTaggingSkill;
+import com.campus.love.tracking.BehaviorTracker;
 import com.campus.love.feed.mapper.FeedCommentMapper;
 import com.campus.love.feed.mapper.FeedLikeMapper;
 import com.campus.love.feed.mapper.FeedPostMapper;
@@ -47,12 +49,14 @@ public class FeedService {
 
     private final FeedPostMapper feedPostMapper;
     private final FeedLikeMapper feedLikeMapper;
+    private final FeedTaggingSkill feedTaggingSkill;
     private final FeedCommentMapper feedCommentMapper;
     private final UserMapper userMapper;
     private final FollowService followService;
     private final ActivityService activityService;
     private final MessageMapper messageMapper;
     private final NotificationService notificationService;
+    private final BehaviorTracker behaviorTracker;
 
     /**
      * 创建朋友圈帖子
@@ -85,8 +89,11 @@ public class FeedService {
         post.setCommentCount(0);
         feedPostMapper.insert(post);
         activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.POST, post.getId());
+        feedTaggingSkill.tagPost(post.getId());
         log.info("用户{}发布动态: postId={}, postType={}", userId, post.getId(), postType);
-        return toResponse(post, userId);
+        // 重新查询以获取 tagPost 写入的 aiTags
+        FeedPost tagged = feedPostMapper.selectById(post.getId());
+        return toResponse(tagged != null ? tagged : post, userId);
     }
 
     /**
@@ -110,8 +117,8 @@ public class FeedService {
         Map<Long, User> authorMap = batchLoadAuthors(posts);
         return posts.stream().map(p -> {
             FeedPostResponse response = toResponse(p, currentUserId, authorMap);
-            // 记录浏览活跃度
             activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.VIEW, p.getId());
+            behaviorTracker.trackFeedView(currentUserId, p.getId());
             return response;
         }).collect(Collectors.toList());
     }
@@ -355,6 +362,7 @@ public class FeedService {
         if (!canSeePost(post, currentUserId, batchLoadAuthors(List.of(post)))) {
             throw new BusinessException(ResultCode.FORBIDDEN);
         }
+        behaviorTracker.trackFeedView(currentUserId, postId);
         return toResponse(post, currentUserId, null, FeedConstants.DETAIL_COMMENT_LIMIT);
     }
 
@@ -419,6 +427,25 @@ public class FeedService {
         }
 
         feedPostMapper.deleteById(postId);
+    }
+
+    /** 重新生成 AI 标签（作者可触发，用于无标签或需刷新的帖子） */
+    public void retagPost(Long postId) {
+        Long userId = CurrentUser.getId();
+        FeedPost post = feedPostMapper.selectById(postId);
+        if (post == null) throw new BusinessException(ResultCode.FEED_NOT_FOUND);
+        if (!post.getUserId().equals(userId)) throw new BusinessException(ResultCode.FORBIDDEN);
+        feedTaggingSkill.tagPost(postId);
+    }
+
+    /** 更新帖子 AI 标签（仅作者可修改） */
+    public void updatePostAiTags(Long postId, String aiTags) {
+        Long userId = CurrentUser.getId();
+        FeedPost post = feedPostMapper.selectById(postId);
+        if (post == null) throw new BusinessException(ResultCode.FEED_NOT_FOUND);
+        if (!post.getUserId().equals(userId)) throw new BusinessException(ResultCode.FORBIDDEN);
+        post.setAiTags(aiTags != null ? aiTags.trim() : null);
+        feedPostMapper.updateById(post);
     }
 
     /** 我发布的帖子收到的新点赞+新评论数量（自上次查看朋友圈活动以来），用于导航红点；从未查看过则返回 0 */
@@ -578,6 +605,7 @@ public class FeedService {
                 .visibility(post.getVisibility() != null ? post.getVisibility() : VisibilityConstants.ALL)
                 .createdAt(post.getCreatedAt() != null ? post.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "")
                 .comments(commentItems)
+                .aiTags(post.getAiTags())
                 .build();
     }
 

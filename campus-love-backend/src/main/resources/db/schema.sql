@@ -3,7 +3,7 @@
 -- 新环境首次初始化时只需执行本脚本一次：
 --   mysql -uroot -p campus_love < schema.sql
 -- 或在客户端：SOURCE /绝对路径/schema.sql;
--- 已有数据库升级请使用增量脚本 V2～V17。
+-- 已有数据库升级请使用增量脚本 V2～V24。
 -- =============================================
 
 CREATE DATABASE IF NOT EXISTS campus_love
@@ -47,6 +47,9 @@ CREATE TABLE IF NOT EXISTS t_user (
     moment_photo_url              VARCHAR(256) DEFAULT NULL COMMENT '心动一刻照片URL（V13）',
     moment_self_score             TINYINT      DEFAULT NULL COMMENT '自评颜值分1-10（V13）',
     moment_banned                 TINYINT(1)   DEFAULT 0   COMMENT '是否被禁止参加心动一刻（V13）',
+    bazi_unknown                   TINYINT(1)   DEFAULT 0   COMMENT '生辰时辰是否不知道（V24）',
+    ice_break_enabled              TINYINT(1)   DEFAULT 0   COMMENT '是否开启破冰功能（V24）',
+    ai_disclosure_settings         JSON         DEFAULT (JSON_OBJECT('mbti', true, 'zodiac', true, 'majorCategory', true, 'interestTags', true, 'naturalLangTags', false, 'baziInfo', false, 'questionnaireHints', false)) COMMENT 'AI信息公开授权（V24）',
     UNIQUE KEY uk_email (email)
 ) COMMENT '用户基础信息';
 
@@ -94,6 +97,11 @@ CREATE TABLE IF NOT EXISTS t_feed_post (
     like_count      INT             DEFAULT 0 COMMENT '点赞数',
     comment_count   INT             DEFAULT 0 COMMENT '评论数',
     visibility      VARCHAR(16)     DEFAULT 'ALL' COMMENT '可见性：ALL/FOLLOWERS/FRIENDS/SELF（V17）',
+    ai_tags         TEXT            COMMENT 'AI提取的标签，逗号分隔（V24/V29 由JSON改为TEXT）',
+    primary_category VARCHAR(20)    COMMENT '主要兴趣分类（V24）',
+    tag_sentiment   VARCHAR(10)     COMMENT 'positive/neutral/negative（V24）',
+    ocean_hints     JSON            COMMENT 'AI推断的OCEAN信号（V24）',
+    tag_confidence  DECIMAL(3,2)    COMMENT '标签置信权重（V24）',
     deleted         TINYINT(1)      DEFAULT 0,
     created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME        DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
@@ -330,6 +338,10 @@ CREATE TABLE IF NOT EXISTS t_moment_profile (
     partner_personality     CHAR(1)      COMMENT 'Q7 期望性格: A/B/C',
     major_preference        CHAR(1)      COMMENT 'Q8 专业偏好: A/B/C',
     age_range_preference    VARCHAR(20)  COMMENT 'Q9 年龄偏好（可多选逗号分隔）: A/B/C/D',
+    age_preference_min      INT          DEFAULT -10 COMMENT 'V25 年龄偏好下限 -10~10',
+    age_preference_max      INT          DEFAULT 10 COMMENT 'V25 年龄偏好上限',
+    grade_range_min         INT          DEFAULT 1 COMMENT 'V25 年级范围下限 1~11',
+    grade_range_max         INT          DEFAULT 11 COMMENT 'V25 年级范围上限',
     date_style              CHAR(1)      COMMENT 'Q10 约会风格: A/B/C',
     intimacy_pace           CHAR(1)      COMMENT 'Q11 亲密节奏: A/B/C',
     loyalty_value           CHAR(1)      COMMENT 'Q12 忠诚观: A/B/C',
@@ -380,3 +392,84 @@ CREATE TABLE IF NOT EXISTS t_report (
     INDEX idx_target (target_type, target_id),
     INDEX idx_status (status)
 ) COMMENT '举报记录表';
+
+-- RAG + AI 人物画像（V24，依据技术文档 V1.1.0-final Rev2）
+CREATE TABLE IF NOT EXISTS t_user_ai_profile (
+    user_id               BIGINT        PRIMARY KEY,
+    interest_tags         JSON          COMMENT '兴趣标签树',
+    ocean_o_long          DECIMAL(4,1)  COMMENT '开放性-长期',
+    ocean_c_long          DECIMAL(4,1)  COMMENT '尽责性-长期',
+    ocean_e_long          DECIMAL(4,1)  COMMENT '外向性-长期',
+    ocean_a_long          DECIMAL(4,1)  COMMENT '宜人性-长期',
+    ocean_n_long          DECIMAL(4,1)  COMMENT '神经质-长期',
+    ocean_o_short         DECIMAL(4,1)  COMMENT '开放性-短期',
+    ocean_c_short         DECIMAL(4,1)  COMMENT '尽责性-短期',
+    ocean_e_short         DECIMAL(4,1)  COMMENT '外向性-短期',
+    ocean_a_short         DECIMAL(4,1)  COMMENT '宜人性-短期',
+    ocean_n_short         DECIMAL(4,1)  COMMENT '神经质-短期',
+    has_real_ocean        TINYINT(1)    DEFAULT 0 COMMENT '是否有行为数据支撑的真实OCEAN',
+    natural_language_tags JSON          COMMENT 'AI自然语言标签',
+    love_attachment_type  VARCHAR(20)   COMMENT '依恋类型（不进AI Prompt）',
+    attracted_to_traits   JSON          COMMENT '倾向被吸引的对方特质',
+    friction_points       JSON          COMMENT '潜在摩擦场景（不进AI Prompt）',
+    user_corrected_fields JSON          COMMENT '用户手动修正过的字段名',
+    profile_version       INT           DEFAULT 1,
+    last_long_update      DATE,
+    last_short_update     DATE,
+    created_at            DATETIME      DEFAULT CURRENT_TIMESTAMP,
+    updated_at            DATETIME      DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) COMMENT 'AI深度人物画像（V24）';
+
+CREATE TABLE IF NOT EXISTS t_user_behavior_summary (
+    user_id                BIGINT    PRIMARY KEY,
+    browse_pref_short      JSON      COMMENT '近14天兴趣类目分布',
+    browse_pref_long       JSON      COMMENT '近6个月兴趣类目分布',
+    chat_partner_traits    JSON      COMMENT '聊天对象MBTI/专业/OCEAN均值',
+    match_interest_pattern JSON      COMMENT '有效停留偏好',
+    updated_at             DATETIME  DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) COMMENT '行为统计摘要（V24）';
+
+CREATE TABLE IF NOT EXISTS t_user_behavior_log (
+    id            BIGINT        PRIMARY KEY AUTO_INCREMENT,
+    user_id       BIGINT        NOT NULL,
+    behavior_type VARCHAR(30)   NOT NULL,
+    target_id     BIGINT,
+    metadata      JSON,
+    created_at    DATETIME      DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user_date (user_id, created_at)
+) COMMENT '行为原始日志（V24）';
+
+CREATE TABLE IF NOT EXISTS t_user_profile_vector (
+    user_id         BIGINT PRIMARY KEY,
+    profile_vector  JSON    NOT NULL COMMENT '画像向量 1536维',
+    behavior_vector JSON,
+    updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) COMMENT '用户画像向量 RAG（V24）';
+
+CREATE TABLE IF NOT EXISTS t_feed_content_vector (
+    feed_id          BIGINT PRIMARY KEY,
+    user_id          BIGINT NOT NULL,
+    content_vector   JSON   NOT NULL COMMENT '内容向量 1536维',
+    ai_tags          JSON,
+    primary_category VARCHAR(20),
+    created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_user (user_id)
+) COMMENT '朋友圈内容向量 RAG（V24）';
+
+CREATE TABLE IF NOT EXISTS t_ice_break_reminder_log (
+    id            BIGINT      PRIMARY KEY AUTO_INCREMENT,
+    from_user_id  BIGINT      NOT NULL,
+    to_user_id    BIGINT      NOT NULL,
+    reminder_type VARCHAR(30) DEFAULT 'ICE_BREAK',
+    created_at    DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_reminder (from_user_id, to_user_id, reminder_type)
+) COMMENT '破冰提醒记录（V24）';
+
+CREATE TABLE IF NOT EXISTS t_relation_milestone (
+    id             BIGINT      PRIMARY KEY AUTO_INCREMENT,
+    user_id_a      BIGINT      NOT NULL,
+    user_id_b      BIGINT      NOT NULL,
+    milestone_type VARCHAR(30) NOT NULL,
+    notified_at    DATETIME    DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_milestone (user_id_a, user_id_b, milestone_type)
+) COMMENT '关系节点提醒记录（V24）';

@@ -17,6 +17,9 @@
                 <el-dropdown-item @click="$router.push('/setup-profile')">
                   <el-icon><Edit /></el-icon> 编辑资料
                 </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/profile/insight')">
+                  <el-icon><DataAnalysis /></el-icon> 我的性格画像
+                </el-dropdown-item>
                 <el-dropdown-item @click="showCoverSettings = true">
                   <el-icon><Picture /></el-icon> 背景设置
                 </el-dropdown-item>
@@ -120,6 +123,18 @@
           <span>当前等级 Lv{{ profile.userLevel }}</span>
           <span>{{ getNextLevelScore(profile.activityScore) }}分升级</span>
         </div>
+      </div>
+
+      <!-- 我的性格画像入口（仅本人可见） -->
+      <div v-if="isMe" class="profile-insight-entry" @click="$router.push('/profile/insight')">
+        <div class="insight-entry-icon">
+          <el-icon :size="28"><DataAnalysis /></el-icon>
+        </div>
+        <div class="insight-entry-text">
+          <span class="insight-entry-title">我的性格画像</span>
+          <span class="insight-entry-desc">查看 OCEAN 五维人格与性格标签</span>
+        </div>
+        <el-icon class="insight-entry-arrow"><ArrowLeft /></el-icon>
       </div>
 
       <!-- 邀约成就 & 平均评分 -->
@@ -346,6 +361,15 @@
           <el-option label="近半年" :value="180" />
         </el-select>
       </div>
+      <div class="setting-item setting-row">
+        <div class="setting-label">破冰功能</div>
+        <el-switch v-model="iceBreakEnabled" @change="saveIceBreak" />
+      </div>
+      <div class="setting-item">
+        <button class="btn-link" @click="openAiDisclosureSheet">
+          <el-icon><Lock /></el-icon> AI 信息授权
+        </button>
+      </div>
       <div class="privacy-hint">
         <el-icon><InfoFilled /></el-icon>
         <span>朋友表示与你互相关注的用户</span>
@@ -420,6 +444,14 @@
       </div>
     </div>
   </el-dialog>
+
+  <!-- AI 信息公开授权面板 -->
+  <IceBreakPrivacySheet
+    v-model="showAiDisclosureSheet"
+    :profile="profile"
+    :current-settings="parsedAiDisclosureSettings"
+    @saved="onAiDisclosureSaved"
+  />
 </template>
 
 <script setup lang="ts">
@@ -428,18 +460,19 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { useFollowStore } from '@/store/followStore'
-import { getUserProfile, updateFeedVisibility, updateFeedVisibilityTime, type UserProfile } from '@/api/userApi'
+import { getUserProfile, updateFeedVisibility, updateFeedVisibilityTime, updateIceBreakEnabled, type UserProfile, type AiDisclosureSettings } from '@/api/userApi'
 import { getMatchDetail, type MatchResult } from '@/api/matchApi'
 import { getInviteStats, getUserInviteStats, type InviteStats } from '@/api/inviteApi'
 import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, setUserRemark, type FollowUser } from '@/api/followApi'
 import { getUserPostsSummary } from '@/api/feedApi'
 import { ElMessage } from 'element-plus'
-import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton, InfoFilled, ArrowLeft, Picture } from '@element-plus/icons-vue'
+import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton, InfoFilled, ArrowLeft, Picture, DataAnalysis } from '@element-plus/icons-vue'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { FOLLOW_STATUS_LABELS, FollowStatus } from '@/constants/followConst'
 import { uploadAvatar, uploadCover, clearCover as clearCoverApi, sendPasswordCode, resetPassword as resetPasswordApi } from '@/api/userApi'
 import { getYuanFenCooldown } from '@/api/aiApi'
 import YuanFenAnalysisSheet from './components/YuanFenAnalysisSheet.vue'
+import IceBreakPrivacySheet from './components/IceBreakPrivacySheet.vue'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
 const dimensionLabels = MATCH_DIMENSION_LABELS
@@ -584,6 +617,43 @@ function onCoverDialogClose() {
 const showPrivacySettings = ref(false)
 const feedVisibility = ref<string>('ALL')
 const feedVisibilityTime = ref<number>(-1)
+const iceBreakEnabled = ref(false)
+const showAiDisclosureSheet = ref(false)
+
+const parsedAiDisclosureSettings = computed((): AiDisclosureSettings | null => {
+  const s = profile.value?.aiDisclosureSettings
+  if (!s || !s.trim()) return null
+  try {
+    return JSON.parse(s) as AiDisclosureSettings
+  } catch {
+    return null
+  }
+})
+
+function openAiDisclosureSheet() {
+  showPrivacySettings.value = false
+  showAiDisclosureSheet.value = true
+}
+
+function onAiDisclosureSaved(settings: AiDisclosureSettings) {
+  if (profile.value) profile.value.aiDisclosureSettings = JSON.stringify(settings)
+}
+
+async function saveIceBreak(enabled: boolean) {
+  try {
+    const res = await updateIceBreakEnabled(enabled)
+    if (profile.value && res.data.data) {
+      profile.value.iceBreakEnabled = res.data.data.iceBreakEnabled ?? false
+    }
+    ElMessage.success(enabled ? '已开启破冰功能' : '已关闭破冰功能')
+    if (enabled && !parsedAiDisclosureSettings.value) {
+      showAiDisclosureSheet.value = true
+    }
+  } catch (e) {
+    iceBreakEnabled.value = !enabled
+    console.error('保存破冰设置失败:', e)
+  }
+}
 
 // 备注编辑
 const showRemarkEditor = ref(false)
@@ -682,6 +752,15 @@ watch(() => userStore.user?.feedVisibility, (v) => {
 watch(() => userStore.user?.feedVisibilityTime, (v) => {
   if (v !== undefined && v !== null) feedVisibilityTime.value = v
   else feedVisibilityTime.value = -1
+}, { immediate: true })
+watch(() => profile.value?.iceBreakEnabled, (v) => {
+  iceBreakEnabled.value = !!v
+}, { immediate: true })
+watch(() => route.query.openAiDisclosure, (v) => {
+  if (v === '1' && isMe.value) {
+    showAiDisclosureSheet.value = true
+    router.replace({ query: {} })
+  }
 }, { immediate: true })
 
 // 昵称编辑
@@ -1248,6 +1327,56 @@ async function handleAvatarChange(event: Event) {
   background: rgba($primary, 0.04);
   border-radius: $radius-xl;
   border: none;
+}
+
+.profile-insight-entry {
+  margin-top: 12px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba($primary, 0.08), rgba($primary, 0.03));
+  border-radius: $radius-xl;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+
+  &:hover {
+    background: linear-gradient(135deg, rgba($primary, 0.12), rgba($primary, 0.06));
+  }
+
+  .insight-entry-icon {
+    width: 48px;
+    height: 48px;
+    border-radius: 12px;
+    background: rgba($primary, 0.15);
+    color: $primary;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .insight-entry-text {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .insight-entry-title {
+    font-size: 16px;
+    font-weight: 700;
+    color: $text-primary;
+  }
+
+  .insight-entry-desc {
+    font-size: 13px;
+    color: $text-secondary;
+  }
+
+  .insight-entry-arrow {
+    color: $text-muted;
+    transform: rotate(180deg);
+  }
 }
 
 .invite-stats-card {
@@ -1837,6 +1966,28 @@ async function handleAvatarChange(event: Event) {
 
 .setting-item {
   margin-bottom: 20px;
+
+  &.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .btn-link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 0;
+    font-size: 14px;
+    color: $primary;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+
+    &:hover {
+      text-decoration: underline;
+    }
+  }
 
   .setting-label {
     font-size: 14px;

@@ -57,7 +57,7 @@
         <p class="slider-hint">诚实填写效果最好，系统会综合参考 😊</p>
       </div>
 
-      <!-- Q3-Q5 -->
+      <!-- Step 1 题目 -->
       <QuestionCard
         v-for="q in STEP1_QUESTIONS" :key="q.key"
         :question="q"
@@ -87,15 +87,13 @@
         </div>
       </div>
 
-      <!-- Q6-Q10 (excluding age preference Q11 which will be shown as slider) -->
+      <!-- Step 2 题目 -->
       <QuestionCard
-        v-for="q in STEP2_QUESTIONS.filter(q => q.key !== 'ageRangePreference')"
-        :key="q.key"
+        v-for="q in STEP2_QUESTIONS" :key="q.key"
         :question="q"
         :model-value="(form as any)[q.key]"
         @update:model-value="(v: string) => (form as any)[q.key] = v"
       >
-        <!-- Q6 特殊提示 -->
         <template v-if="q.key === 'appearanceRequirement' && form.appearanceRequirement === 'A'" #hint>
           <div class="appearance-warning">
             <el-icon><WarningFilled /></el-icon>
@@ -103,22 +101,6 @@
           </div>
         </template>
       </QuestionCard>
-
-      <!-- Q11 年龄偏好 - 改为滑块 -->
-      <div class="slider-section">
-        <div class="section-label">年龄偏好（相对于你的年龄）</div>
-        <div class="slider-wrap age-slider-wrap">
-          <span class="slider-age-label">大10岁</span>
-          <el-slider
-            v-model="form.agePreference"
-            :min="-10" :max="10" :step="1"
-            :marks="agePreferenceMarks"
-            show-stops
-          />
-          <span class="slider-age-label">小10岁</span>
-        </div>
-        <p class="slider-hint">中间表示同龄，左滑喜欢年长的，右滑喜欢年下的</p>
-      </div>
     </div>
 
     <!-- Step 3: 价值观 -->
@@ -188,48 +170,73 @@ const agreed = ref(false)
 const photoFile = ref<File | null>(null)
 const photoPreview = ref<string>('')
 const photoInputRef = ref<HTMLInputElement>()
-const existingPhotoUrl = ref<string>('')  // 已有照片URL（来自上次上传）
+const existingPhotoUrl = ref<string>('')
 
 const form = reactive<MomentEnrollRequest>({
   selfScore: 5,
   targetGender: '',
   socialStyle: '',
   lifeRhythm: '',
+  personalityBase: '',
+  campusFocus: '',
+  emotionStyle: '',
   companionshipStyle: '',
   appearanceRequirement: '',
+  ageRangePreference: '',
+  gradeRangePreference: '',
   partnerPersonality: '',
   majorPreference: '',
-  ageRangePreference: '',
-  agePreference: 0, // 新增：年龄偏好，-10到10
+  careerAmbitionPref: '',
   dateStyle: '',
   intimacyPace: '',
-  loyaltyValue: '',
+  honestyLevel: '',
   premaritalCohabitation: '',
-  futureLifestyle: '',
+  premaritalSex: '',
   relationshipCoreValue: '',
+  conflictStyle: '',
+  socialBoundary: '',
+  futureLifestyle: '',
+  campusLovePlan: '',
+  idolRole: '',
+  temptationResponse: '',
+  realityCondition: '',
+  humanNatureView: '',
+  breakupView: '',
+  careerLoveConflict: '',
+  emotionPriority: '',
+  lifeGoalPriority: '',
 })
 
 const selfScoreMarks: Record<number, string> = { 1: '1', 5: '5', 10: '10' }
-const agePreferenceMarks: Record<number, string> = { '-10': '-10', '-5': '-5', 0: '0', 5: '+5', 10: '+10' }
 
 // 步骤校验
 const canProceed = computed(() => {
   if (currentStep.value === 1) {
-    return form.socialStyle && form.lifeRhythm && form.companionshipStyle
+    return !!(
+      form.socialStyle && form.lifeRhythm && form.personalityBase &&
+      form.campusFocus && form.emotionStyle
+    )
   }
   if (currentStep.value === 2) {
-    return form.targetGender && form.appearanceRequirement &&
-           form.partnerPersonality && form.majorPreference &&
-           form.dateStyle && form.intimacyPace
-    // agePreference 有默认值0，不需要检查
+    return !!(
+      form.targetGender && form.appearanceRequirement &&
+      form.gradeRangePreference && form.partnerPersonality &&
+      form.majorPreference && form.careerAmbitionPref &&
+      form.companionshipStyle && form.dateStyle && form.intimacyPace
+    )
   }
   return true
 })
 
 const canSubmit = computed(() => {
-  return canProceed.value && agreed.value &&
-         form.loyaltyValue && form.premaritalCohabitation &&
-         form.futureLifestyle && form.relationshipCoreValue
+  if (!canProceed.value || !agreed.value) return false
+  return !!(
+    form.honestyLevel && form.premaritalCohabitation && form.premaritalSex &&
+    form.relationshipCoreValue && form.conflictStyle && form.socialBoundary &&
+    form.futureLifestyle && form.campusLovePlan && form.idolRole &&
+    form.temptationResponse && form.realityCondition && form.humanNatureView &&
+    form.breakupView && form.careerLoveConflict && form.emotionPriority && form.lifeGoalPriority
+  )
 })
 
 function nextStep() {
@@ -246,7 +253,6 @@ function prevStep() {
   }
 }
 
-// 照片处理
 function triggerPhotoUpload() {
   photoInputRef.value?.click()
 }
@@ -270,13 +276,11 @@ function removePhoto() {
   existingPhotoUrl.value = ''
 }
 
-// 提交
 async function handleSubmit() {
   if (!canSubmit.value || submitting.value) return
   submitting.value = true
 
   try {
-    // 先上传照片（仅在用户选择了新文件时）
     if (photoFile.value) {
       try {
         await uploadMomentPhoto(photoFile.value)
@@ -285,8 +289,8 @@ async function handleSubmit() {
       }
     }
 
-    // 提交问卷
-    await enrollMoment(form)
+    const payload: MomentEnrollRequest = { ...form }
+    await enrollMoment(payload)
     ElMessage.success('报名成功！')
     router.replace('/moment')
   } catch (err: any) {
@@ -297,7 +301,6 @@ async function handleSubmit() {
   }
 }
 
-// 加载已有问卷（回填）
 onMounted(async () => {
   try {
     const res = await getMomentProfile()
@@ -306,22 +309,35 @@ onMounted(async () => {
       form.targetGender = profile.targetGender || ''
       form.socialStyle = profile.socialStyle || ''
       form.lifeRhythm = profile.lifeRhythm || ''
+      form.personalityBase = profile.personalityBase || ''
+      form.campusFocus = profile.campusFocus || ''
+      form.emotionStyle = profile.emotionStyle || ''
       form.companionshipStyle = profile.companionshipStyle || ''
       form.appearanceRequirement = profile.appearanceRequirement || ''
+      form.ageRangePreference = profile.ageRangePreference || ''
+      form.gradeRangePreference = profile.gradeRangePreference || ''
       form.partnerPersonality = profile.partnerPersonality || ''
       form.majorPreference = profile.majorPreference || ''
-      form.ageRangePreference = profile.ageRangePreference || ''
-      form.agePreference = (profile as any).agePreference || 0 // 新字段
+      form.careerAmbitionPref = profile.careerAmbitionPref || ''
       form.dateStyle = profile.dateStyle || ''
       form.intimacyPace = profile.intimacyPace || ''
-      form.loyaltyValue = profile.loyaltyValue || ''
+      form.honestyLevel = profile.honestyLevel || ''
       form.premaritalCohabitation = profile.premaritalCohabitation || ''
-      form.futureLifestyle = profile.futureLifestyle || ''
+      form.premaritalSex = profile.premaritalSex || ''
       form.relationshipCoreValue = profile.relationshipCoreValue || ''
-      // 回填自评分和照片
-      if (profile.momentSelfScore) {
-        form.selfScore = profile.momentSelfScore
-      }
+      form.conflictStyle = profile.conflictStyle || ''
+      form.socialBoundary = profile.socialBoundary || ''
+      form.futureLifestyle = profile.futureLifestyle || ''
+      form.campusLovePlan = profile.campusLovePlan || ''
+      form.idolRole = profile.idolRole || ''
+      form.temptationResponse = profile.temptationResponse || ''
+      form.realityCondition = profile.realityCondition || ''
+      form.humanNatureView = profile.humanNatureView || ''
+      form.breakupView = profile.breakupView || ''
+      form.careerLoveConflict = profile.careerLoveConflict || ''
+      form.emotionPriority = profile.emotionPriority || ''
+      form.lifeGoalPriority = profile.lifeGoalPriority || ''
+      if (profile.momentSelfScore) form.selfScore = profile.momentSelfScore
       if (profile.momentPhotoUrl) {
         photoPreview.value = '/api' + profile.momentPhotoUrl
         existingPhotoUrl.value = profile.momentPhotoUrl
@@ -340,7 +356,6 @@ onMounted(async () => {
   padding: 24px 20px 100px;
 }
 
-// ==================== 进度条 ====================
 .progress-bar {
   height: 4px;
   background: $bg-tertiary;
@@ -374,7 +389,6 @@ onMounted(async () => {
   &.current { width: 24px; border-radius: 4px; }
 }
 
-// ==================== 步骤标题 ====================
 .step-title {
   font-size: 24px;
   font-weight: 800;
@@ -388,7 +402,6 @@ onMounted(async () => {
   margin-bottom: 28px;
 }
 
-// ==================== 照片上传 ====================
 .photo-upload-section {
   margin-bottom: 28px;
 }
@@ -468,7 +481,6 @@ onMounted(async () => {
   color: $text-muted;
 }
 
-// ==================== 自评滑块 ====================
 .slider-section {
   margin-bottom: 28px;
 }
@@ -494,26 +506,6 @@ onMounted(async () => {
   color: $text-muted;
 }
 
-.age-slider-wrap {
-  .el-slider { flex: 1; }
-  .slider-min, .slider-max {
-    font-size: 14px;
-    font-weight: 600;
-    color: $text-muted;
-    flex-shrink: 0;
-  }
-}
-
-.slider-age-label {
-  font-size: 13px;
-  font-weight: 500;
-  color: $text-secondary;
-  flex-shrink: 0;
-  width: 50px;
-  text-align: center;
-}
-
-// ==================== 目标性别选择 ====================
 .question-block {
   margin-bottom: 24px;
 }
@@ -557,7 +549,6 @@ onMounted(async () => {
   .option-label { font-size: 14px; font-weight: 500; color: $text-primary; }
 }
 
-// ==================== Q6 颜值提示 ====================
 .appearance-warning {
   display: flex;
   align-items: flex-start;
@@ -578,7 +569,6 @@ onMounted(async () => {
   }
 }
 
-// ==================== 确认提交 ====================
 .confirm-section {
   margin-top: 24px;
   padding: 20px;
@@ -593,7 +583,6 @@ onMounted(async () => {
   }
 }
 
-// ==================== 底部导航 ====================
 .bottom-nav {
   position: fixed;
   bottom: 0;

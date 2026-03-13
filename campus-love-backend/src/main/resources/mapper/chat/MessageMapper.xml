@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.love.chat.mapper.MessageMapper">
+  <!-- 自定义查询：包含已撤回消息（绕过 MyBatis-Plus 逻辑删除过滤） -->
+  <select id="selectPageForChatHistory" resultType="com.campus.love.chat.entity.Message">
+    SELECT id, sender_id, receiver_id, group_id, content, msg_type, is_read, deleted, created_at
+    FROM t_message
+    WHERE group_id IS NULL
+      AND ((sender_id = #{currentUserId} AND receiver_id = #{otherUserId})
+           OR (sender_id = #{otherUserId} AND receiver_id = #{currentUserId}))
+    ORDER BY created_at DESC
+    LIMIT #{offset}, #{size}
+  </select>
+</mapper>

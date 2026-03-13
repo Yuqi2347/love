@@ -28,6 +28,8 @@ public class UserProfileResponse {
     private String mbti;
     private String zodiac;
     private String bazi;
+    /** V1.1.0：不知道时辰时八字权重清零 */
+    private Boolean baziUnknown;
     private String avatarUrl;
     /** 个人主页背景图 URL */
     private String coverImageUrl;
@@ -38,4 +40,8 @@ public class UserProfileResponse {
     private String feedVisibility;
     /** 动态可见时间(天)：3=近三天，30=近一月，180=近半年，-1=全部 */
     private Integer feedVisibilityTime;
+    /** V24：是否开启破冰功能（仅本人） */
+    private Boolean iceBreakEnabled;
+    /** V24：AI 信息公开授权设置 JSON（仅本人） */
+    private String aiDisclosureSettings;
 }

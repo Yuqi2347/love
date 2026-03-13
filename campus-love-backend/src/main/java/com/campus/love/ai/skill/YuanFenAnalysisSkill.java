@@ -4,6 +4,7 @@ import com.campus.love.ai.dto.AiChatResult;
 import com.campus.love.ai.dto.YuanFenAnalysisResponse;
 import com.campus.love.ai.dto.YuanFenAnalysisResult;
 import com.campus.love.ai.prompt.YuanFenPromptTemplates;
+import com.campus.love.ai.rag.RagContextBuilder;
 import com.campus.love.ai.service.AiService;
 import com.campus.love.match.dto.MatchResultResponse;
 import com.campus.love.user.entity.User;
@@ -24,6 +25,7 @@ public class YuanFenAnalysisSkill {
 
     private final AiService aiService;
     private final ObjectMapper objectMapper;
+    private final RagContextBuilder ragContextBuilder;
 
     /** 用户 Prompt 模板（异性） */
     private static final String PROMPT_TEMPLATE_OPPOSITE = """
@@ -41,6 +43,9 @@ public class YuanFenAnalysisSkill {
             【系统匹配硬指标】
             - 综合缘分评分：{totalScore}/100
             - 细分维度得分：兴趣={interestScore} | MBTI={mbtiScore} | 星座={zodiacScore} | 八字={baziScore} | 专业跨度={majorScore}
+
+            【RAG上下文】
+            {ragContext}
             ---------------------------------
 
             【输出结构与深度指令】
@@ -94,6 +99,9 @@ public class YuanFenAnalysisSkill {
             【系统匹配硬指标】
             - 综合羁绊评分：{totalScore}/100
             - 细分维度得分：兴趣={interestScore} | MBTI={mbtiScore} | 星座={zodiacScore} | 八字={baziScore} | 专业跨度={majorScore}
+
+            【RAG上下文】
+            {ragContext}
             ---------------------------------
 
             【输出结构与深度指令】
@@ -133,7 +141,8 @@ public class YuanFenAnalysisSkill {
     public YuanFenAnalysisResult analyze(User userA, User userB, MatchResultResponse matchResult) {
         boolean sameGender = isSameGender(userA.getGender(), userB.getGender());
         String systemPrompt = sameGender ? YuanFenPromptTemplates.SYSTEM_SAME : YuanFenPromptTemplates.SYSTEM_OPPOSITE;
-        String userPrompt = buildPrompt(userA, userB, matchResult, sameGender);
+        String ragContext = ragContextBuilder.buildYuanFenContext(userA.getId(), userB.getId());
+        String userPrompt = buildPrompt(userA, userB, matchResult, sameGender, ragContext);
 
         AiChatResult aiResult;
         try {
@@ -201,9 +210,10 @@ public class YuanFenAnalysisSkill {
         return genderA.equals(genderB);
     }
 
-    private String buildPrompt(User a, User b, MatchResultResponse match, boolean sameGender) {
+    private String buildPrompt(User a, User b, MatchResultResponse match, boolean sameGender, String ragContext) {
         String template = sameGender ? PROMPT_TEMPLATE_SAME : PROMPT_TEMPLATE_OPPOSITE;
         MatchResultResponse.MatchDetail detail = match.getDetail();
+        String baziStr = detail.getBaziScore() != null ? String.valueOf(detail.getBaziScore()) : "暂无（未参与计算）";
         return template
                 .replace("{nicknameA}", a.getNickname() != null && !a.getNickname().isBlank() ? a.getNickname().trim() : "匿名")
                 .replace("{genderA}", genderLabel(a.getGender()))
@@ -227,8 +237,9 @@ public class YuanFenAnalysisSkill {
                 .replace("{interestScore}", String.valueOf(detail.getInterestScore()))
                 .replace("{mbtiScore}", String.valueOf(detail.getMbtiScore()))
                 .replace("{zodiacScore}", String.valueOf(detail.getZodiacScore()))
-                .replace("{baziScore}", String.valueOf(detail.getBaziScore()))
-                .replace("{majorScore}", String.valueOf(detail.getMajorScore()));
+                .replace("{baziScore}", baziStr)
+                .replace("{majorScore}", String.valueOf(detail.getMajorScore()))
+                .replace("{ragContext}", ragContext != null && !ragContext.isBlank() ? ragContext : "暂无");
     }
 
     private String genderLabel(Integer gender) {

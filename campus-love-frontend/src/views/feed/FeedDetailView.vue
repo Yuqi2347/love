@@ -16,7 +16,7 @@
       <div class="post-card">
         <div class="post-header">
           <img
-            :src="post.avatarUrl || defaultAvatar"
+            :src="imageUrl(post.avatarUrl) || defaultAvatar"
             class="post-avatar"
             @click="$router.push(`/profile/${post.userId}`)"
           />
@@ -41,6 +41,30 @@
         </div>
 
         <p class="post-content">{{ post.content }}</p>
+
+        <!-- AI 标签（所有人可见） -->
+        <div v-if="post.aiTags" class="post-ai-tags">
+          <span
+            v-for="tag in (post.aiTags || '').split(/[,，]/).filter(Boolean)"
+            :key="tag"
+            class="ai-tag"
+          >{{ tag.trim() }}</span>
+        </div>
+        <!-- AI 标签确认条（仅作者可见，5秒自动消失，可编辑） -->
+        <FeedTagConfirmBar
+          v-if="isPostOwner && post.aiTags"
+          :post-id="post.id"
+          :ai-tags="post.aiTags"
+          :is-owner="isPostOwner"
+          :auto-dismiss-ms="5000"
+          @update:ai-tags="post.aiTags = $event"
+        />
+        <!-- 作者可手动触发重新生成标签（无标签时显示） -->
+        <div v-if="isPostOwner && !post.aiTags" class="retag-hint">
+          <button type="button" class="retag-btn" :disabled="retagging" @click="handleRetag">
+            {{ retagging ? '生成中...' : '生成 AI 标签' }}
+          </button>
+        </div>
 
         <div v-if="post.images" class="post-images">
           <el-image
@@ -260,7 +284,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import {
@@ -270,6 +294,7 @@ import {
   addComment,
   deletePost,
   deleteComment,
+  retagPost,
   type FeedPost,
   type FeedComment,
 } from '@/api/feedApi'
@@ -279,6 +304,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Delete, Flag, Picture, Close } from '@element-plus/icons-vue'
 import ShareDialog from '@/components/ShareDialog.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
+import FeedTagConfirmBar from './components/FeedTagConfirmBar.vue'
 import { uploadImage } from '@/api/feedApi'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect fill="%23f0f2f5" width="44" height="44" rx="22"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="20">👤</text></svg>'
@@ -288,11 +314,16 @@ const router = useRouter()
 const userStore = useUserStore()
 
 const postId = computed(() => Number(route.params.postId))
+const isPostIdValid = computed(() => {
+  const id = postId.value
+  return Number.isFinite(id) && id > 0
+})
 const post = ref<FeedPost | null>(null)
 const loading = ref(true)
 const commentText = ref('')
 const commentImages = ref<string[]>([])
 const submitting = ref(false)
+const retagging = ref(false)
 const commentInputRef = ref()
 const commentImageInputRef = ref<HTMLInputElement | null>(null)
 
@@ -415,6 +446,8 @@ function goBack() {
   router.back()
 }
 
+const isPostOwner = computed(() => post.value && userStore.user?.id === post.value.userId)
+
 function canDeletePost(p: FeedPost) {
   return userStore.user?.id === p.userId
 }
@@ -480,6 +513,23 @@ async function handleReportClick(targetId: number, targetType: string) {
 
 function onReportSuccess() {
   postReported.value = true
+}
+
+async function handleRetag() {
+  if (!post.value || retagging.value) return
+  retagging.value = true
+  try {
+    await retagPost(post.value.id)
+    const res = await getPostDetail(postId.value)
+    if (res.data.data) {
+      post.value = res.data.data
+      ElMessage.success('AI 标签已生成')
+    }
+  } catch {
+    ElMessage.error('生成失败，请稍后重试')
+  } finally {
+    retagging.value = false
+  }
 }
 
 async function handleDeletePost(id: number) {
@@ -584,18 +634,56 @@ async function submitComment() {
   }
 }
 
+let aiTagPollTimer: ReturnType<typeof setInterval> | null = null
+
 onMounted(async () => {
+  if (!isPostIdValid.value) {
+    ElMessage.error('动态不存在或链接无效')
+    router.replace('/discover')
+    loading.value = false
+    return
+  }
   try {
     const res = await getPostDetail(postId.value)
     post.value = res.data.data || null
     if (post.value) {
       const reported = await checkReported('POST', post.value.id)
       postReported.value = !!reported.data.data
+      // 作者自己的帖子且无 AI 标签时，轮询等待标签生成（最多 30 秒）
+      if (userStore.user?.id === post.value.userId && !post.value.aiTags) {
+        let pollCount = 0
+        aiTagPollTimer = setInterval(async () => {
+          pollCount++
+          if (pollCount > 10 || !isPostIdValid.value) {
+            if (aiTagPollTimer) clearInterval(aiTagPollTimer)
+            aiTagPollTimer = null
+            return
+          }
+          try {
+            const r = await getPostDetail(postId.value)
+            const p = r.data.data
+            if (p?.aiTags && post.value) {
+              post.value.aiTags = p.aiTags
+              if (aiTagPollTimer) clearInterval(aiTagPollTimer)
+              aiTagPollTimer = null
+            }
+          } catch {
+            // 忽略轮询错误（如 postId 变为无效）
+          }
+        }, 3000)
+      }
     }
   } catch {
     post.value = null
   } finally {
     loading.value = false
+  }
+})
+
+onUnmounted(() => {
+  if (aiTagPollTimer) {
+    clearInterval(aiTagPollTimer)
+    aiTagPollTimer = null
   }
 })
 </script>
@@ -710,6 +798,44 @@ onMounted(async () => {
   white-space: pre-wrap;
   word-break: break-word;
   margin-bottom: 12px;
+}
+
+.post-ai-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+
+.post-ai-tags .ai-tag {
+  font-size: 12px;
+  color: var(--el-color-primary);
+  background: rgba(var(--el-color-primary-rgb), 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
+}
+
+.retag-hint {
+  margin-bottom: 12px;
+}
+
+.retag-btn {
+  font-size: 13px;
+  color: var(--el-color-primary);
+  background: rgba(var(--el-color-primary-rgb), 0.08);
+  border: 1px dashed var(--el-color-primary);
+  padding: 4px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.retag-btn:hover:not(:disabled) {
+  background: rgba(var(--el-color-primary-rgb), 0.15);
+}
+
+.retag-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .post-images {

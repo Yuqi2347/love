@@ -3,9 +3,12 @@ package com.campus.love.chat.controller;
 import com.campus.love.chat.dto.ChatGroupItemResponse;
 import com.campus.love.chat.dto.ChatMessageResponse;
 import com.campus.love.chat.dto.ConversationResponse;
+import com.campus.love.chat.dto.IceBreakStatusResponse;
+import com.campus.love.chat.dto.IceBreakTopicsResponse;
 import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.chat.service.ChatService;
 import com.campus.love.common.result.Result;
+import com.campus.love.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -23,6 +26,7 @@ import java.util.List;
 public class ChatController {
 
     private final ChatService chatService;
+    private final UserService userService;
 
     @Operation(summary = "获取会话列表")
     @GetMapping("/conversations")
@@ -40,6 +44,23 @@ public class ChatController {
     @GetMapping("/can-send/{otherUserId}")
     public Result<Boolean> canSendTo(@PathVariable Long otherUserId) {
         return Result.success(chatService.canSendTo(CurrentUser.getId(), otherUserId));
+    }
+
+    /** 破冰接口（保留 /chat/ice-break-* 路径兼容旧前端/缓存） */
+    @GetMapping("/ice-break-status/{targetUserId}")
+    public Result<IceBreakStatusResponse> getIceBreakStatus(@PathVariable Long targetUserId) {
+        return Result.success(chatService.getIceBreakStatus(targetUserId));
+    }
+
+    @GetMapping("/ice-break-topics/{targetUserId}")
+    public Result<IceBreakTopicsResponse> getIceBreakTopics(@PathVariable Long targetUserId) {
+        return Result.success(chatService.getIceBreakTopics(targetUserId));
+    }
+
+    @PatchMapping("/ice-break-allow/{targetUserId}")
+    public Result<Void> updateIceBreakAllow(@PathVariable Long targetUserId, @RequestParam boolean allowed) {
+        userService.updateIceBreakAllow(targetUserId, allowed);
+        return Result.success();
     }
 
     @Operation(summary = "获取聊天记录")

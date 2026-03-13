@@ -46,6 +46,8 @@ import com.campus.love.moment.mapper.MomentMatchResultMapper;
 import com.campus.love.moment.mapper.MomentProfileMapper;
 import com.campus.love.ai.entity.YuanFenAnalysisLog;
 import com.campus.love.ai.mapper.YuanFenAnalysisLogMapper;
+import com.campus.love.ai.skill.UserProfileSkill;
+import com.campus.love.profile.mapper.UserAiProfileMapper;
 import com.campus.love.notification.entity.Notification;
 import com.campus.love.notification.mapper.NotificationMapper;
 import com.campus.love.user.entity.ActivityLog;
@@ -96,6 +98,8 @@ public class AdminService {
     private final MomentMatchResultMapper momentMatchResultMapper;
     private final ActivityLogMapper activityLogMapper;
     private final RedisTemplate<String, Object> redisTemplate;
+    private final UserAiProfileMapper userAiProfileMapper;
+    private final UserProfileSkill userProfileSkill;
 
     public IPage<AdminUserItem> listUsers(int page, int size, String keyword) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
@@ -379,5 +383,86 @@ public class AdminService {
     public static class DashboardStats {
         private long userTotal;
         private long inviteTotal;
+    }
+
+    // ==================== 人物画像管理 ====================
+
+    /**
+     * 画像生成统计：已完善资料用户数、已有画像数、缺失画像数、定时任务说明
+     */
+    public ProfileStats getProfileStats() {
+        try {
+            long totalUsers = userMapper.selectCount(null);
+            long profileCompleteCount = userMapper.selectCount(
+                    new LambdaQueryWrapper<User>().eq(User::getProfileComplete, true));
+            long hasProfileCount;
+            long missingCount;
+            try {
+                hasProfileCount = userAiProfileMapper.selectCount(null);
+            } catch (Exception e) {
+                log.warn("t_user_ai_profile 表可能不存在，请执行 V24 迁移脚本: {}", e.getMessage());
+                throw new BusinessException(ResultCode.INTERNAL_ERROR,
+                        "画像表未初始化，请先执行数据库迁移脚本 V24__rag_ai_profile.sql");
+            }
+            List<Long> completeIds = userMapper.selectList(
+                            new LambdaQueryWrapper<User>()
+                                    .eq(User::getProfileComplete, true)
+                                    .select(User::getId))
+                    .stream().map(User::getId).toList();
+            missingCount = 0;
+            for (Long id : completeIds) {
+                if (userAiProfileMapper.selectById(id) == null) missingCount++;
+            }
+            return new ProfileStats(totalUsers, profileCompleteCount, hasProfileCount, missingCount);
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            log.error("getProfileStats failed", e);
+            throw new BusinessException(ResultCode.INTERNAL_ERROR,
+                    "加载画像统计失败: " + (e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName()));
+        }
+    }
+
+    /**
+     * 管理员手动触发单个用户画像生成
+     * @param force true=覆盖已有画像，false=仅对无画像用户生成
+     */
+    public void regenerateProfile(Long userId, boolean force) {
+        User user = userMapper.selectById(userId);
+        if (user == null) throw new BusinessException(ResultCode.NOT_FOUND, "用户不存在");
+        if (!Boolean.TRUE.equals(user.getProfileComplete())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "用户资料未完善，无法生成画像");
+        }
+        userProfileSkill.regenerateProfile(userId, user, force);
+    }
+
+    /**
+     * 批量补充缺失画像（仅对 profileComplete 且无画像的用户）
+     */
+    public int batchRegenerateMissing() {
+        List<User> completeUsers = userMapper.selectList(
+                new LambdaQueryWrapper<User>().eq(User::getProfileComplete, true));
+        int count = 0;
+        for (User u : completeUsers) {
+            if (userAiProfileMapper.selectById(u.getId()) == null) {
+                userProfileSkill.generateInitialProfile(u.getId(), u);
+                count++;
+            }
+        }
+        log.info("Admin batch regenerated {} missing profiles", count);
+        return count;
+    }
+
+    @lombok.Data
+    @lombok.AllArgsConstructor
+    public static class ProfileStats {
+        /** 总用户数 */
+        private long totalUsers;
+        /** 已完善资料用户数 */
+        private long profileCompleteCount;
+        /** 已有 AI 画像用户数 */
+        private long hasProfileCount;
+        /** 已完善资料但无画像（待补充） */
+        private long missingCount;
     }
 }

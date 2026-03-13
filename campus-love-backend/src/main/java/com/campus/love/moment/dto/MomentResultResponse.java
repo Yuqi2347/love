@@ -28,4 +28,7 @@ public class MomentResultResponse {
     // 分数
     private BigDecimal totalScore;
     private Map<String, Object> scoreDetail;
+
+    /** AI 配对总结（借鉴缘分分析格式，多段落深度内容） */
+    private String summary;
 }

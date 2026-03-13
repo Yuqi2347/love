@@ -33,8 +33,16 @@ v-model="form.birthDate" type="date" placeholder="选择生日"
           </el-form-item>
           <el-form-item label="出生时间（可选，用于八字精确计算）">
             <el-time-picker
-v-model="form.birthTime" placeholder="选择出生时间"
-                              value-format="HH:mm" format="HH:mm" style="width:100%" />
+              v-model="form.birthTime"
+              placeholder="选择出生时间"
+              value-format="HH:mm"
+              format="HH:mm"
+              :disabled="form.baziUnknown"
+              style="width:100%"
+            />
+            <el-checkbox v-model="form.baziUnknown" class="bazi-unknown-check">
+              我不清楚出生时辰
+            </el-checkbox>
           </el-form-item>
           <el-form-item label="学校">
             <el-input v-model="form.school" placeholder="你的学校" />
@@ -172,6 +180,7 @@ const form = reactive({
   gender: 0,
   birthDate: '',
   birthTime: '',
+  baziUnknown: false,
   school: '',
   major: '',
   grade: '',
@@ -194,6 +203,7 @@ onMounted(async () => {
         form.gender = data.gender ?? 0
         form.birthDate = data.birthDate ?? ''
         form.birthTime = data.birthTime ?? ''
+        form.baziUnknown = data.baziUnknown ?? false
         form.school = data.school ?? ''
         form.major = data.major ?? ''
         form.grade = data.grade ?? ''
@@ -283,7 +293,8 @@ async function handleSkipAll() {
       nickname: form.nickname.trim(),
       gender: form.gender,
       birthDate: form.birthDate,
-      birthTime: form.birthTime || undefined,
+      birthTime: form.baziUnknown ? undefined : (form.birthTime || undefined),
+      baziUnknown: form.baziUnknown,
       school: form.school || undefined,
       major: form.major || undefined,
       grade: form.grade,
@@ -308,7 +319,8 @@ async function doSave(interests: string) {
       nickname: form.nickname.trim() || userStore.user?.nickname || '',
       gender: form.gender,
       birthDate: form.birthDate,
-      birthTime: form.birthTime,
+      birthTime: form.baziUnknown ? undefined : form.birthTime,
+      baziUnknown: form.baziUnknown,
       school: form.school,
       major: form.major,
       grade: form.grade,
@@ -431,6 +443,11 @@ async function doSave(interests: string) {
   }
 
   &:hover { border-color: $primary-light; }
+}
+
+.bazi-unknown-check {
+  margin-top: 8px;
+  display: block;
 }
 
 .mbti-grid {

@@ -16,7 +16,7 @@
       <div v-for="post in posts" :key="post.id" class="feed-card card">
         <div class="feed-header" @click.stop>
           <img
-            :src="post.avatarUrl || defaultAvatar"
+            :src="getMediaUrl(post.avatarUrl) || defaultAvatar"
             class="feed-avatar"
             @click="$router.push(`/profile/${post.userId}`)"
           />
@@ -70,6 +70,14 @@
               <div class="link-title">{{ post.linkTitle || post.linkUrl }}</div>
             </div>
           </a>
+        </div>
+        <!-- AI 标签 -->
+        <div v-if="post.aiTags" class="feed-ai-tags">
+          <span
+            v-for="tag in (post.aiTags || '').split(/[,，]/).filter(Boolean)"
+            :key="tag"
+            class="ai-tag"
+          >{{ tag.trim() }}</span>
         </div>
         <div class="feed-actions" @click.stop>
           <button
@@ -192,7 +200,9 @@ function formatTime(timeStr: string): string {
 }
 
 function goPostDetail(postId: number) {
-  router.push(`/feed/${postId}`)
+  const id = Number(postId)
+  if (!Number.isFinite(id) || id <= 0) return
+  router.push(`/feed/${id}`)
 }
 
 function canDeletePost(post: FeedPost): boolean {
@@ -398,6 +408,21 @@ onMounted(async () => {
 
 .feed-link {
   margin-bottom: 12px;
+}
+
+.feed-ai-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+
+.ai-tag {
+  font-size: 12px;
+  color: var(--el-color-primary);
+  background: rgba(var(--el-color-primary-rgb), 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .link-card {

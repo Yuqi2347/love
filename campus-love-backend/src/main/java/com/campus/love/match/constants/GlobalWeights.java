@@ -28,6 +28,19 @@ public final class GlobalWeights {
         put("age",      0.05);
     }};
 
+    /**
+     * 八字权重为零的配置（双方任一 bazi_unknown=true 时使用）
+     * 技术文档 V1.1.0 第 7.3 节
+     */
+    public static final Map<String, Double> WITHOUT_BAZI = new HashMap<>() {{
+        put("interest", 0.35);
+        put("mbti",     0.30);
+        put("zodiac",   0.17);
+        put("bazi",     0.00);
+        put("major",    0.13);
+        put("age",      0.05);
+    }};
+
     // ==================== 权重边界配置 ====================
 
     /**

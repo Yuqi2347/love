@@ -59,7 +59,7 @@
         <div class="feed-card card" @click="goPostDetail(item.post.id)">
           <div class="feed-header" @click.stop>
             <img
-              :src="item.post.avatarUrl || defaultAvatar"
+              :src="getMediaUrl(item.post.avatarUrl) || defaultAvatar"
               class="feed-avatar"
               @click="$router.push(`/profile/${item.post.userId}`)"
             />
@@ -133,6 +133,14 @@
                 <div class="link-url">{{ getDomain(item.post.linkUrl) }}</div>
               </div>
             </a>
+          </div>
+          <!-- AI 标签 -->
+          <div v-if="item.post.aiTags" class="feed-ai-tags">
+            <span
+              v-for="tag in (item.post.aiTags || '').split(/[,，]/).filter(Boolean)"
+              :key="tag"
+              class="ai-tag"
+            >{{ tag.trim() }}</span>
           </div>
           <div class="feed-actions" @click.stop>
             <button
@@ -337,7 +345,9 @@ function handleShareSuccess() {
 }
 
 function goPostDetail(postId: number) {
-  router.push(`/feed/${postId}`)
+  const id = Number(postId)
+  if (!Number.isFinite(id) || id <= 0) return
+  router.push(`/feed/${id}`)
 }
 
 const isAdmin = computed(() => userStore.user?.isAdmin || false)
@@ -1266,6 +1276,21 @@ async function handleDeletePost(postId: number) {
 
 .feed-link {
   margin: 8px 0;
+}
+
+.feed-ai-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 8px 0 0;
+}
+
+.ai-tag {
+  font-size: 12px;
+  color: var(--el-color-primary);
+  background: rgba(var(--el-color-primary-rgb), 0.08);
+  padding: 2px 8px;
+  border-radius: 4px;
 }
 
 .link-card {

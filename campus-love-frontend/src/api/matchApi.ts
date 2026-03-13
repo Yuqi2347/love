@@ -5,9 +5,12 @@ export interface MatchDetail {
   interestScore: number
   mbtiScore: number
   zodiacScore: number
-  baziScore: number
+  /** 任一方 bazi_unknown 时为 null，前端展示「暂无数据」 */
+  baziScore: number | null
   majorScore: number
   ageScore: number
+  /** V1.1.0：OCEAN 契合度，无真实 OCEAN 时为 null */
+  oceanScore?: number | null
 }
 
 export interface MatchResult {
@@ -24,6 +27,8 @@ export interface MatchResult {
   interests: string | null
   matchScore: number
   detail: MatchDetail
+  /** V1.1.0：AI 一句话总结，前端展示用，不展示总分 */
+  aiSummary?: string
 }
 
 export function getRecommendations(page = 0, size = 10, genderFilter: 'all' | 'same' | 'opposite' = 'all') {

@@ -19,10 +19,15 @@
     </div>
 
     <!-- 聊天消息列表（默认） -->
-    <div v-if="activeTab === 'chat'">
-      <div v-if="conversations.length" class="conversation-list">
+    <div v-if="activeTab === 'chat'" class="notify-list">
+      <div v-if="displayedConversations.length" class="notify-list-inner">
+        <div class="notify-list-header">
+          <span class="notify-count">共 {{ displayedConversations.length }} 个会话</span>
+          <button v-if="displayedConversations.length" class="clear-all-btn" @click="clearTab('chat')">清空</button>
+        </div>
+        <div class="conversation-list">
         <div
-          v-for="conv in conversations"
+          v-for="conv in displayedConversations"
           :key="conv.userId"
           class="conversation-item"
           @click="$router.push(`/chat/${conv.userId}`)"
@@ -37,12 +42,16 @@
               <span class="conv-time">{{ formatConvTime(conv.lastTime) }}</span>
             </div>
             <!-- 帖子分享卡片 -->
-            <div v-if="conv.msgType === 5" class="conv-msg-share-card" @click.stop="$router.push(`/feed/${getPostIdFromShare(conv.lastMessage)}`)">
+            <div v-if="conv.msgType === 5" class="conv-msg-share-card" @click.stop="() => { const id = getPostIdFromShare(conv.lastMessage); if (id != null) $router.push(`/feed/${id}`) }">
               <el-icon class="share-icon" :size="16"><Share /></el-icon>
               <span class="share-text">{{ getShareContent(conv.lastMessage) }}</span>
             </div>
             <p v-else class="conv-msg text-ellipsis">{{ displayLastMessage(conv.lastMessage, conv.msgType) }}</p>
           </div>
+          <button class="notify-delete-btn" title="从列表移除（不删除聊天记录）" @click.stop.prevent="dismissConversation(conv.userId)">
+            <el-icon :size="16"><Delete /></el-icon>
+          </button>
+        </div>
         </div>
       </div>
       <div v-else class="empty-state">
@@ -54,9 +63,14 @@
 
     <!-- 赞 -->
     <div v-if="activeTab === 'likes'" class="notify-list">
-      <div v-if="likeNotifications.length">
+      <div v-if="displayedLikes.length" class="notify-list-inner">
+        <div class="notify-list-header">
+          <span class="notify-count">共 {{ displayedLikes.length }} 条</span>
+          <button v-if="displayedLikes.length" class="clear-all-btn" @click="clearTab('likes')">清空</button>
+        </div>
         <div
-v-for="item in likeNotifications" :key="item.id"
+          v-for="item in displayedLikes"
+          :key="item.id"
           :class="['notify-item', { 'is-read': readIds.has(item.id) }]"
           @click="handleNotifyClick(item, 'post')"
         >
@@ -67,6 +81,9 @@ v-for="item in likeNotifications" :key="item.id"
             <div class="notify-time">{{ formatConvTime(item.createdAt) }}</div>
           </div>
           <span v-if="!readIds.has(item.id)" class="unread-indicator" />
+          <button class="notify-delete-btn" title="从列表移除" @click.stop.prevent="dismissLike(item.id)">
+            <el-icon :size="16"><Delete /></el-icon>
+          </button>
         </div>
       </div>
       <div v-else class="empty-state">
@@ -77,9 +94,14 @@ v-for="item in likeNotifications" :key="item.id"
 
     <!-- 新增关注 -->
     <div v-if="activeTab === 'followers'" class="notify-list">
-      <div v-if="followerNotifications.length">
+      <div v-if="displayedFollowers.length" class="notify-list-inner">
+        <div class="notify-list-header">
+          <span class="notify-count">共 {{ displayedFollowers.length }} 条</span>
+          <button v-if="displayedFollowers.length" class="clear-all-btn" @click="clearTab('followers')">清空</button>
+        </div>
         <div
-v-for="item in followerNotifications" :key="item.id"
+          v-for="item in displayedFollowers"
+          :key="item.id"
           :class="['notify-item', { 'is-read': readIds.has(item.id) }]"
           @click="handleNotifyClick(item, 'profile')"
         >
@@ -95,6 +117,9 @@ v-for="item in followerNotifications" :key="item.id"
           >
             {{ followStore.isFollowed(item.senderId) ? '已关注' : '回关' }}
           </button>
+          <button class="notify-delete-btn" title="从列表移除" @click.stop.prevent="dismissFollower(item.senderId)">
+            <el-icon :size="16"><Delete /></el-icon>
+          </button>
         </div>
       </div>
       <div v-else class="empty-state">
@@ -105,9 +130,14 @@ v-for="item in followerNotifications" :key="item.id"
 
     <!-- 评论和@ -->
     <div v-if="activeTab === 'comments'" class="notify-list">
-      <div v-if="commentNotifications.length">
+      <div v-if="displayedComments.length" class="notify-list-inner">
+        <div class="notify-list-header">
+          <span class="notify-count">共 {{ displayedComments.length }} 条</span>
+          <button v-if="displayedComments.length" class="clear-all-btn" @click="clearTab('comments')">清空</button>
+        </div>
         <div
-v-for="item in commentNotifications" :key="item.id"
+          v-for="item in displayedComments"
+          :key="item.id"
           :class="['notify-item', { 'is-read': readIds.has(item.id) }]"
           @click="handleNotifyClick(item, 'post')"
         >
@@ -118,6 +148,9 @@ v-for="item in commentNotifications" :key="item.id"
             <div class="notify-time">{{ formatConvTime(item.createdAt) }}</div>
           </div>
           <span v-if="!readIds.has(item.id)" class="unread-indicator" />
+          <button class="notify-delete-btn" title="从列表移除" @click.stop.prevent="dismissComment(item.id)">
+            <el-icon :size="16"><Delete /></el-icon>
+          </button>
         </div>
       </div>
       <div v-else class="empty-state">
@@ -134,8 +167,10 @@ import { useRouter } from 'vue-router'
 import { useChatStore } from '@/store/chatStore'
 import { useFollowStore } from '@/store/followStore'
 import { useBadgeStore } from '@/store/badgeStore'
+import { useNotifyDismissStore } from '@/store/notifyDismissStore'
 import { followUser, getFollowerList, type FollowUser } from '@/api/followApi'
 import { ElMessage } from 'element-plus'
+import { Delete } from '@element-plus/icons-vue'
 import { storeToRefs } from 'pinia'
 import request from '@/api/request'
 import type { ApiResult } from '@/api/request'
@@ -145,6 +180,7 @@ const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg
 const chatStore = useChatStore()
 const followStore = useFollowStore()
 const badgeStore = useBadgeStore()
+const notifyDismissStore = useNotifyDismissStore()
 const { conversations } = storeToRefs(chatStore)
 
 const activeTab = ref('chat')
@@ -196,20 +232,62 @@ const followerNotifications = computed(() => {
 })
 const commentNotifications = computed(() => socialNotifications.value.filter(n => n.type === 'COMMENT' || n.type === 'MENTION'))
 
-// 未读计数：总数 - 已读数
+const displayedConversations = computed(() =>
+  conversations.value.filter(c => !notifyDismissStore.dismissedChatIds.has(c.userId))
+)
+const displayedLikes = computed(() =>
+  likeNotifications.value.filter(n => !notifyDismissStore.raw.likes.includes(n.id))
+)
+const displayedFollowers = computed(() =>
+  followerNotifications.value.filter(n => !notifyDismissStore.raw.followers.includes(n.senderId))
+)
+const displayedComments = computed(() =>
+  commentNotifications.value.filter(n => !notifyDismissStore.raw.comments.includes(n.id))
+)
+
+function dismissLike(id: number) {
+  if (notifyDismissStore.dismissLike(id)) ElMessage.success('已移除')
+}
+
+function dismissFollower(senderId: number) {
+  if (notifyDismissStore.dismissFollower(senderId)) ElMessage.success('已移除')
+}
+
+function dismissComment(id: number) {
+  if (notifyDismissStore.dismissComment(id)) ElMessage.success('已移除')
+}
+
+function dismissConversation(userId: number) {
+  if (notifyDismissStore.dismissChat(userId)) ElMessage.success('已移除')
+}
+
+function clearTab(tab: 'chat' | 'likes' | 'followers' | 'comments') {
+  if (tab === 'chat') {
+    notifyDismissStore.clearChats(conversations.value.map(c => c.userId))
+  } else if (tab === 'likes') {
+    notifyDismissStore.clearLikes(likeNotifications.value.map(n => n.id))
+  } else if (tab === 'followers') {
+    notifyDismissStore.clearFollowers(followerNotifications.value.map(n => n.senderId))
+  } else {
+    notifyDismissStore.clearComments(commentNotifications.value.map(n => n.id))
+  }
+  ElMessage.success('已清空')
+}
+
+// 未读计数：展示列表中的未读数
 const unreadLikeCount = computed(() =>
-  likeNotifications.value.filter(n => !readIds.value.has(n.id)).length
+  displayedLikes.value.filter(n => !readIds.value.has(n.id)).length
 )
 const unreadFollowerCount = computed(() =>
-  followerNotifications.value.filter(n => !readIds.value.has(n.id)).length
+  displayedFollowers.value.filter(n => !readIds.value.has(n.id)).length
 )
 const unreadCommentCount = computed(() =>
-  commentNotifications.value.filter(n => !readIds.value.has(n.id)).length
+  displayedComments.value.filter(n => !readIds.value.has(n.id)).length
 )
 
 const notifyTabs = computed(() => {
   return [
-    { key: 'chat', label: '消息', icon: 'ChatDotRound', count: conversations.value.reduce((s, c) => s + (c.unreadCount || 0), 0) },
+    { key: 'chat', label: '消息', icon: 'ChatDotRound', count: displayedConversations.value.reduce((s, c) => s + (c.unreadCount || 0), 0) },
     { key: 'likes', label: '赞', icon: 'StarFilled', count: unreadLikeCount.value },
     { key: 'followers', label: '新增关注', icon: 'UserFilled', count: unreadFollowerCount.value },
     { key: 'comments', label: '评论@', icon: 'ChatDotRound', count: unreadCommentCount.value },
@@ -262,11 +340,14 @@ function goToProfile(userId: number) {
 function handleNotifyClick(item: SocialNotification, target: 'post' | 'profile') {
   readIds.value.add(item.id)
   saveReadIds()
-  if (target === 'post' && item.postId) {
-    router.push(`/feed/${item.postId}`)
-  } else {
-    router.push(`/profile/${item.senderId}`)
+  if (target === 'post' && item.postId != null) {
+    const n = Number(item.postId)
+    if (Number.isFinite(n) && n > 0) {
+      router.push(`/feed/${n}`)
+      return
+    }
   }
+  router.push(`/profile/${item.senderId}`)
 }
 
 function formatConvTime(lastTime: string): string {
@@ -314,12 +395,16 @@ function displayLastMessage(text: string | undefined, msgType?: number): string 
   return text.includes('INVITE#') ? '[邀约邀请]' : text
 }
 
-// 从帖子分享内容中提取 postId
+// 从帖子分享内容中提取 postId（严格校验，避免 NaN 导致后端报错）
 function getPostIdFromShare(content: string | undefined): number | null {
   if (!content) return null
   try {
     const data = JSON.parse(content)
-    return data.postId || null
+    const id = data.postId
+    if (id == null || id === '' || id === 'NaN') return null
+    const n = Number(id)
+    if (!Number.isFinite(n) || n <= 0) return null
+    return Math.floor(n)
   } catch {
     return null
   }
@@ -527,6 +612,57 @@ async function loadFollowers() {
 // 通知列表
 .notify-list {
   padding: 16px;
+}
+
+.notify-list-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+}
+
+.notify-list-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding: 0 4px;
+}
+
+.notify-count {
+  font-size: 13px;
+  color: $text-muted;
+}
+
+.clear-all-btn {
+  padding: 6px 14px;
+  font-size: 13px;
+  color: $text-muted;
+  background: transparent;
+  border: 1px solid $border-color;
+  border-radius: $radius-md;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover {
+    color: #ef4444;
+    border-color: #ef4444;
+  }
+}
+
+.notify-delete-btn {
+  flex-shrink: 0;
+  align-self: center;
+  padding: 6px;
+  border: none;
+  background: transparent;
+  color: $text-muted;
+  cursor: pointer;
+  border-radius: $radius-md;
+  transition: color 0.2s;
+
+  &:hover {
+    color: #ef4444;
+  }
 }
 
 .notify-item {

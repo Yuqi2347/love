@@ -29,6 +29,16 @@ public class FeedPost {
 
     /** 可见范围：ALL=所有人，FOLLOWERS=关注我的人，FRIENDS=朋友，SELF=仅自己 */
     private String visibility;
+    /** V24：AI提取的标签 JSON */
+    private String aiTags;
+    /** V24：主要兴趣分类 */
+    private String primaryCategory;
+    /** V24：positive/neutral/negative */
+    private String tagSentiment;
+    /** V24：OCEAN信号 JSON */
+    private String oceanHints;
+    /** V24：标签置信权重 */
+    private java.math.BigDecimal tagConfidence;
 
     @TableLogic
     private Integer deleted;

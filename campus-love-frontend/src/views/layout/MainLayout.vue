@@ -250,6 +250,7 @@ const navItems = computed(() => {
   ]
   if (userStore.user?.isAdmin) {
     items.push({ path: '/admin/reports', label: '举报管理', icon: 'Flag', showDot: false })
+    items.push({ path: '/admin/profile', label: '画像管理', icon: 'User', showDot: false })
   }
   return items
 })

@@ -90,17 +90,11 @@
             </div>
             <p class="card-bio">{{ card.bio || '这个人很神秘~' }}</p>
 
-            <div class="match-score-bar">
-              <div class="score-label">匹配度</div>
-              <div class="score-track">
-                <div class="score-fill" :style="{ width: card.matchScore + '%' }"></div>
-              </div>
-              <div class="score-value">{{ card.matchScore }}%</div>
-            </div>
+            <div v-if="card.aiSummary" class="ai-summary">{{ card.aiSummary }}</div>
 
             <div class="dimension-grid">
               <div v-for="(val, key) in card.detail" :key="key" class="dimension-item">
-                <div class="dim-score">{{ val }}</div>
+                <div class="dim-score" :class="{ 'dim-na': val == null }">{{ val != null ? val : '暂无数据' }}</div>
                 <div class="dim-label">{{ dimensionLabels[key as string] || key }}</div>
               </div>
             </div>
@@ -848,10 +842,25 @@ function handleViewProfile(userId: number) {
   .score-value { font-size: 16px; font-weight: 800; color: $primary; }
 }
 
+.ai-summary {
+  font-size: 14px;
+  color: $text-secondary;
+  line-height: 1.5;
+  margin-bottom: 12px;
+  padding: 8px 12px;
+  background: rgba($primary, 0.06);
+  border-radius: $radius-md;
+}
+
 .dimension-grid {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 6px;
+}
+
+.dim-na {
+  color: $text-muted;
+  font-size: 12px;
 }
 
 .dimension-item {

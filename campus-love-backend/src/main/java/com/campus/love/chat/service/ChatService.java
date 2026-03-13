@@ -20,9 +20,14 @@ import com.campus.love.common.constants.RedisKeyConstants;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.common.service.FileUploadService;
+import com.campus.love.ai.agent.IceBreakReActAgent;
+import com.campus.love.chat.dto.IceBreakStatusResponse;
+import com.campus.love.chat.dto.IceBreakTopicsResponse;
 import com.campus.love.follow.service.FollowService;
 import com.campus.love.user.entity.User;
+import com.campus.love.user.entity.UserIceBreakAllow;
 import com.campus.love.user.mapper.UserMapper;
+import com.campus.love.user.mapper.UserIceBreakAllowMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.ObjectProvider;
@@ -51,6 +56,8 @@ public class ChatService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final ChatGroupService chatGroupService;
     private final FileUploadService fileUploadService;
+    private final IceBreakReActAgent iceBreakReActAgent;
+    private final UserIceBreakAllowMapper userIceBreakAllowMapper;
 
     /**
      * 上传聊天图片，返回可访问的 URL（供 msgType=3 图片消息使用，msgType=2 保留给邀约链接）
@@ -124,16 +131,8 @@ public class ChatService {
         Long currentUserId = CurrentUser.getId();
         int current = (page <= 0) ? 1 : page;
         int pageSize = (size <= 0) ? 20 : Math.min(size, ChatConstants.MAX_PAGE_SIZE);
-        Page<Message> pageReq = new Page<>(current, pageSize);
-        LambdaQueryWrapper<Message> wrapper = new LambdaQueryWrapper<Message>()
-                .and(w -> w
-                        .and(q -> q.eq(Message::getSenderId, currentUserId).eq(Message::getReceiverId, otherUserId))
-                        .or(q -> q.eq(Message::getSenderId, otherUserId).eq(Message::getReceiverId, currentUserId))
-                )
-                .isNull(Message::getGroupId)
-                .orderByDesc(Message::getCreatedAt);
-        Page<Message> messagePage = messageMapper.selectPage(pageReq, wrapper);
-        List<Message> messages = messagePage.getRecords();
+        int offset = (current - 1) * pageSize;
+        List<Message> messages = messageMapper.selectPageForChatHistory(currentUserId, otherUserId, offset, pageSize);
         if (messages.isEmpty()) {
             return List.of();
         }
@@ -249,8 +248,7 @@ public class ChatService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "仅支持撤回1小时内的消息");
         }
 
-        msg.setDeleted(Message.DELETED);
-        messageMapper.updateById(msg);
+        messageMapper.markAsRecalled(messageId);
 
         Long receiverId = msg.getReceiverId();
         if (receiverId != null) {
@@ -272,6 +270,46 @@ public class ChatService {
                         .eq(Message::getReceiverId, currentUserId)
                         .eq(Message::getIsRead, false)
                         .set(Message::getIsRead, true));
+    }
+
+    /**
+     * 破冰功能状态（技术文档 V1.1.0 第 5.1 节）
+     * 用于聊天框底部「💡 破冰灵感」按钮的展示逻辑
+     */
+    public IceBreakStatusResponse getIceBreakStatus(Long targetUserId) {
+        Long selfId = CurrentUser.getId();
+        if (selfId == null || targetUserId == null) {
+            return IceBreakStatusResponse.builder().canShow(false).targetEnabled(false).allowedByMe(false).canAllow(false).build();
+        }
+        boolean mutual = followService.isMutual(selfId, targetUserId);
+        if (!mutual) {
+            return IceBreakStatusResponse.builder().canShow(false).targetEnabled(false).allowedByMe(false).canAllow(false).build();
+        }
+        // targetEnabled: 对方允许我使用破冰 = 全局开启 OR 对方单独授权了我
+        User target = userMapper.selectById(targetUserId);
+        boolean globalOn = Boolean.TRUE.equals(target != null ? target.getIceBreakEnabled() : false);
+        boolean perFriendAllowed = userIceBreakAllowMapper.selectOne(
+                new LambdaQueryWrapper<UserIceBreakAllow>()
+                        .eq(UserIceBreakAllow::getUserId, targetUserId)
+                        .eq(UserIceBreakAllow::getAllowedUserId, selfId)) != null;
+        boolean targetEnabled = globalOn || perFriendAllowed;
+        // allowedByMe: 我是否已允许对方使用破冰
+        boolean allowedByMe = userIceBreakAllowMapper.selectOne(
+                new LambdaQueryWrapper<UserIceBreakAllow>()
+                        .eq(UserIceBreakAllow::getUserId, selfId)
+                        .eq(UserIceBreakAllow::getAllowedUserId, targetUserId)) != null;
+        return IceBreakStatusResponse.builder().canShow(true).targetEnabled(targetEnabled).allowedByMe(allowedByMe).canAllow(true).build();
+    }
+
+    /**
+     * 生成破冰灵感（需互关且对方已开启破冰功能）：先分析聊天记录，再给话题建议
+     */
+    public IceBreakTopicsResponse getIceBreakTopics(Long targetUserId) {
+        IceBreakStatusResponse status = getIceBreakStatus(targetUserId);
+        if (!status.isCanShow() || !status.isTargetEnabled()) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "对方暂未开启破冰功能或未互关");
+        }
+        return iceBreakReActAgent.generateIceBreakTopics(CurrentUser.getId(), targetUserId);
     }
 
     /**

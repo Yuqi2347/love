@@ -99,28 +99,58 @@ public class MomentMatcher {
         double lifestyle = calcLifestyleScore(pa, pb) * 0.20;
         double coreValue = calcCoreValueScore(pa, pb) * 0.20;
 
-        return personality + preference + lifestyle + coreValue;
+        double total = personality + preference + lifestyle + coreValue;
+
+        // 3.3 婚前性行为软惩罚：差距≥2档扣20分
+        int sexA = premaritalSexToTier(pa.getPremaritalSex());
+        int sexB = premaritalSexToTier(pb.getPremaritalSex());
+        if (sexA > 0 && sexB > 0 && Math.abs(sexA - sexB) >= 2) {
+            total = Math.max(0, total - 20);
+        }
+
+        return total;
     }
 
     // ==================== 硬筛选 ====================
 
     boolean isValueCompatible(MomentProfile a, MomentProfile b) {
-        // Q13 同居观冲突：一方坚决不接受(C) 另一方支持(A)
+        // 3.2 婚前同居：一方坚决不接受(C) 另一方支持(A)
         if ("C".equals(a.getPremaritalCohabitation()) && "A".equals(b.getPremaritalCohabitation())) return false;
         if ("A".equals(a.getPremaritalCohabitation()) && "C".equals(b.getPremaritalCohabitation())) return false;
+
+        // 3.3 婚前性行为：A=1档, B=2档, C=3档, D=4档，|A-D|=3 直接排除
+        int sexA = premaritalSexToTier(a.getPremaritalSex());
+        int sexB = premaritalSexToTier(b.getPremaritalSex());
+        if (sexA > 0 && sexB > 0 && Math.abs(sexA - sexB) >= 3) return false;
+
         return true;
+    }
+
+    int premaritalSexToTier(String v) {
+        if (v == null) return 0;
+        return switch (v) {
+            case "A" -> 1;
+            case "B" -> 2;
+            case "C" -> 3;
+            case "D" -> 4;
+            default -> 0;
+        };
     }
 
     // ==================== 性格匹配 25% ====================
 
     double calcPersonalityScore(MomentProfile a, MomentProfile b) {
         double score = 0;
-        // Q3 社交风格：相同或互补都给分 (权重35%)
-        score += calcSimilarity(a.getSocialStyle(), b.getSocialStyle()) * 0.35;
-        // Q4 生活节奏 (权重35%)
-        score += calcSimilarity(a.getLifeRhythm(), b.getLifeRhythm()) * 0.35;
-        // Q5 陪伴方式 (权重30%)
-        score += calcSimilarity(a.getCompanionshipStyle(), b.getCompanionshipStyle()) * 0.30;
+        // 1.2 社交风格 (权重25%)
+        score += calcSimilarity(a.getSocialStyle(), b.getSocialStyle()) * 0.25;
+        // 1.3 生活节奏 (权重25%)
+        score += calcSimilarity(a.getLifeRhythm(), b.getLifeRhythm()) * 0.25;
+        // 1.4 性格底色 (权重25%)
+        score += calcSimilarity(a.getPersonalityBase(), b.getPersonalityBase()) * 0.25;
+        // 1.6 情绪表达 (权重15%)
+        score += calcSimilarity(a.getEmotionStyle(), b.getEmotionStyle()) * 0.15;
+        // 2.8 陪伴方式 (权重10%)
+        score += calcSimilarity(a.getCompanionshipStyle(), b.getCompanionshipStyle()) * 0.10;
         return score;
     }
 
@@ -131,23 +161,26 @@ public class MomentMatcher {
         MomentProfile pa = a.profile();
         MomentProfile pb = b.profile();
 
-        // Q6 颜值期望 vs 对方自评分（双向，各12.5%）
+        // 2.2 颜值期望 vs 对方自评分（双向，各10%）
         int selfScoreA = a.user().getMomentSelfScore() != null ? a.user().getMomentSelfScore() : 5;
         int selfScoreB = b.user().getMomentSelfScore() != null ? b.user().getMomentSelfScore() : 5;
-        score += calcAppearanceMatch(pb.getAppearanceRequirement(), selfScoreA) * 0.125;
-        score += calcAppearanceMatch(pa.getAppearanceRequirement(), selfScoreB) * 0.125;
+        score += calcAppearanceMatch(pb.getAppearanceRequirement(), selfScoreA) * 0.10;
+        score += calcAppearanceMatch(pa.getAppearanceRequirement(), selfScoreB) * 0.10;
 
-        // Q7 性格期望 vs 对方实际社交风格（双向，各12.5%）
-        score += calcPersonalityExpect(pa.getPartnerPersonality(), pb.getSocialStyle()) * 0.125;
-        score += calcPersonalityExpect(pb.getPartnerPersonality(), pa.getSocialStyle()) * 0.125;
+        // 2.5 性格期望 vs 对方性格底色（双向，各10%）
+        score += calcPersonalityExpect(pa.getPartnerPersonality(), pb.getPersonalityBase()) * 0.10;
+        score += calcPersonalityExpect(pb.getPartnerPersonality(), pa.getPersonalityBase()) * 0.10;
 
-        // Q8 专业偏好 (25%)
+        // 2.6 专业偏好 (15%)
         score += calcMajorMatch(pa.getMajorPreference(), pb.getMajorPreference(),
-                a.user().getMajor(), b.user().getMajor()) * 0.25;
+                a.user().getMajor(), b.user().getMajor()) * 0.15;
 
-        // Q9 年龄偏好（双向，各12.5%）
-        score += calcAgeMatch(pa.getAgeRangePreference(), a.user(), b.user()) * 0.125;
-        score += calcAgeMatch(pb.getAgeRangePreference(), b.user(), a.user()) * 0.125;
+        // 2.3 年龄偏好（双向，各7.5%）
+        score += calcAgeMatch(pa.getAgeRangePreference(), a.user(), b.user()) * 0.075;
+        score += calcAgeMatch(pb.getAgeRangePreference(), b.user(), a.user()) * 0.075;
+
+        // 2.7 事业心偏好 (10%)
+        score += calcSimilarity(pa.getCareerAmbitionPref(), pb.getCareerAmbitionPref()) * 0.10;
 
         return score;
     }
@@ -161,10 +194,11 @@ public class MomentMatcher {
     }
 
     double calcPersonalityExpect(String expected, String actual) {
-        // A=活泼开朗(匹配A), B=温柔安静(匹配B), C=相近就好(任何都可)
-        if ("C".equals(expected)) return 80;
+        // A=活泼开朗(匹配A), B=内向安静(匹配B), C=中间型, D=无要求(任何都可)
+        if ("C".equals(expected) || "D".equals(expected)) return 80;
+        if (actual == null) return 60;
         if (expected.equals(actual)) return 100;
-        if ("C".equals(actual)) return 70; // 对方是"两种都OK"
+        if ("C".equals(actual)) return 70; // 对方是"多变/中间型"
         return 40;
     }
 
@@ -184,7 +218,7 @@ public class MomentMatcher {
     }
 
     double calcAgeMatch(String agePref, User self, User target) {
-        if (agePref == null || agePref.contains("D")) return 80; // 年龄不是问题
+        if (agePref == null || agePref.isEmpty() || agePref.contains("D")) return 80; // 年龄不是问题
         if (self.getBirthDate() == null || target.getBirthDate() == null) return 60;
 
         int ageDiff = Period.between(target.getBirthDate(), self.getBirthDate()).getYears();
@@ -205,34 +239,42 @@ public class MomentMatcher {
 
     double calcLifestyleScore(MomentProfile a, MomentProfile b) {
         double score = 0;
-        // Q10 约会风格 (权重35%)
-        score += calcSimilarity(a.getDateStyle(), b.getDateStyle()) * 0.35;
-        // Q11 亲密节奏 (权重35%)
-        score += calcSimilarity(a.getIntimacyPace(), b.getIntimacyPace()) * 0.35;
-        // Q14 未来规划 (权重30%)
-        score += calcSimilarity(a.getFutureLifestyle(), b.getFutureLifestyle()) * 0.30;
+        // 2.9 约会方式 (权重30%)
+        score += calcSimilarity(a.getDateStyle(), b.getDateStyle()) * 0.30;
+        // 2.10 亲密节奏 (权重30%)
+        score += calcSimilarity(a.getIntimacyPace(), b.getIntimacyPace()) * 0.30;
+        // 3.7 未来生活方式 (权重25%)
+        score += calcSimilarity(a.getFutureLifestyle(), b.getFutureLifestyle()) * 0.25;
+        // 3.8 校园恋爱规划 (权重15%)
+        score += calcSimilarity(a.getCampusLovePlan(), b.getCampusLovePlan()) * 0.15;
         return score;
     }
 
     // ==================== 核心价值 20% ====================
 
     double calcCoreValueScore(MomentProfile a, MomentProfile b) {
-        // Q15 最重要的事
-        if (a.getRelationshipCoreValue() == null || b.getRelationshipCoreValue() == null) return 60;
-        if (a.getRelationshipCoreValue().equals(b.getRelationshipCoreValue())) return 100;
-        return 50;
+        double score = 0;
+        // 3.4 核心价值 (权重35%)
+        score += calcSimilarity(a.getRelationshipCoreValue(), b.getRelationshipCoreValue()) * 0.35;
+        // 3.5 矛盾解决 (权重25%)
+        score += calcSimilarity(a.getConflictStyle(), b.getConflictStyle()) * 0.25;
+        // 3.6 社交边界 (权重20%)
+        score += calcSimilarity(a.getSocialBoundary(), b.getSocialBoundary()) * 0.20;
+        // 3.1 坦诚度 (权重20%)
+        score += calcSimilarity(a.getHonestyLevel(), b.getHonestyLevel()) * 0.20;
+        return score > 0 ? score : 60;
     }
 
     // ==================== 工具方法 ====================
 
     /**
      * 计算两个选项的相似/互补分数
-     * 相同=100, C(灵活型)=70, 不同=40
+     * 相同=100, C/D(灵活/无要求型)=70, 不同=40
      */
     double calcSimilarity(String a, String b) {
         if (a == null || b == null) return 60;
         if (a.equals(b)) return 100;
-        if ("C".equals(a) || "C".equals(b)) return 70;
+        if ("C".equals(a) || "C".equals(b) || "D".equals(a) || "D".equals(b)) return 70;
         return 40;
     }
 

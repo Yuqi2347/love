@@ -6,19 +6,30 @@ import com.campus.love.common.result.ResultCode;
 import com.campus.love.common.service.FileUploadService;
 import com.campus.love.common.utils.BaziUtil;
 import com.campus.love.common.utils.ZodiacUtil;
+import com.campus.love.ai.skill.UserProfileSkill;
+import com.campus.love.profile.mapper.UserAiProfileMapper;
+import com.campus.love.profile.entity.UserAiProfile;
+import com.campus.love.user.dto.UserAiProfileResponse;
 import com.campus.love.user.dto.UserProfileRequest;
 import com.campus.love.user.dto.UserProfileResponse;
 import com.campus.love.user.dto.UserSearchItemResponse;
 import com.campus.love.user.entity.User;
+import com.campus.love.user.entity.UserIceBreakAllow;
 import com.campus.love.feed.constants.VisibilityConstants;
+import com.campus.love.follow.service.FollowService;
 import com.campus.love.user.mapper.UserMapper;
+import com.campus.love.user.mapper.UserIceBreakAllowMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.io.IOException;
+import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.Period;
@@ -31,7 +42,12 @@ public class UserService {
 
     private final UserMapper userMapper;
     private final FileUploadService fileUploadService;
+    private final UserProfileSkill userProfileSkill;
+    private final UserAiProfileMapper userAiProfileMapper;
+    private final UserIceBreakAllowMapper userIceBreakAllowMapper;
+    private final FollowService followService;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
+    private final ObjectMapper objectMapper;
 
     /**
      * 获取用户资料（本人或他人）。返回为公开资料，不含 password/email 等敏感字段；若需区分本人与他人展示，在 toProfileResponse 或 Controller 层处理。
@@ -94,8 +110,10 @@ public class UserService {
             user.setBirthDate(birthDate);
             user.setZodiac(ZodiacUtil.getZodiac(birthDate));
 
+            boolean baziUnknown = Boolean.TRUE.equals(request.getBaziUnknown());
+            user.setBaziUnknown(baziUnknown);
             LocalTime birthTime = null;
-            if (request.getBirthTime() != null && !request.getBirthTime().isEmpty()) {
+            if (!baziUnknown && request.getBirthTime() != null && !request.getBirthTime().isEmpty()) {
                 birthTime = LocalTime.parse(request.getBirthTime());
             }
             user.setBirthTime(birthTime);
@@ -105,9 +123,14 @@ public class UserService {
         boolean complete = user.getNickname() != null && user.getGender() != null
                 && user.getBirthDate() != null && user.getMbti() != null
                 && user.getInterests() != null && !user.getInterests().isEmpty();
+        boolean wasIncomplete = !Boolean.TRUE.equals(user.getProfileComplete());
         user.setProfileComplete(complete);
 
         userMapper.updateById(user);
+
+        if (complete && wasIncomplete && userAiProfileMapper.selectById(userId) == null) {
+            userProfileSkill.generateInitialProfile(userId, user);
+        }
         return toProfileResponse(user, true);
     }
 
@@ -134,6 +157,59 @@ public class UserService {
             v = VisibilityConstants.ALL;
         }
         user.setFeedVisibility(v);
+        userMapper.updateById(user);
+        return toProfileResponse(user, true);
+    }
+
+    public UserProfileResponse updateIceBreakEnabled(boolean enabled) {
+        Long userId = CurrentUser.getId();
+        User user = userMapper.selectById(userId);
+        if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        user.setIceBreakEnabled(enabled);
+        userMapper.updateById(user);
+        return toProfileResponse(user, true);
+    }
+
+    /** 按好友单独设置：允许/禁止对方使用破冰（需互关） */
+    public void updateIceBreakAllow(Long targetUserId, boolean allowed) {
+        Long myId = CurrentUser.getId();
+        if (myId == null || targetUserId == null) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "参数无效");
+        }
+        if (!followService.isMutual(myId, targetUserId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN, "仅互关好友可设置");
+        }
+        if (allowed) {
+            UserIceBreakAllow existing = userIceBreakAllowMapper.selectOne(
+                    new LambdaQueryWrapper<UserIceBreakAllow>()
+                            .eq(UserIceBreakAllow::getUserId, myId)
+                            .eq(UserIceBreakAllow::getAllowedUserId, targetUserId));
+            if (existing == null) {
+                UserIceBreakAllow allow = new UserIceBreakAllow();
+                allow.setUserId(myId);
+                allow.setAllowedUserId(targetUserId);
+                userIceBreakAllowMapper.insert(allow);
+            }
+        } else {
+            userIceBreakAllowMapper.delete(
+                    new LambdaQueryWrapper<UserIceBreakAllow>()
+                            .eq(UserIceBreakAllow::getUserId, myId)
+                            .eq(UserIceBreakAllow::getAllowedUserId, targetUserId));
+        }
+    }
+
+    public UserProfileResponse updateAiDisclosureSettings(java.util.Map<String, Boolean> settings) {
+        Long userId = CurrentUser.getId();
+        User user = userMapper.selectById(userId);
+        if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        if (settings == null || settings.isEmpty()) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "授权设置不能为空");
+        }
+        try {
+            user.setAiDisclosureSettings(objectMapper.writeValueAsString(settings));
+        } catch (Exception e) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "授权设置格式错误");
+        }
         userMapper.updateById(user);
         return toProfileResponse(user, true);
     }
@@ -176,6 +252,45 @@ public class UserService {
         if (user != null) {
             user.setCoverImageUrl(null);
             userMapper.updateById(user);
+        }
+    }
+
+    /**
+     * 获取当前用户的 AI 画像（本人可见，用于性格画像页）
+     */
+    public UserAiProfileResponse getMyAiProfile() {
+        Long userId = CurrentUser.getId();
+        UserAiProfile p = userAiProfileMapper.selectById(userId);
+        if (p == null) {
+            return UserAiProfileResponse.builder()
+                    .userId(userId)
+                    .hasRealOcean(false)
+                    .oceanO(null)
+                    .oceanC(null)
+                    .oceanE(null)
+                    .oceanA(null)
+                    .oceanN(null)
+                    .naturalLanguageTags(List.of())
+                    .build();
+        }
+        return UserAiProfileResponse.builder()
+                .userId(userId)
+                .hasRealOcean(Boolean.TRUE.equals(p.getHasRealOcean()))
+                .oceanO(p.getOceanOLong() != null ? p.getOceanOLong() : p.getOceanOShort())
+                .oceanC(p.getOceanCLong() != null ? p.getOceanCLong() : p.getOceanCShort())
+                .oceanE(p.getOceanELong() != null ? p.getOceanELong() : p.getOceanEShort())
+                .oceanA(p.getOceanALong() != null ? p.getOceanALong() : p.getOceanAShort())
+                .oceanN(p.getOceanNLong() != null ? p.getOceanNLong() : p.getOceanNShort())
+                .naturalLanguageTags(parseTags(p.getNaturalLanguageTags()))
+                .build();
+    }
+
+    private List<String> parseTags(String json) {
+        if (json == null || json.trim().isEmpty()) return List.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            return List.of();
         }
     }
 
@@ -231,6 +346,7 @@ public class UserService {
                 .mbti(user.getMbti())
                 .zodiac(user.getZodiac())
                 .bazi(bazi)
+                .baziUnknown(user.getBaziUnknown())
                 .avatarUrl(user.getAvatarUrl())
                 .coverImageUrl(user.getCoverImageUrl())
                 .bio(user.getBio())
@@ -238,6 +354,8 @@ public class UserService {
                 .profileComplete(user.getProfileComplete())
                 .feedVisibility(user.getFeedVisibility() != null ? user.getFeedVisibility() : VisibilityConstants.ALL)
                 .feedVisibilityTime(user.getFeedVisibilityTime() != null ? user.getFeedVisibilityTime() : -1)
+                .iceBreakEnabled(isSelf ? user.getIceBreakEnabled() : null)
+                .aiDisclosureSettings(isSelf ? user.getAiDisclosureSettings() : null)
                 .build();
     }
 }

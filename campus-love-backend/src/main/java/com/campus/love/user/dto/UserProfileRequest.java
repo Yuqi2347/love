@@ -17,6 +17,8 @@ public class UserProfileRequest {
     private String birthDate;
 
     private String birthTime;
+    /** V1.1.0：勾选「不知道时辰」时八字权重清零 */
+    private Boolean baziUnknown;
 
     private String school;
     private String major;

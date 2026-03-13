@@ -59,3 +59,4 @@ export function uploadChatImage(file: File) {
     headers: { 'Content-Type': 'multipart/form-data' },
   })
 }
+

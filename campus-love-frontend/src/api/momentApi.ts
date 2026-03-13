@@ -13,19 +13,43 @@ export interface MomentStatusResponse {
 export interface MomentEnrollRequest {
   selfScore: number
   targetGender: 'male' | 'female' | 'any'
+  // 第一步
   socialStyle: string
   lifeRhythm: string
+  personalityBase: string
+  campusFocus: string
+  emotionStyle: string
   companionshipStyle: string
+  // 第二步
   appearanceRequirement: string
+  ageRangePreference?: string
+  agePreferenceMin?: number
+  agePreferenceMax?: number
+  gradeRangePreference: string
+  gradeRangeMin?: number
+  gradeRangeMax?: number
   partnerPersonality: string
   majorPreference: string
-  ageRangePreference: string
+  careerAmbitionPref: string
   dateStyle: string
   intimacyPace: string
-  loyaltyValue: string
+  // 第三步
+  honestyLevel: string
   premaritalCohabitation: string
-  futureLifestyle: string
+  premaritalSex: string
   relationshipCoreValue: string
+  conflictStyle: string
+  socialBoundary: string
+  futureLifestyle: string
+  campusLovePlan: string
+  idolRole: string
+  temptationResponse: string
+  realityCondition: string
+  humanNatureView: string
+  breakupView: string
+  careerLoveConflict: string
+  emotionPriority: string
+  lifeGoalPriority: string
 }
 
 export interface MomentProfile {
@@ -34,17 +58,38 @@ export interface MomentProfile {
   targetGender: string
   socialStyle: string
   lifeRhythm: string
+  personalityBase?: string
+  campusFocus?: string
+  emotionStyle?: string
   companionshipStyle: string
   appearanceRequirement: string
+  ageRangePreference?: string
+  agePreferenceMin?: number
+  agePreferenceMax?: number
+  gradeRangePreference?: string
+  gradeRangeMin?: number
+  gradeRangeMax?: number
   partnerPersonality: string
   majorPreference: string
-  ageRangePreference: string
+  careerAmbitionPref?: string
   dateStyle: string
   intimacyPace: string
-  loyaltyValue: string
+  honestyLevel?: string
   premaritalCohabitation: string
-  futureLifestyle: string
+  premaritalSex?: string
   relationshipCoreValue: string
+  conflictStyle?: string
+  socialBoundary?: string
+  futureLifestyle: string
+  campusLovePlan?: string
+  idolRole?: string
+  temptationResponse?: string
+  realityCondition?: string
+  humanNatureView?: string
+  breakupView?: string
+  careerLoveConflict?: string
+  emotionPriority?: string
+  lifeGoalPriority?: string
   momentPhotoUrl?: string | null
   momentSelfScore?: number | null
 }
@@ -70,6 +115,7 @@ export interface MomentResultResponse {
     lifestyle: number
     coreValue: number
   }
+  summary?: string | null
 }
 
 // ==================== API 函数 ====================

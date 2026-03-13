@@ -19,6 +19,8 @@ public class MatchResultResponse {
     private String bio;
     private String interests;
     private Integer matchScore;
+    /** AI 一句话总结（约30字），技术文档 V1.1.0 第 8 节 */
+    private String aiSummary;
     private MatchDetail detail;
 
     @Data

@@ -147,17 +147,31 @@ const developmentContent = computed(() => result.value?.developmentPotential || 
 
 watch(() => props.modelValue, (val) => {
   visible.value = val
-  if (val && !result.value) {
-    fetchAnalysis()
+  if (val) {
+    const uid = props.targetUserId
+    if (Number.isFinite(uid) && uid > 0) {
+      if (!result.value) fetchAnalysis()
+    } else {
+      error.value = '用户信息无效，请刷新后重试'
+      loading.value = false
+    }
   }
 }, { immediate: true })
 
 async function fetchAnalysis() {
+  const uid = props.targetUserId
+  if (!Number.isFinite(uid) || uid <= 0) return
   loading.value = true
   error.value = ''
+  result.value = null
   try {
-    const res = await getYuanFenAnalysis(props.targetUserId)
-    result.value = res.data.data
+    const res = await getYuanFenAnalysis(uid)
+    const data = res.data?.data ?? res.data
+    if (!data || typeof data !== 'object') {
+      error.value = '分析结果格式异常，请稍后重试'
+      return
+    }
+    result.value = data
 
     // 通知父组件冷却时间
     if (result.value?.nextAvailableAt) {

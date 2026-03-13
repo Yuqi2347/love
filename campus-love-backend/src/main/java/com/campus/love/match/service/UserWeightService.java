@@ -181,7 +181,11 @@ public class UserWeightService {
             }
         }
 
-        // 归一化，确保所有权重之和 = 1.0
+        // bazi_unknown 时八字权重锁定为 0（技术文档 V1.1.0）
+        User user = userMapper.selectById(userId);
+        if (user != null && Boolean.TRUE.equals(user.getBaziUnknown())) {
+            newWeights.put("bazi", 0.0);
+        }
         newWeights = GlobalWeights.normalizeWeights(newWeights);
 
         // 保存更新后的权重
@@ -217,19 +221,21 @@ public class UserWeightService {
         }
 
         for (UserWeights uw : allWeights) {
-            Map<String, Double> decayed = new HashMap<>();
-            Map<String, Double> defaultW = GlobalWeights.DEFAULT_WEIGHTS;
+            User user = userMapper.selectById(uw.getUserId());
+            Map<String, Double> defaultW = (user != null && Boolean.TRUE.equals(user.getBaziUnknown()))
+                    ? GlobalWeights.WITHOUT_BAZI : GlobalWeights.DEFAULT_WEIGHTS;
 
+            Map<String, Double> decayed = new HashMap<>();
             for (String dim : GlobalWeights.getAllDimensions()) {
                 double current = uw.getWeight(dim);
                 double def = defaultW.get(dim);
-                // 衰减公式：w_new = w_default × decay + w_current × (1 - decay)
                 double decayedWeight = def * GlobalWeights.WEEKLY_DECAY_RATE +
                                        current * (1 - GlobalWeights.WEEKLY_DECAY_RATE);
                 decayed.put(dim, decayedWeight);
             }
-
-            // 归一化
+            if (user != null && Boolean.TRUE.equals(user.getBaziUnknown())) {
+                decayed.put("bazi", 0.0);
+            }
             decayed = GlobalWeights.normalizeWeights(decayed);
             uw.updateWeights(decayed);
         }

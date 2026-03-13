@@ -32,6 +32,8 @@ export interface FeedPost {
   visibility?: string
   createdAt: string
   comments: FeedComment[]
+  /** V24：AI 提取的标签，逗号分隔 */
+  aiTags?: string | null
 }
 
 export function createPost(data: {
@@ -116,12 +118,24 @@ export function deletePost(postId: number) {
   return request.delete<ApiResult<void>>(`/feed/${postId}`)
 }
 
+export function updatePostAiTags(postId: number, aiTags: string) {
+  return request.patch<ApiResult<void>>(`/feed/${postId}/ai-tags`, null, { params: { aiTags } })
+}
+
+export function retagPost(postId: number) {
+  return request.post<ApiResult<void>>(`/feed/retag/${postId}`)
+}
+
 export function getDiscoveryPosts(page = 0, size = 10, keyword?: string) {
   return request.get<ApiResult<FeedPost[]>>('/feed/discovery', { params: { page, size, keyword } })
 }
 
 export function getPostDetail(postId: number) {
-  return request.get<ApiResult<FeedPost>>(`/feed/${postId}`)
+  const id = Number(postId)
+  if (!Number.isFinite(id) || id <= 0) {
+    return Promise.reject(new Error('无效的动态 ID'))
+  }
+  return request.get<ApiResult<FeedPost>>(`/feed/${id}`)
 }
 
 export function getLikedPosts(page = 0, size = 20) {

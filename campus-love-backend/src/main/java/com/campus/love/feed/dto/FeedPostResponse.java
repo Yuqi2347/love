@@ -25,6 +25,8 @@ public class FeedPostResponse {
     private String visibility;
     private String createdAt;
     private List<CommentItem> comments;
+    /** V24：AI 提取的标签，逗号分隔 */
+    private String aiTags;
 
     @Data
     @Builder

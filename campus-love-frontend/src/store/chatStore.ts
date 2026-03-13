@@ -2,6 +2,7 @@ import { defineStore } from 'pinia'
 import { ref } from 'vue'
 import type { ChatMessage, Conversation } from '@/api/chatApi'
 import { getConversations } from '@/api/chatApi'
+import { useNotifyDismissStore } from '@/store/notifyDismissStore'
 
 export const useChatStore = defineStore('chat', () => {
   const conversations = ref<Conversation[]>([])
@@ -130,16 +131,23 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function updateConversation(msg: ChatMessage) {
-    const otherId = msg.senderId === Number(localStorage.getItem('userId'))
-      ? msg.receiverId : msg.senderId
+    const myId = Number(localStorage.getItem('userId'))
+    const otherId = msg.senderId === myId ? msg.receiverId : msg.senderId
     const idx = conversations.value.findIndex(c => c.userId === otherId)
+    const isInvite = msg.msgType === 4 || (msg.content && String(msg.content).includes('INVITE#'))
+    const lastMsg = isInvite ? '[邀约邀请]' : (msg.content ?? '')
+    const dismissStore = useNotifyDismissStore()
     if (idx >= 0) {
       const conv = conversations.value[idx]
       if (conv) {
-        const isInvite = msg.msgType === 4 || (msg.content && String(msg.content).includes('INVITE#'))
-        conv.lastMessage = isInvite ? '[邀约邀请]' : (msg.content ?? '')
-        conv.lastTime = msg.createdAt
+        conv.lastMessage = lastMsg
+        conv.lastTime = msg.createdAt ?? ''
+        conv.msgType = msg.msgType
       }
+      dismissStore.undismissChat(otherId)
+    } else {
+      dismissStore.undismissChat(otherId)
+      fetchConversations()
     }
   }
 

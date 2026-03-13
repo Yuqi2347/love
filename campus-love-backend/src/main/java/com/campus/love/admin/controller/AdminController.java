@@ -117,4 +117,29 @@ public class AdminController {
         requireAdmin();
         return Result.success(aiTokenStatsService.getStats(range));
     }
+
+    @Operation(summary = "人物画像统计")
+    @GetMapping("/profile/stats")
+    public Result<AdminService.ProfileStats> profileStats() {
+        requireAdmin();
+        return Result.success(adminService.getProfileStats());
+    }
+
+    @Operation(summary = "手动触发单个用户画像生成")
+    @PostMapping("/profile/regenerate/{userId}")
+    public Result<Void> regenerateProfile(
+            @PathVariable Long userId,
+            @RequestParam(defaultValue = "false") boolean force) {
+        requireAdmin();
+        adminService.regenerateProfile(userId, force);
+        return Result.success();
+    }
+
+    @Operation(summary = "批量补充缺失画像")
+    @PostMapping("/profile/batch-regenerate")
+    public Result<Integer> batchRegenerateMissing() {
+        requireAdmin();
+        int count = adminService.batchRegenerateMissing();
+        return Result.success(count);
+    }
 }

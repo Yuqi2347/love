@@ -119,6 +119,22 @@ public class FeedController {
         return Result.success();
     }
 
+    @Operation(summary = "更新动态 AI 标签（仅作者可修改）")
+    @PatchMapping("/{postId}/ai-tags")
+    public Result<Void> updatePostAiTags(
+            @PathVariable Long postId,
+            @RequestParam String aiTags) {
+        feedService.updatePostAiTags(postId, aiTags);
+        return Result.success();
+    }
+
+    @Operation(summary = "重新生成 AI 标签（作者可触发，用于无标签的帖子）")
+    @PostMapping("/retag/{postId}")
+    public Result<Void> retagPost(@PathVariable Long postId) {
+        feedService.retagPost(postId);
+        return Result.success();
+    }
+
     @Operation(summary = "获取我点赞的帖子列表")
     @GetMapping("/liked-posts")
     public Result<List<FeedPostResponse>> getLikedPosts(

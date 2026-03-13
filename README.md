@@ -9,6 +9,7 @@
 | 前端 | Vue 3 + Vite 5 + TypeScript + Element Plus + Pinia |
 | 后端 | Spring Boot 3.2 + MyBatis-Plus + Spring Security + JWT |
 | 数据库 | MySQL 8.0 + Redis 7 |
+| 向量存储 | MySQL JSON（1536 维，应用层相似度计算；可扩展 pgvector/专用向量库） |
 | 实时通信 | WebSocket |
 | API文档 | Swagger 3 / OpenAPI 3.0 |
 
@@ -27,7 +28,7 @@
      - 或在 MySQL 客户端中：`SOURCE campus-love-backend/src/main/resources/db/schema.sql;`
      完成后会一次性创建所有基础表（用户、关注、聊天、朋友圈等）。
 
-   - **已有数据库升级到最新版本（例如从 V1.0.0 升级到 V1.0.1）**：
+   - **已有数据库升级到最新版本（例如从 V1.0.0 升级到 V1.1.0）**：
      在 `campus-love-backend/src/main/resources/db/` 目录下，按顺序执行尚未执行过的增量脚本，例如：
      ```bash
      mysql -uroot -p campus_love < schema_v1.0.1.sql
@@ -35,8 +36,11 @@
      mysql -uroot -p campus_love < set_admin.sql
      mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V10__invite_decline.sql
      mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V16__follow_remark_comment_reply.sql
+     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V24__rag_ai_profile.sql
+     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V28__moment_profile_32_questions.sql
+     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V29__fix_ai_tags_column_type.sql
      ```
-     增量脚本只负责在已有结构上做”补充/升级”，不会重复创建基础表。
+     增量脚本只负责在已有结构上做”补充/升级”，不会重复创建基础表。向量存储说明见 `docs/architecture/VECTOR_STORAGE.md`。
 5. **Redis** — Windows: [下载](https://github.com/tporadowski/redis/releases)，默认端口 6379
 
 ## 数据库与邮件配置

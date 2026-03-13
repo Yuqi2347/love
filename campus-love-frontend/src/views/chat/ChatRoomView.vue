@@ -114,11 +114,48 @@
             <span class="msg-time">{{ msg.createdAt?.slice(11, 16) }}</span>
           </template>
         </div>
+        <button v-if="msg.senderId === myId && canRecall(msg)" type="button" class="recall-btn recall-btn-left" @click.stop="handleRecall(msg.id)">撤回</button>
       </div>
     </div>
 
+    <!-- 破冰话题面板 -->
+    <Transition name="ice-break-panel">
+      <div v-if="showIceBreakPanel" class="ice-break-panel">
+        <div class="ice-break-panel-header">
+          <span>💡 破冰灵感</span>
+          <button type="button" class="ice-break-close" @click="showIceBreakPanel = false" aria-label="关闭">
+            <el-icon :size="18"><Close /></el-icon>
+          </button>
+        </div>
+        <div v-if="iceBreakLoading" class="ice-break-loading">加载中...</div>
+        <template v-else>
+          <p v-if="iceBreakAnalysis" class="ice-break-analysis">{{ iceBreakAnalysis }}</p>
+          <div class="ice-break-topics">
+          <button
+            v-for="(t, i) in iceBreakTopics"
+            :key="i"
+            type="button"
+            class="ice-break-topic-btn"
+            @click="selectIceBreakTopic(t)"
+          >
+            {{ t }}
+          </button>
+          </div>
+        </template>
+      </div>
+    </Transition>
+
     <div class="chat-input-area">
       <div v-if="!canSend" class="chat-limit-hint">未回复前只能发送两条消息</div>
+      <!-- 允许对方获取破冰灵感（按好友单独设置） -->
+      <div v-if="iceBreakStatus?.canAllow" class="ice-break-allow-row">
+        <span class="ice-break-allow-label">允许TA获取破冰灵感</span>
+        <el-switch
+          :model-value="iceBreakStatus.allowedByMe"
+          :loading="iceBreakAllowLoading"
+          @update:model-value="handleIceBreakAllowChange"
+        />
+      </div>
       <input
         ref="imageInputRef"
         type="file"
@@ -127,6 +164,16 @@
         @change="handleMediaSelect"
       />
       <div class="input-row" :class="{ disabled: !canSend }">
+        <button
+          v-if="iceBreakStatus?.canShow"
+          type="button"
+          :class="['icon-btn', 'ice-break-btn', { disabled: !iceBreakStatus.targetEnabled }]"
+          :title="iceBreakStatus.targetEnabled ? '破冰灵感' : '对方暂未允许您获取破冰灵感（可开启下方开关）'"
+          :disabled="!iceBreakStatus.targetEnabled"
+          @click="iceBreakStatus.targetEnabled && handleIceBreakClick()"
+        >
+          💡
+        </button>
         <button type="button" class="icon-btn" title="图片/视频" :disabled="!canSend" @click="canSend && triggerImageInput()">
           <el-icon :size="20"><Picture /></el-icon>
         </button>
@@ -148,15 +195,18 @@ import { ref, computed, onMounted, nextTick, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useChatStore } from '@/store/chatStore'
 import { useUserStore } from '@/store/userStore'
+import { useNotifyDismissStore } from '@/store/notifyDismissStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { useFollowStore } from '@/store/followStore'
-import { getChatHistory, markAsRead, uploadChatImage, canSendTo } from '@/api/chatApi'
+import { getChatHistory, markAsRead, uploadChatImage, canSendTo, recallMessage } from '@/api/chatApi'
+import { getIceBreakStatus, getIceBreakTopics, updateIceBreakAllow } from '@/api/userApi'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { joinInvite, declineInvite } from '@/api/inviteApi'
 import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { formatLocalDateTime } from '@/utils/dateTime'
 import EmojiPicker from '@/components/EmojiPicker.vue'
+import { Close } from '@element-plus/icons-vue'
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect fill="%23f0f2f5" width="36" height="36" rx="18"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="16">👤</text></svg>'
 
@@ -164,6 +214,7 @@ const route = useRoute()
 const router = useRouter()
 const chatStore = useChatStore()
 const userStore = useUserStore()
+const notifyDismissStore = useNotifyDismissStore()
 const badgeStore = useBadgeStore()
 const followStore = useFollowStore()
 const { currentMessages } = storeToRefs(chatStore)
@@ -180,6 +231,14 @@ const imageInputRef = ref<HTMLInputElement | null>(null)
 const inputRef = ref<{ $el: HTMLElement } | null>(null)
 /** 未互关时仅允许发一条，对方回复前不能继续发；互关则始终可发。初始 false，等 canSendTo 返回后再设 */
 const canSend = ref(false)
+/** 破冰功能状态：canShow=互关时显示按钮，targetEnabled=对方已开启时高亮 */
+const iceBreakStatus = ref<{ canShow: boolean; targetEnabled: boolean } | null>(null)
+/** 破冰话题面板 */
+const showIceBreakPanel = ref(false)
+const iceBreakAnalysis = ref('')
+const iceBreakTopics = ref<string[]>([])
+const iceBreakLoading = ref(false)
+const iceBreakAllowLoading = ref(false)
 
 const messages = computed(() => {
   const filtered = currentMessages.value.filter(m =>
@@ -222,6 +281,19 @@ onMounted(async () => {
     const canRes = await canSendTo(otherUserId.value)
     canSend.value = canRes.data?.data ?? true
     scrollToBottom()
+    // 加载破冰功能状态（仅当 otherUserId 有效时）；互关时始终显示按钮，API 失败时用默认状态
+    const uid = otherUserId.value
+    if (Number.isFinite(uid) && uid > 0) {
+      try {
+        const statusRes = await getIceBreakStatus(uid)
+        iceBreakStatus.value = statusRes.data.data ?? null
+      } catch {
+        // API 失败时：若互关且可发消息，仍显示破冰区域（按钮置灰，用户可开启「允许对方使用破冰」）
+        iceBreakStatus.value = canSend.value ? { canShow: true, targetEnabled: false, allowedByMe: false, canAllow: true } : null
+      }
+    } else {
+      iceBreakStatus.value = null
+    }
   } catch { /* handled */ }
 })
 
@@ -298,6 +370,7 @@ async function handleSend() {
     { pendingOtherUserId: otherUserId.value }
   )
   chatStore.sendMessage(otherUserId.value, text)
+  notifyDismissStore.undismissChat(otherUserId.value)
   inputText.value = ''
   nextTick(scrollToBottom)
   // 发送后刷新是否还能发（未互关时发一条后变为 false）
@@ -337,12 +410,16 @@ function getSharedPostInfo(content: string | undefined): { nickname: string; con
   }
 }
 
-/** 获取帖子分享中的 postId */
+/** 获取帖子分享中的 postId（严格校验，避免 NaN 导致后端报错） */
 function getSharedPostId(content: string | undefined): number | null {
   if (!content) return null
   try {
     const data = JSON.parse(content)
-    return data.postId || null
+    const id = data.postId
+    if (id == null || id === '' || id === 'NaN') return null
+    const n = Number(id)
+    if (!Number.isFinite(n) || n <= 0) return null
+    return Math.floor(n)
   } catch {
     return null
   }
@@ -353,6 +430,82 @@ function goToSharedPost(content: string | undefined) {
   const postId = getSharedPostId(content)
   if (postId) {
     router.push(`/feed/${postId}`)
+  }
+}
+
+/** 点击破冰灵感按钮 */
+async function handleIceBreakClick() {
+  if (!iceBreakStatus.value?.targetEnabled || iceBreakLoading.value) return
+  iceBreakLoading.value = true
+  showIceBreakPanel.value = true
+  iceBreakAnalysis.value = ''
+  iceBreakTopics.value = []
+  try {
+    const res = await getIceBreakTopics(otherUserId.value)
+    const data = res.data.data
+    iceBreakAnalysis.value = data?.analysis || ''
+    iceBreakTopics.value = data?.topics || []
+  } catch {
+    ElMessage.error('获取破冰灵感失败')
+    showIceBreakPanel.value = false
+  } finally {
+    iceBreakLoading.value = false
+  }
+}
+
+/** 选择破冰话题并填入输入框 */
+function selectIceBreakTopic(topic: string) {
+  inputText.value = topic
+  showIceBreakPanel.value = false
+  inputRef.value?.$el?.querySelector('input')?.focus()
+}
+
+/** 是否可撤回（本人发送、未撤回、1小时内） */
+function canRecall(msg: { senderId: number; deleted?: boolean; createdAt?: string }): boolean {
+  if (msg.senderId !== myId.value || msg.deleted) return false
+  if (!msg.createdAt) return false
+  const created = new Date(msg.createdAt).getTime()
+  const oneHourAgo = Date.now() - 60 * 60 * 1000
+  return created >= oneHourAgo
+}
+
+/** 撤回消息 */
+async function handleRecall(messageId: number) {
+  try {
+    await recallMessage(messageId)
+    chatStore.updateMessageRecall(messageId)
+    ElMessage.success('已撤回')
+    // 重新拉取历史，确保与后端一致（后端会返回 deleted: true）
+    historyPage.value = 1
+    noMoreHistory.value = false
+    const res = await getChatHistory(otherUserId.value, 1, 30)
+    const loaded = (res.data.data || []).reverse()
+    const myIdNum = myId.value
+    const otherId = otherUserId.value
+    const belong = (m: { senderId: number; receiverId: number }) =>
+      (m.senderId === myIdNum && m.receiverId === otherId) ||
+      (m.senderId === otherId && m.receiverId === myIdNum)
+    chatStore.setMessagesMergedWithHistory(loaded, m => belong(m), [])
+    nextTick(scrollToBottom)
+  } catch {
+    // 错误已由 request 拦截器展示
+  }
+}
+
+/** 切换「允许对方使用破冰」 */
+async function handleIceBreakAllowChange(allowed: boolean) {
+  if (iceBreakAllowLoading.value) return
+  iceBreakAllowLoading.value = true
+  try {
+    await updateIceBreakAllow(otherUserId.value, allowed)
+    if (iceBreakStatus.value) {
+      iceBreakStatus.value = { ...iceBreakStatus.value, allowedByMe: allowed }
+    }
+    ElMessage.success(allowed ? '已允许对方使用破冰' : '已关闭')
+  } catch {
+    // 错误已由 request 拦截器展示
+  } finally {
+    iceBreakAllowLoading.value = false
   }
 }
 
@@ -463,6 +616,7 @@ async function handleMediaSelect(e: Event) {
       { pendingOtherUserId: otherUserId.value }
     )
     chatStore.sendMessage(otherUserId.value, imageUrlVal, 3)
+    notifyDismissStore.undismissChat(otherUserId.value)
     nextTick(scrollToBottom)
     const canRes = await canSendTo(otherUserId.value)
     canSend.value = canRes.data?.data ?? false
@@ -546,19 +700,6 @@ async function handleMediaSelect(e: Event) {
   max-width: 100%;
 
   .msg-time { font-size: 11px; color: $text-muted; display: block; text-align: right; margin-top: 4px; }
-  .recall-btn {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    font-size: 11px;
-    color: var(--el-color-danger);
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 2px 6px;
-    opacity: 0.8;
-  }
-  .recall-btn:hover { opacity: 1; }
 }
 
 .message-bubble {
@@ -572,20 +713,20 @@ async function handleMediaSelect(e: Event) {
   .msg-content { font-size: 14px; line-height: 1.5; word-wrap: break-word; }
   .msg-content.msg-recalled { color: var(--el-text-color-placeholder); font-style: italic; }
   .msg-time { font-size: 11px; color: $text-muted; display: block; text-align: right; margin-top: 4px; }
-  .recall-btn {
-    position: absolute;
-    right: 0;
-    bottom: 0;
-    font-size: 11px;
-    color: var(--el-color-danger);
-    background: none;
-    border: none;
-    cursor: pointer;
-    padding: 2px 6px;
-    opacity: 0.8;
-  }
-  .recall-btn:hover { opacity: 1; }
 }
+
+.recall-btn-left {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--el-color-danger);
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px;
+  opacity: 0.85;
+  align-self: center;
+}
+.recall-btn-left:hover { opacity: 1; }
 
 .invite-link-btn {
   margin-top: 4px;
@@ -700,6 +841,94 @@ async function handleMediaSelect(e: Event) {
       object-fit: cover;
       border-radius: 4px;
     }
+  }
+}
+
+// 破冰话题面板
+.ice-break-panel {
+  padding: 12px 16px;
+  margin: 0 20px 8px;
+  background: linear-gradient(135deg, rgba($primary, 0.08), rgba($primary, 0.04));
+  border: 1px solid rgba($primary, 0.2);
+  border-radius: $radius-md;
+  flex-shrink: 0;
+
+  .ice-break-panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    color: $primary;
+  }
+  .ice-break-close {
+    padding: 4px;
+    color: $text-muted;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    border-radius: 4px;
+    &:hover { color: $text-primary; }
+  }
+  .ice-break-loading {
+    font-size: 13px;
+    color: $text-muted;
+  }
+  .ice-break-analysis {
+    font-size: 13px;
+    color: $text-secondary;
+    line-height: 1.6;
+    margin-bottom: 12px;
+    padding: 8px 0;
+    border-bottom: 1px solid rgba($primary, 0.15);
+  }
+  .ice-break-topics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  .ice-break-topic-btn {
+    padding: 6px 12px;
+    font-size: 13px;
+    color: $primary;
+    background: rgba($primary, 0.08);
+    border: 1px solid rgba($primary, 0.2);
+    border-radius: $radius-md;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s;
+    &:hover {
+      background: rgba($primary, 0.15);
+      border-color: rgba($primary, 0.4);
+    }
+  }
+}
+.ice-break-panel-enter-active,
+.ice-break-panel-leave-active { transition: opacity 0.2s, transform 0.2s; }
+.ice-break-panel-enter-from,
+.ice-break-panel-leave-to {
+  opacity: 0;
+  transform: translateY(-8px);
+}
+
+.ice-break-btn {
+  font-size: 18px !important;
+  &.disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+  }
+}
+
+.ice-break-allow-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 0 12px;
+  font-size: 13px;
+  color: $text-secondary;
+
+  .ice-break-allow-label {
+    flex: 1;
   }
 }
 
