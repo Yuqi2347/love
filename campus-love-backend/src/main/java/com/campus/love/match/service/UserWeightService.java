@@ -1,12 +1,12 @@
 package com.campus.love.match.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.campus.love.common.utils.BaziCalculator;
+import com.campus.love.common.utils.InterestTagConverter;
 import com.campus.love.match.constants.GlobalWeights;
-import com.campus.love.match.constants.MbtiCompatibilityMatrix;
 import com.campus.love.match.constants.ZodiacCompatibilityTable;
 import com.campus.love.match.entity.UserWeights;
 import com.campus.love.match.mapper.UserWeightsMapper;
+import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -15,11 +15,8 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
-import java.time.Period;
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * 用户个性化权重服务（V2.0）
@@ -39,8 +36,12 @@ public class UserWeightService {
 
     private final UserWeightsMapper userWeightsMapper;
     private final UserMapper userMapper;
+    private final UserPortraitService userPortraitService;
     private final InterestMatcher interestMatcher;
     private final MajorCategoryMatcher majorCategoryMatcher;
+    private final OceanMatcher oceanMatcher;
+    private final ValuesMatcher valuesMatcher;
+    private final AgeGradeMatcher ageGradeMatcher;
 
     /**
      * 获取用户权重
@@ -54,7 +55,7 @@ public class UserWeightService {
             );
 
             if (weights == null) {
-                weights = UserWeights.defaultWeights(userId);
+                weights = UserWeights.defaultWeights(userId, hasRealOcean(userId));
                 try {
                     userWeightsMapper.insert(weights);
                     log.debug("Created default weights for user: {}", userId);
@@ -70,7 +71,7 @@ public class UserWeightService {
             } else {
                 log.error("Failed to query user weights for user: {}", userId, e);
             }
-            return UserWeights.defaultWeights(userId);
+            return UserWeights.defaultWeights(userId, hasRealOcean(userId));
         }
     }
 
@@ -92,11 +93,16 @@ public class UserWeightService {
     public Map<String, Double> getEffectiveWeights(Long userId) {
         try {
             UserWeights weights = getUserWeights(userId);
+            Map<String, Double> baseWeights = getBaseWeightsForUser(userId);
+
+            if (!hasRealOcean(userId)) {
+                return baseWeights;
+            }
 
             if (!weights.canUsePersonalizedWeights()) {
                 log.debug("User {} is in cold start (count={}), using default weights",
                         userId, weights.getActionCount());
-                return new HashMap<>(GlobalWeights.DEFAULT_WEIGHTS);
+                return baseWeights;
             }
 
             return weights.getWeightMap();
@@ -106,8 +112,14 @@ public class UserWeightService {
             } else {
                 log.error("Failed to get effective weights for user: {}", userId, e);
             }
-            return new HashMap<>(GlobalWeights.DEFAULT_WEIGHTS);
+            return getBaseWeightsForUser(userId);
         }
+    }
+
+    public Map<String, Double> getBaseWeightsForUser(Long userId) {
+        return hasRealOcean(userId)
+                ? new HashMap<>(GlobalWeights.DEFAULT_WEIGHTS)
+                : new HashMap<>(GlobalWeights.COLD_START_WEIGHTS);
     }
 
     /**
@@ -181,11 +193,6 @@ public class UserWeightService {
             }
         }
 
-        // bazi_unknown 时八字权重锁定为 0（技术文档 V1.1.0）
-        User user = userMapper.selectById(userId);
-        if (user != null && Boolean.TRUE.equals(user.getBaziUnknown())) {
-            newWeights.put("bazi", 0.0);
-        }
         newWeights = GlobalWeights.normalizeWeights(newWeights);
 
         // 保存更新后的权重
@@ -221,9 +228,7 @@ public class UserWeightService {
         }
 
         for (UserWeights uw : allWeights) {
-            User user = userMapper.selectById(uw.getUserId());
-            Map<String, Double> defaultW = (user != null && Boolean.TRUE.equals(user.getBaziUnknown()))
-                    ? GlobalWeights.WITHOUT_BAZI : GlobalWeights.DEFAULT_WEIGHTS;
+            Map<String, Double> defaultW = getBaseWeightsForUser(uw.getUserId());
 
             Map<String, Double> decayed = new HashMap<>();
             for (String dim : GlobalWeights.getAllDimensions()) {
@@ -232,9 +237,6 @@ public class UserWeightService {
                 double decayedWeight = def * GlobalWeights.WEEKLY_DECAY_RATE +
                                        current * (1 - GlobalWeights.WEEKLY_DECAY_RATE);
                 decayed.put(dim, decayedWeight);
-            }
-            if (user != null && Boolean.TRUE.equals(user.getBaziUnknown())) {
-                decayed.put("bazi", 0.0);
             }
             decayed = GlobalWeights.normalizeWeights(decayed);
             uw.updateWeights(decayed);
@@ -266,63 +268,25 @@ public class UserWeightService {
 
         Map<String, Integer> scores = new HashMap<>();
 
-        // 兴趣匹配
-        scores.put("interest", interestMatcher.calculateInterestScore(
-                user1.getInterests(), user2.getInterests()));
-
-        // MBTI匹配
-        scores.put("mbti", MbtiCompatibilityMatrix.getCompatibility(
-                user1.getMbti(), user2.getMbti()));
+        // 兴趣匹配（新格式优先）
+        var p1 = userPortraitService.getPortrait(userId1);
+        var p2 = userPortraitService.getPortrait(userId2);
+        scores.put("ocean", oceanMatcher.calculateOceanScore(p1, p2));
+        String m1 = InterestTagConverter.getInterestsForMatching(p1 != null ? p1.getInterestTags() : null, user1.getInterests());
+        String m2 = InterestTagConverter.getInterestsForMatching(p2 != null ? p2.getInterestTags() : null, user2.getInterests());
+        scores.put("interest", interestMatcher.calculateInterestScore(m1, m2));
+        scores.put("values", valuesMatcher.calculateValuesScore(p1, p2).orElse(50));
+        scores.put("age_grade", ageGradeMatcher.calculateAgeGradeScore(user1, user2));
 
         // 星座匹配
         scores.put("zodiac", ZodiacCompatibilityTable.getCompatibility(
                 user1.getZodiac(), user2.getZodiac()));
 
-        // 八字匹配
-        LocalDateTime birth1 = user1.getBirthDate() != null ?
-                LocalDateTime.of(user1.getBirthDate(),
-                        user1.getBirthTime() != null ? user1.getBirthTime() : java.time.LocalTime.NOON) :
-                null;
-        LocalDateTime birth2 = user2.getBirthDate() != null ?
-                LocalDateTime.of(user2.getBirthDate(),
-                        user2.getBirthTime() != null ? user2.getBirthTime() : java.time.LocalTime.NOON) :
-                null;
-        scores.put("bazi", BaziCalculator.calculateHunYinScore(birth1, birth2));
-
         // 专业匹配
         scores.put("major", majorCategoryMatcher.calculateMajorScore(
                 user1.getMajor(), user2.getMajor()));
 
-        // 年龄匹配
-        scores.put("age", calculateAgeScore(user1.getBirthDate(), user2.getBirthDate()));
-
         return scores;
-    }
-
-    /**
-     * 归一化维度得分到[-1, 1]
-     * 以50为中心，高于50为正，低于50为负
-     */
-    private Map<String, Double> normalizeScores(Map<String, Integer> scores) {
-        Map<String, Double> normalized = new HashMap<>();
-
-        for (Map.Entry<String, Integer> entry : scores.entrySet()) {
-            double normalizedValue = (entry.getValue() - 50.0) / 50.0;
-            normalized.put(entry.getKey(), Math.max(-1.0, Math.min(1.0, normalizedValue)));
-        }
-
-        return normalized;
-    }
-
-    /**
-     * 计算年龄匹配分
-     */
-    private int calculateAgeScore(LocalDate date1, LocalDate date2) {
-        if (date1 == null || date2 == null) return 50;
-        int diff = Math.abs(Period.between(date1, date2).getYears());
-        if (diff == 0) return 100;
-        if (diff >= GlobalWeights.MAX_AGE_DIFF_YEARS) return 20;
-        return 100 - (diff * 80 / GlobalWeights.MAX_AGE_DIFF_YEARS);
     }
 
     /**
@@ -342,7 +306,7 @@ public class UserWeightService {
     @Transactional
     public void resetUserWeights(Long userId) {
         UserWeights weights = getUserWeights(userId);
-        weights.updateWeights(GlobalWeights.DEFAULT_WEIGHTS);
+        weights.updateWeights(getBaseWeightsForUser(userId));
         weights.setActionCount(0);
         try {
             userWeightsMapper.updateById(weights);
@@ -358,12 +322,13 @@ public class UserWeightService {
      */
     public Map<String, Object> getWeightStats(Long userId) {
         UserWeights weights = getUserWeights(userId);
+        boolean canUsePersonalized = hasRealOcean(userId) && weights.canUsePersonalizedWeights();
 
         Map<String, Object> stats = new HashMap<>();
         stats.put("userId", userId);
         stats.put("actionCount", weights.getActionCount());
-        stats.put("canUsePersonalizedWeights", weights.canUsePersonalizedWeights());
-        stats.put("weights", weights.getWeightMap());
+        stats.put("canUsePersonalizedWeights", canUsePersonalized);
+        stats.put("weights", canUsePersonalized ? weights.getWeightMap() : getBaseWeightsForUser(userId));
         stats.put("lastUpdated", weights.getLastUpdated());
 
         return stats;
@@ -402,5 +367,10 @@ public class UserWeightService {
         } catch (Exception e) {
             log.warn("Failed to save weight preferences to database for user: {}", userId, e);
         }
+    }
+
+    private boolean hasRealOcean(Long userId) {
+        var portrait = userPortraitService.getPortrait(userId);
+        return portrait != null && Boolean.TRUE.equals(portrait.getHasRealOcean());
     }
 }

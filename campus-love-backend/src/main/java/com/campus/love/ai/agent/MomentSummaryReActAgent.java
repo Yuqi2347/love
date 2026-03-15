@@ -2,15 +2,21 @@ package com.campus.love.ai.agent;
 
 import com.campus.love.ai.service.AiService;
 import com.campus.love.ai.service.YuanFenService;
-import com.campus.love.profile.entity.UserAiProfile;
-import com.campus.love.profile.mapper.UserAiProfileMapper;
+import com.campus.love.common.utils.InterestTagConverter;
+import com.campus.love.profile.entity.UserPortrait;
+import com.campus.love.profile.service.OceanConfidenceService;
+import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 
+import java.math.BigDecimal;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Objects;
 
 /**
  * 心动一刻总结报告 Agent（技术文档 V1.1.0 第 3.3 节）
@@ -27,7 +33,8 @@ public class MomentSummaryReActAgent {
 
     private final AiService aiService;
     private final YuanFenService yuanFenService;
-    private final UserAiProfileMapper userAiProfileMapper;
+    private final UserPortraitService userPortraitService;
+    private final OceanConfidenceService oceanConfidenceService;
     private final UserMapper userMapper;
 
     private static final String SYSTEM_PROMPT = """
@@ -92,47 +99,94 @@ public class MomentSummaryReActAgent {
 
     private String formatUser(User u) {
         if (u == null) return "未知";
+        var p = userPortraitService.getPortrait(u.getId());
+        String interests = InterestTagConverter.getInterestsForDisplay(p != null ? p.getInterestTags() : null, u.getInterests());
         return String.format("%s | %s%s | %s | 兴趣:%s",
                 u.getNickname() != null ? u.getNickname() : "匿名",
                 u.getSchool() != null ? u.getSchool() : "",
                 u.getGrade() != null ? u.getGrade() : "",
                 u.getMajor() != null ? u.getMajor() : "未填",
-                u.getInterests() != null ? u.getInterests() : "未填");
+                interests != null ? interests : "未填");
     }
 
     /** 工具：获取问卷最显著差异和契合点 */
     public QuestionnaireHighlight getQuestionnaireHighlight(Long userAId, Long userBId) {
-        // TODO: 接入 t_moment_profile 32题问卷
-        return new QuestionnaireHighlight("性格与价值观较为契合", List.of("社交风格相近", "生活节奏相似"));
+        UserPortrait a = userPortraitService.getPortrait(userAId);
+        UserPortrait b = userPortraitService.getPortrait(userBId);
+        if (a == null || b == null) {
+            return new QuestionnaireHighlight("问卷信息不足", List.of());
+        }
+        List<String> highlights = new ArrayList<>();
+        if (same(a.getSocialStyle(), b.getSocialStyle())) highlights.add("社交风格相近");
+        if (same(a.getLifeRhythm(), b.getLifeRhythm())) highlights.add("生活节奏相似");
+        if (same(a.getPersonalityBase(), b.getPersonalityBase())) highlights.add("性格底色接近");
+        if (same(a.getFutureLifestyle(), b.getFutureLifestyle())) highlights.add("未来生活方式同频");
+        if (same(a.getConflictStyle(), b.getConflictStyle())) highlights.add("矛盾处理方式一致");
+        if (same(a.getRelationshipCoreValue(), b.getRelationshipCoreValue())) highlights.add("核心价值观较一致");
+        if (same(a.getDateStyle(), b.getDateStyle())) highlights.add("约会方式容易同拍");
+        if (!same(a.getIntimacyPace(), b.getIntimacyPace()) && a.getIntimacyPace() != null && b.getIntimacyPace() != null) {
+            highlights.add("亲密节奏存在互补空间");
+        }
+        if (highlights.isEmpty()) {
+            highlights.add("问卷显示双方属于可磨合型组合");
+        }
+        String summary = highlights.size() >= 3 ? "问卷显示双方在相处节奏上较容易形成默契" : "问卷呈现出一定互补性，适合慢慢磨合";
+        return new QuestionnaireHighlight(summary, highlights.stream().limit(4).toList());
     }
 
-    /** 工具：OCEAN契合分析（仅当双方均有真实OCEAN时） */
+    /** 工具：OCEAN契合分析（使用有效 OCEAN） */
     public OceanCompatibility getOceanCompatibility(Long userAId, Long userBId) {
-        UserAiProfile pa = userAiProfileMapper.selectById(userAId);
-        UserAiProfile pb = userAiProfileMapper.selectById(userBId);
-        if (pa == null || pb == null || !Boolean.TRUE.equals(pa.getHasRealOcean()) || !Boolean.TRUE.equals(pb.getHasRealOcean())) {
+        UserPortrait pa = userPortraitService.getPortrait(userAId);
+        UserPortrait pb = userPortraitService.getPortrait(userBId);
+        if (pa == null || pb == null) {
             return null;
         }
-        // 简化：五维差值加权
-        double e = diff(pa.getOceanEShort(), pb.getOceanEShort());
-        double o = diff(pa.getOceanOShort(), pb.getOceanOShort());
-        double a = diff(pa.getOceanAShort(), pb.getOceanAShort());
-        double c = diff(pa.getOceanCShort(), pb.getOceanCShort());
-        double n = diff(pa.getOceanNShort(), pb.getOceanNShort());
+        Map<String, BigDecimal> aOcean = oceanConfidenceService.getEffectiveOcean(pa);
+        Map<String, BigDecimal> bOcean = oceanConfidenceService.getEffectiveOcean(pb);
+        if (aOcean.isEmpty() || bOcean.isEmpty()) return null;
+        double e = diff(aOcean.get("E"), bOcean.get("E"));
+        double o = diff(aOcean.get("O"), bOcean.get("O"));
+        double a = diff(aOcean.get("A"), bOcean.get("A"));
+        double c = diff(aOcean.get("C"), bOcean.get("C"));
+        double n = diff(aOcean.get("N"), bOcean.get("N"));
         double avg = (e + o + a + c + n) / 5;
         return new OceanCompatibility(avg >= 0.7 ? "高" : avg >= 0.5 ? "中" : "一般", avg);
     }
 
-    private double diff(java.math.BigDecimal a, java.math.BigDecimal b) {
+    private double diff(BigDecimal a, BigDecimal b) {
         if (a == null || b == null) return 0.5;
         double diff = Math.abs(a.doubleValue() - b.doubleValue());
-        return Math.max(0, 1 - diff / 9);
+        return Math.max(0, 1 - diff / 100d);
     }
 
     /** 工具：价值观硬筛选字段详情（Q3.3） */
     public ValueAlignment getValueAlignment(Long userAId, Long userBId) {
-        // TODO: 接入 t_moment_profile.premarital_sex
+        UserPortrait a = userPortraitService.getPortrait(userAId);
+        UserPortrait b = userPortraitService.getPortrait(userBId);
+        if (a == null || b == null) return new ValueAlignment("未知", 0);
+        int sexA = premaritalSexToTier(a.getPremaritalSex());
+        int sexB = premaritalSexToTier(b.getPremaritalSex());
+        if (sexA == 0 || sexB == 0) return new ValueAlignment("信息不足", 0);
+        int diff = Math.abs(sexA - sexB);
+        if (diff >= 3) return new ValueAlignment("冲突", 20);
+        if (diff >= 2) return new ValueAlignment("存在分歧", 20);
+        if (diff == 1) return new ValueAlignment("基本兼容", 0);
         return new ValueAlignment("兼容", 0);
+    }
+
+    private int premaritalSexToTier(String value) {
+        if (value == null) return 0;
+        return switch (value) {
+            case "A" -> 1;
+            case "B" -> 2;
+            case "C" -> 3;
+            case "D" -> 4;
+            default -> 0;
+        };
+    }
+
+    private boolean same(String a, String b) {
+        return a != null && Objects.equals(a, b);
     }
 
     public record QuestionnaireHighlight(String summary, List<String> highlights) {}

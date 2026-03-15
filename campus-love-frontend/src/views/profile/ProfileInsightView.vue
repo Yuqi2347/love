@@ -24,39 +24,60 @@
         <h3 class="card-title">OCEAN 五维人格</h3>
         <p class="card-hint">开放性 · 尽责性 · 外向性 · 宜人性 · 神经质</p>
         <div class="radar-wrap">
-          <svg viewBox="0 0 300 300" class="radar-svg">
+          <svg viewBox="0 0 320 320" class="radar-svg">
             <defs>
               <linearGradient id="radarFill" x1="0%" y1="0%" x2="100%" y2="100%">
-                <stop offset="0%" stop-color="#a78bfa" stop-opacity="0.4" />
-                <stop offset="100%" stop-color="#6366f1" stop-opacity="0.15" />
+                <stop offset="0%" stop-color="#8b5cf6" stop-opacity="0.5" />
+                <stop offset="100%" stop-color="#3b82f6" stop-opacity="0.2" />
               </linearGradient>
+              <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+                <feGaussianBlur stdDeviation="4" result="blur" />
+                <feComposite in="SourceGraphic" in2="blur" operator="over" />
+              </filter>
             </defs>
+            
             <!-- 背景网格 -->
             <g v-for="i in 5" :key="'grid-' + i">
               <polygon
                 :points="gridPoints(i)"
                 fill="none"
-                stroke="rgba(99,102,241,0.2)"
-                stroke-width="0.5"
+                stroke="rgba(148, 163, 184, 0.2)"
+                stroke-width="1"
+                stroke-dasharray="4 4"
               />
             </g>
-            <!-- 数据区域 -->
-            <polygon
-              v-if="radarPoints"
-              :points="radarPoints"
-              fill="url(#radarFill)"
-              stroke="#6366f1"
-              stroke-width="2"
-            />
-            <!-- 顶点标签 -->
+            
+            <!-- 数据区域 (带入场动画) -->
+            <g class="radar-data-group">
+              <polygon
+                v-if="radarPointsStr"
+                :points="radarPointsStr"
+                fill="url(#radarFill)"
+                stroke="#6366f1"
+                stroke-width="2"
+                filter="url(#glow)"
+                class="radar-polygon"
+              />
+              <!-- 数据顶点圆点 -->
+              <circle
+                v-for="(pt, idx) in radarDataPoints"
+                :key="'pt-' + idx"
+                :cx="pt.x"
+                :cy="pt.y"
+                r="4"
+                fill="#fff"
+                stroke="#6366f1"
+                stroke-width="2"
+                class="radar-point"
+                :style="{ animationDelay: `${idx * 0.1}s` }"
+              />
+            </g>
+            
+            <!-- 顶点标签 + 数值 -->
             <g v-for="(pos, idx) in labelPositions" :key="'label-' + idx">
-              <text
-                :x="pos.x"
-                :y="pos.y"
-                class="radar-label"
-                text-anchor="middle"
-              >
-                {{ oceanLabels[idx] ?? '' }}
+              <text :x="pos.x" :y="pos.y" text-anchor="middle" class="radar-text-group">
+                <tspan class="radar-label">{{ oceanLabels[idx] ?? '' }}</tspan>
+                <tspan v-if="oceanValues[idx] != null" :x="pos.x" dy="20" class="radar-value">{{ oceanValues[idx] }}</tspan>
               </text>
             </g>
           </svg>
@@ -100,6 +121,14 @@ const error = ref('')
 
 const oceanLabels = ['开放性', '尽责性', '外向性', '宜人性', '神经质']
 
+const oceanValues = computed(() => {
+  const p = profile.value
+  if (!p) return [null, null, null, null, null]
+  return [p.oceanO, p.oceanC, p.oceanE, p.oceanA, p.oceanN].map(v =>
+    v != null && !Number.isNaN(Number(v)) ? Math.round(Number(v)) : null
+  )
+})
+
 const hasOcean = computed(() => {
   const p = profile.value
   if (!p) return false
@@ -107,10 +136,10 @@ const hasOcean = computed(() => {
   return vals.some(v => v != null && !Number.isNaN(v))
 })
 
-// 雷达图中心 150,150，半径 100
+// 雷达图中心 160,160，半径 100
 function gridPoints(level: number): string {
-  const cx = 150
-  const cy = 150
+  const cx = 160
+  const cy = 160
   const r = (100 / 5) * level
   const pts: string[] = []
   for (let i = 0; i < 5; i++) {
@@ -120,35 +149,47 @@ function gridPoints(level: number): string {
   return pts.join(' ')
 }
 
-const radarPoints = computed(() => {
+const radarDataPoints = computed(() => {
   const p = profile.value
-  if (!p || !hasOcean.value) return ''
+  if (!p || !hasOcean.value) return []
   const vals = [
-    p.oceanO ?? 5,
-    p.oceanC ?? 5,
-    p.oceanE ?? 5,
-    p.oceanA ?? 5,
-    p.oceanN ?? 5,
-  ].map(v => Math.max(0, Math.min(10, Number(v))))
-  const cx = 150
-  const cy = 150
+    p.oceanO ?? 50,
+    p.oceanC ?? 50,
+    p.oceanE ?? 50,
+    p.oceanA ?? 50,
+    p.oceanN ?? 50,
+  ].map(v => Math.max(0, Math.min(100, Number(v))))
+  const cx = 160
+  const cy = 160
   const r = 90
-  const pts: string[] = []
+  const pts = []
   for (let i = 0; i < 5; i++) {
     const angle = (Math.PI * 2 * i) / 5 - Math.PI / 2
-    const vr = ((vals[i] ?? 5) / 10) * r
-    pts.push(`${cx + vr * Math.cos(angle)},${cy + vr * Math.sin(angle)}`)
+    const vr = ((vals[i] ?? 50) / 100) * r
+    pts.push({
+      x: cx + vr * Math.cos(angle),
+      y: cy + vr * Math.sin(angle)
+    })
   }
-  return pts.join(' ')
+  return pts
 })
 
-const labelPositions = [
-  { x: 150, y: 45 },
-  { x: 245, y: 165 },
-  { x: 195, y: 275 },
-  { x: 105, y: 275 },
-  { x: 55, y: 165 },
-]
+const radarPointsStr = computed(() => radarDataPoints.value.map(p => `${p.x},${p.y}`).join(' '))
+
+// 动态计算标签位置
+const labelPositions = computed(() => {
+  const cx = 160
+  const cy = 160
+  const r = 135 // 标签半径
+  return Array.from({ length: 5 }).map((_, i) => {
+    const angle = (Math.PI * 2 * i) / 5 - Math.PI / 2
+    return {
+      x: cx + r * Math.cos(angle),
+      // 微调 Y 轴，让顶部标签稍微高一点，底部标签稍微低一点
+      y: cy + r * Math.sin(angle) + (i === 0 ? -10 : (i === 2 || i === 3 ? 15 : 0))
+    }
+  })
+})
 
 async function loadProfile() {
   loading.value = true
@@ -245,15 +286,26 @@ onMounted(loadProfile)
 .ocean-empty,
 .tags-card {
   background: #fff;
-  border-radius: 16px;
+  border-radius: 20px;
   padding: 24px;
   margin-bottom: 16px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  position: relative;
+  overflow: hidden;
+  
+  &::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0; height: 120px;
+    background: linear-gradient(180deg, rgba(99, 102, 241, 0.03) 0%, rgba(255, 255, 255, 0) 100%);
+    pointer-events: none;
+  }
 }
 
 .card-title {
-  font-size: 17px;
-  font-weight: 700;
+  font-size: 18px;
+  font-weight: 800;
   color: #0f172a;
   margin: 0 0 4px 0;
 }
@@ -271,14 +323,56 @@ onMounted(loadProfile)
 }
 
 .radar-svg {
-  width: 260px;
-  height: 260px;
+  width: 100%;
+  max-width: 320px;
+  height: auto;
+  overflow: visible;
+}
+
+.radar-data-group {
+  transform-origin: 160px 160px;
+  animation: radar-enter 1s cubic-bezier(0.34, 1.56, 0.64, 1) forwards;
+}
+
+.radar-polygon {
+  transition: all 0.5s ease;
+}
+
+.radar-point {
+  opacity: 0;
+  animation: point-enter 0.4s ease forwards;
+}
+
+@keyframes radar-enter {
+  0% { transform: scale(0.5); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes point-enter {
+  0% { transform: scale(0); opacity: 0; }
+  100% { transform: scale(1); opacity: 1; }
 }
 
 .radar-label {
-  font-size: 12px;
-  fill: #475569;
-  font-weight: 500;
+  font-size: 13px;
+  fill: #64748b;
+  font-weight: 600;
+}
+
+.radar-value {
+  font-size: 14px;
+  fill: #6366f1;
+  font-weight: 800;
+}
+
+.radar-text-group {
+  animation: fade-in 0.8s ease forwards;
+  animation-delay: 0.5s;
+  opacity: 0;
+}
+
+@keyframes fade-in {
+  to { opacity: 1; }
 }
 
 .ocean-empty {
@@ -331,10 +425,12 @@ onMounted(loadProfile)
 
 .tag-item {
   padding: 8px 14px;
-  background: linear-gradient(135deg, #f0f9ff 0%, #e0f2fe 100%);
-  color: #0369a1;
+  background: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  color: #334155;
   border-radius: 20px;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 500;
+  border: 1px solid #e2e8f0;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.02);
 }
 </style>

@@ -8,11 +8,13 @@ export interface MomentStatusResponse {
   status: 'NOT_ENROLLED' | 'WAITING' | 'MATCHED' | 'UNMATCHED'
   participantCount: number
   enrollmentOpen: boolean
+  matchedTitle?: string | null
 }
 
 export interface MomentEnrollRequest {
   selfScore: number
   targetGender: 'male' | 'female' | 'any'
+  prioritizeMatching?: boolean
   // 第一步
   socialStyle: string
   lifeRhythm: string
@@ -69,6 +71,7 @@ export interface MomentProfile {
   gradeRangePreference?: string
   gradeRangeMin?: number
   gradeRangeMax?: number
+  prioritizeMatching?: boolean
   partnerPersonality: string
   majorPreference: string
   careerAmbitionPref?: string
@@ -97,6 +100,7 @@ export interface MomentProfile {
 export interface MomentResultResponse {
   matched: boolean
   weekTag: string
+  yuanfenTitle?: string | null
   matchedUserId?: number
   nickname?: string
   avatarUrl?: string | null
@@ -108,14 +112,28 @@ export interface MomentResultResponse {
   mbti?: string | null
   zodiac?: string | null
   age?: number | null
-  totalScore?: number
-  scoreDetail?: {
-    personality: number
-    preference: number
-    lifestyle: number
-    coreValue: number
-  }
-  summary?: string | null
+  complementaryModes?: string[]
+  insightCards?: string[]
+  goldenSentence?: string | null
+  dimensionLabels?: string[]
+  aboutMatchedUser?: string | null
+  confirmStatus?: 'PENDING' | 'BOTH_YUE' | 'ANY_GUANZHU' | 'TIMEOUT_GUANZHU'
+  myChoice?: 'YUE' | 'GUANZHU' | null
+  datePrepUnlocked?: boolean
+}
+
+export interface MomentDatePrepTopic {
+  title: string
+  opener: string
+}
+
+export interface MomentDatePrepResponse {
+  dateSceneType?: string
+  dateSuggestion: string
+  iceBreakTopics: MomentDatePrepTopic[]
+  surpriseIdea: string
+  outfitAdvice: string
+  mindsetAdvice: string
 }
 
 // ==================== API 函数 ====================
@@ -130,6 +148,14 @@ export function enrollMoment(data: MomentEnrollRequest) {
 
 export function getMomentResult() {
   return request.get<ApiResult<MomentResultResponse>>('/moment/result')
+}
+
+export function confirmMomentChoice(choice: 'YUE' | 'GUANZHU') {
+  return request.post<ApiResult<MomentResultResponse>>('/moment/result/confirm', { choice })
+}
+
+export function getMomentDatePrep() {
+  return request.get<ApiResult<MomentDatePrepResponse>>('/moment/result/date-prep')
 }
 
 export function getMomentProfile() {

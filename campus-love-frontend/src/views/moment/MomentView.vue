@@ -64,7 +64,7 @@
           <span v-for="i in 12" :key="i" class="confetti" :style="confettiStyle(i)" />
         </div>
         <div class="matched-icon">💘</div>
-        <h2 class="matched-title">恭喜！找到你的心动对象</h2>
+        <h2 class="matched-title">{{ matchedTitle || '恭喜！找到你的心动对象' }}</h2>
         <p class="matched-desc">本周有人和你特别契合，快去看看吧！</p>
         <button class="btn-hero" @click="$router.push('/moment/result')">
           查看匹配结果
@@ -88,37 +88,15 @@
       </div>
     </div>
 
-    <!-- 管理员控制面板 -->
-    <div v-if="isAdmin && !loading" class="admin-panel">
-      <div class="admin-panel-header" @click="adminExpanded = !adminExpanded">
-        <span>管理员控制台</span>
-        <span class="admin-toggle">{{ adminExpanded ? '收起' : '展开' }}</span>
-      </div>
-      <div v-show="adminExpanded" class="admin-panel-body">
-        <div class="admin-info">
-          <span>周期: <strong>{{ currentWeek }}</strong></span>
-          <span>报名: <strong :class="enrollmentOpen ? 'open' : 'closed'">{{ enrollmentOpen ? '开放中' : '已截止' }}</strong></span>
-          <span>人数: <strong>{{ participantCount }}</strong></span>
-        </div>
-        <p v-if="adminMsg" class="admin-msg" :class="adminMsgType">{{ adminMsg }}</p>
-        <div class="admin-actions">
-          <button class="admin-btn warn" :disabled="!enrollmentOpen || adminLoading" @click="doClose">截止报名</button>
-          <button class="admin-btn primary" :disabled="adminLoading" @click="doTrigger">触发匹配</button>
-          <button class="admin-btn success" :disabled="enrollmentOpen || adminLoading" @click="doReopen">重新开放</button>
-          <button class="admin-btn danger" :disabled="adminLoading" @click="doReset">重置本周</button>
-        </div>
-      </div>
-    </div>
   </div>
 </template>
 
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getMomentStatus, triggerMomentMatching, closeMomentEnrollment, reopenMomentEnrollment, resetMomentWeek } from '@/api/momentApi'
+import { getMomentStatus } from '@/api/momentApi'
 import { useUserStore } from '@/store/userStore'
 
 const userStore = useUserStore()
-const isAdmin = computed(() => userStore.user?.isAdmin || false)
 const profileComplete = computed(() => !!userStore.user?.profileComplete)
 
 const loading = ref(true)
@@ -126,12 +104,7 @@ const status = ref<string>('NOT_ENROLLED')
 const participantCount = ref(0)
 const enrollmentOpen = ref(true)
 const currentWeek = ref('')
-
-// 管理员面板
-const adminExpanded = ref(false)
-const adminLoading = ref(false)
-const adminMsg = ref('')
-const adminMsgType = ref<'success' | 'error'>('success')
+const matchedTitle = ref('')
 
 async function fetchStatus() {
   loading.value = true
@@ -143,60 +116,14 @@ async function fetchStatus() {
       participantCount.value = data.participantCount
       enrollmentOpen.value = data.enrollmentOpen
       currentWeek.value = data.currentWeek
+      matchedTitle.value = data.matchedTitle || ''
     }
   } catch {
     status.value = 'NOT_ENROLLED'
+    matchedTitle.value = ''
   } finally {
     loading.value = false
   }
-}
-
-function showAdminMsg(msg: string, type: 'success' | 'error') {
-  adminMsg.value = msg
-  adminMsgType.value = type
-  setTimeout(() => { adminMsg.value = '' }, 4000)
-}
-
-async function doClose() {
-  adminLoading.value = true
-  try {
-    await closeMomentEnrollment()
-    showAdminMsg('已截止报名', 'success')
-    await fetchStatus()
-  } catch { showAdminMsg('截止报名失败', 'error') }
-  finally { adminLoading.value = false }
-}
-
-async function doTrigger() {
-  adminLoading.value = true
-  try {
-    const res = await triggerMomentMatching()
-    const d = res.data.data
-    showAdminMsg(`匹配完成！配对 ${d?.matchedPairs ?? '?'} 对，未匹配 ${d?.unmatchedUsers ?? '?'} 人`, 'success')
-    await fetchStatus()
-  } catch { showAdminMsg('触发匹配失败', 'error') }
-  finally { adminLoading.value = false }
-}
-
-async function doReopen() {
-  adminLoading.value = true
-  try {
-    await reopenMomentEnrollment()
-    showAdminMsg('已重新开放报名', 'success')
-    await fetchStatus()
-  } catch { showAdminMsg('重新开放失败', 'error') }
-  finally { adminLoading.value = false }
-}
-
-async function doReset() {
-  if (!confirm('确定重置本周活动？将删除所有匹配结果！')) return
-  adminLoading.value = true
-  try {
-    await resetMomentWeek()
-    showAdminMsg('已重置本周活动', 'success')
-    await fetchStatus()
-  } catch { showAdminMsg('重置失败', 'error') }
-  finally { adminLoading.value = false }
 }
 
 function confettiStyle(i: number) {
@@ -554,90 +481,6 @@ onMounted(fetchStatus)
   font-weight: 500;
 
   .encourage-icon { font-size: 18px; }
-}
-
-// ==================== 管理员面板 ====================
-.admin-panel {
-  position: fixed;
-  bottom: 70px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: calc(100% - 32px);
-  max-width: 480px;
-  background: $bg-primary;
-  border-radius: $radius-lg;
-  box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.12);
-  z-index: 100;
-  overflow: hidden;
-}
-
-.admin-panel-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: linear-gradient(135deg, #667eea, #764ba2);
-  color: white;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  user-select: none;
-
-  .admin-toggle {
-    font-size: 12px;
-    opacity: 0.8;
-  }
-}
-
-.admin-panel-body {
-  padding: 16px;
-}
-
-.admin-info {
-  display: flex;
-  gap: 16px;
-  font-size: 13px;
-  color: $text-secondary;
-  margin-bottom: 12px;
-  flex-wrap: wrap;
-
-  strong { color: $text-primary; }
-  .open { color: #67c23a; }
-  .closed { color: #f56c6c; }
-}
-
-.admin-msg {
-  font-size: 13px;
-  padding: 8px 12px;
-  border-radius: $radius-sm;
-  margin-bottom: 12px;
-
-  &.success { background: rgba(#67c23a, 0.1); color: #67c23a; }
-  &.error { background: rgba(#f56c6c, 0.1); color: #f56c6c; }
-}
-
-.admin-actions {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 8px;
-}
-
-.admin-btn {
-  padding: 10px 0;
-  border: none;
-  border-radius: $radius-md;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: opacity 0.2s;
-  color: white;
-
-  &:disabled { opacity: 0.4; cursor: not-allowed; }
-  &:hover:not(:disabled) { opacity: 0.85; }
-  &.primary { background: #409eff; }
-  &.warn { background: #e6a23c; }
-  &.success { background: #67c23a; }
-  &.danger { background: #f56c6c; }
 }
 
 // ==================== 动画 ====================

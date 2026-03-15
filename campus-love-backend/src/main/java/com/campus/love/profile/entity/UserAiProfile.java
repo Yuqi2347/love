@@ -23,6 +23,7 @@ public class UserAiProfile {
     private BigDecimal oceanEShort;
     private BigDecimal oceanAShort;
     private BigDecimal oceanNShort;
+    private String oceanConfidence;  // JSON
     private Boolean hasRealOcean;
     private String naturalLanguageTags;  // JSON
     private String loveAttachmentType;

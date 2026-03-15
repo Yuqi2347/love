@@ -62,12 +62,7 @@ export const Q2_2_APPEARANCE: QuestionOption[] = [
   { value: 'C', label: '颜值无关，完全不在意外貌，更看重内在和相处的感觉', emoji: '💬' },
 ]
 
-export const Q2_3_AGE_RANGE: QuestionOption[] = [
-  { value: 'A', label: '比我大 1–2 岁', emoji: '👆' },
-  { value: 'B', label: '和我同龄（±1岁）', emoji: '🤜🤛' },
-  { value: 'C', label: '比我小 1–2 岁', emoji: '👇' },
-  { value: 'D', label: '年龄不是问题，合适最重要', emoji: '💯' },
-]
+// 年龄范围已改为滑块选择（agePreferenceMin/Max），不再使用选项
 
 export const Q2_4_GRADE_RANGE: QuestionOption[] = [
   { value: 'A', label: '学长/学姐型，比自己大 1-2 个年级', emoji: '👆' },
@@ -236,7 +231,7 @@ export const STEP1_QUESTIONS: Question[] = [
 
 export const STEP2_QUESTIONS: Question[] = [
   { key: 'appearanceRequirement', title: '你对另一半的颜值要求？', options: Q2_2_APPEARANCE },
-  { key: 'ageRangePreference', title: '年龄方面，你可以接受的范围？', options: Q2_3_AGE_RANGE, multi: true },
+  // 年龄范围改为滑块，见 MomentEnrollView 中的 age-range-slider
   { key: 'gradeRangePreference', title: '年级方面，你的偏好是？', options: Q2_4_GRADE_RANGE },
   { key: 'partnerPersonality', title: '你更希望对方是？', options: Q2_5_PARTNER_PERSONALITY },
   { key: 'majorPreference', title: '关于专业背景，你的偏好是？', options: Q2_6_MAJOR_PREF },
@@ -261,7 +256,7 @@ export const STEP3_QUESTIONS: Question[] = [
   { key: 'humanNatureView', title: '你对人性的看法？', options: Q3_12_HUMAN_NATURE },
   { key: 'breakupView', title: '当关系出现裂痕时，你会？', options: Q3_13_BREAKUP },
   { key: 'careerLoveConflict', title: '事业与爱情冲突时，你会？', options: Q3_14_CAREER_LOVE },
-  { key: 'emotionPriority', title: '亲情、友情、爱情，你的排序是？', options: Q3_15_EMOTION_PRIORITY },
+  { key: 'emotionPriority', title: '亲情、友情、爱情，你认为最重要的是？', options: Q3_15_EMOTION_PRIORITY },
   { key: 'lifeGoalPriority', title: '人生目标优先级，你更看重？', options: Q3_16_LIFE_GOAL },
 ]
 

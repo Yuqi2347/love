@@ -4,11 +4,18 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.campus.love.moment.entity.MomentEnrollment;
 import com.campus.love.moment.enums.MomentPool;
+import com.campus.love.moment.entity.MomentMatchConfig;
+import com.campus.love.moment.entity.MomentMatchConfirm;
 import com.campus.love.moment.entity.MomentMatchResult;
+import com.campus.love.moment.entity.MomentPairScore;
 import com.campus.love.moment.entity.MomentProfile;
 import com.campus.love.moment.mapper.MomentEnrollmentMapper;
+import com.campus.love.moment.mapper.MomentMatchConfirmMapper;
+import com.campus.love.moment.mapper.MomentPairScoreMapper;
 import com.campus.love.moment.mapper.MomentMatchResultMapper;
 import com.campus.love.moment.mapper.MomentProfileMapper;
+import com.campus.love.profile.entity.UserPortrait;
+import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -19,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 心动时刻管理员服务：截止/开放报名、触发匹配、重置。
@@ -30,10 +38,15 @@ public class MomentAdminService {
 
     private final MomentEnrollmentMapper enrollmentMapper;
     private final MomentMatchResultMapper matchResultMapper;
+    private final MomentMatchConfirmMapper matchConfirmMapper;
+    private final MomentPairScoreMapper pairScoreMapper;
     private final MomentProfileMapper profileMapper;
     private final UserMapper userMapper;
     private final MomentMatcher matcher;
     private final MomentEnrollmentState enrollmentState;
+    private final MomentMatchConfigService matchConfigService;
+    private final UserPortraitService userPortraitService;
+    private final MomentResultContentService momentResultContentService;
     private final ObjectMapper objectMapper;
 
     public Map<String, Object> closeEnrollment(String weekTag, String currentWeekTag) {
@@ -89,82 +102,155 @@ public class MomentAdminService {
             return Map.of("message", "本周无待匹配用户", "weekTag", weekTag);
         }
 
+        matchResultMapper.delete(new LambdaQueryWrapper<MomentMatchResult>()
+                .eq(MomentMatchResult::getWeekTag, weekTag));
+        pairScoreMapper.delete(new LambdaQueryWrapper<MomentPairScore>()
+                .eq(MomentPairScore::getWeekTag, weekTag));
+
+        Map<Long, User> userCache = new HashMap<>();
+        Map<Long, MomentProfile> profileCache = new HashMap<>();
+        Map<Long, UserPortrait> portraitCache = new HashMap<>();
         Map<String, List<MomentMatcher.Candidate>> poolCandidates = new HashMap<>();
 
-        for (MomentEnrollment e : enrollments) {
-            User user = userMapper.selectById(e.getUserId());
-            MomentProfile profile = profileMapper.selectOne(
-                    new LambdaQueryWrapper<MomentProfile>()
-                            .eq(MomentProfile::getUserId, e.getUserId())
-            );
-
-            if (user == null || profile == null) continue;
-
-            String pool = e.getPool();
-            poolCandidates.computeIfAbsent(pool, k -> new ArrayList<>())
-                    .add(new MomentMatcher.Candidate(user, profile));
+        for (MomentEnrollment enrollment : enrollments) {
+            Long userId = enrollment.getUserId();
+            User user = userCache.computeIfAbsent(userId, userMapper::selectById);
+            MomentProfile profile = profileCache.computeIfAbsent(userId, id -> profileMapper.selectOne(
+                    new LambdaQueryWrapper<MomentProfile>().eq(MomentProfile::getUserId, id)
+            ));
+            UserPortrait portrait = portraitCache.computeIfAbsent(userId, userPortraitService::getPortrait);
+            if (user == null || profile == null) {
+                continue;
+            }
+            poolCandidates.computeIfAbsent(enrollment.getPool(), key -> new ArrayList<>())
+                    .add(new MomentMatcher.Candidate(user, profile, portrait));
         }
 
-        int totalMatched = 0;
-        int totalUnmatched = 0;
+        MomentMatchConfig config = matchConfigService.getConfig();
+        int totalMatchedPairs = 0;
         String finalWeekTag = weekTag;
         Set<Long> globalMatchedUserIds = new HashSet<>();
+        Map<String, Map<String, Object>> poolSummary = new LinkedHashMap<>();
 
-        for (Map.Entry<String, List<MomentMatcher.Candidate>> entry : poolCandidates.entrySet()) {
-            String pool = entry.getKey();
-            List<MomentMatcher.Candidate> candidates = entry.getValue();
-            // 排除已在其他池匹配成功的用户，避免重复匹配
-            candidates = candidates.stream()
+        for (String pool : matcher.poolOrder()) {
+            List<MomentMatcher.Candidate> candidates = poolCandidates.getOrDefault(pool, List.of()).stream()
                     .filter(c -> !globalMatchedUserIds.contains(c.user().getId()))
                     .toList();
-            boolean isMFPool = MomentPool.MF.getCode().equals(pool);
+            if (candidates.isEmpty()) {
+                continue;
+            }
 
-            List<MomentMatcher.MatchPair> pairs = matcher.match(candidates, isMFPool);
-
+            MomentMatcher.PoolMatchResult poolResult = matcher.match(candidates, pool, config);
+            List<MomentMatcher.MatchPair> pairs = poolResult.matches();
             Set<Long> matchedUserIds = new HashSet<>();
+            Set<String> matchedPairKeys = new HashSet<>();
             for (MomentMatcher.MatchPair pair : pairs) {
+                long userIdA = Math.min(pair.userIdA(), pair.userIdB());
+                long userIdB = Math.max(pair.userIdA(), pair.userIdB());
+                User userA = userCache.get(userIdA);
+                User userB = userCache.get(userIdB);
+                MomentProfile profileA = profileCache.get(userIdA);
+                MomentProfile profileB = profileCache.get(userIdB);
+                UserPortrait portraitA = portraitCache.get(userIdA);
+                UserPortrait portraitB = portraitCache.get(userIdB);
                 MomentMatchResult result = new MomentMatchResult();
                 result.setWeekTag(finalWeekTag);
                 result.setPool(pool);
-                result.setUserIdA(pair.userIdA());
-                result.setUserIdB(pair.userIdB());
+                result.setUserIdA(userIdA);
+                result.setUserIdB(userIdB);
                 result.setTotalScore(BigDecimal.valueOf(pair.totalScore()));
                 try {
                     result.setScoreDetail(objectMapper.writeValueAsString(pair.scoreDetail()));
                 } catch (Exception ex) {
                     log.warn("序列化分数明细失败", ex);
                 }
+                momentResultContentService.fillPrecomputedContent(
+                        result, userA, userB, profileA, profileB, portraitA, portraitB, pair.scoreDetail()
+                );
                 matchResultMapper.insert(result);
 
-                matchedUserIds.add(pair.userIdA());
-                matchedUserIds.add(pair.userIdB());
+                MomentMatchConfirm confirm = new MomentMatchConfirm();
+                confirm.setMatchResultId(result.getId());
+                confirm.setUserIdA(userIdA);
+                confirm.setUserIdB(userIdB);
+                matchConfirmMapper.insert(confirm);
+
+                matchedUserIds.add(userIdA);
+                matchedUserIds.add(userIdB);
+                matchedPairKeys.add(pairKey(userIdA, userIdB));
+            }
+
+            for (MomentMatcher.PairEvaluation evaluation : poolResult.evaluations()) {
+                long userIdA = Math.min(evaluation.userIdA(), evaluation.userIdB());
+                long userIdB = Math.max(evaluation.userIdA(), evaluation.userIdB());
+                MomentPairScore pairScore = new MomentPairScore();
+                pairScore.setWeekTag(finalWeekTag);
+                pairScore.setPool(pool);
+                pairScore.setUserIdA(userIdA);
+                pairScore.setUserIdB(userIdB);
+                pairScore.setScore(BigDecimal.valueOf(evaluation.totalScore()));
+                try {
+                    pairScore.setScoreDetail(objectMapper.writeValueAsString(evaluation.scoreDetail()));
+                } catch (Exception ex) {
+                    log.warn("序列化候选对分数明细失败", ex);
+                }
+                pairScore.setHardFilterPassed(evaluation.hardFilterPassed());
+                pairScore.setHardFilterReason(evaluation.hardFilterReason());
+                pairScore.setSoftPenalty(evaluation.softPenalty());
+                pairScore.setSoftPenaltyReason(evaluation.softPenaltyReason());
+                pairScore.setThresholdOffsetA(evaluation.thresholdOffsetA());
+                pairScore.setThresholdOffsetB(evaluation.thresholdOffsetB());
+                pairScore.setEffectiveThresholdA(evaluation.effectiveThresholdA());
+                pairScore.setEffectiveThresholdB(evaluation.effectiveThresholdB());
+                pairScore.setThresholdRequired(evaluation.thresholdRequired());
+                pairScore.setIncludedByThreshold(evaluation.includedByThreshold());
+                pairScore.setMatched(matchedPairKeys.contains(pairKey(userIdA, userIdB)));
+                pairScoreMapper.insert(pairScore);
             }
             globalMatchedUserIds.addAll(matchedUserIds);
+            totalMatchedPairs += pairs.size();
 
-            for (MomentMatcher.Candidate c : candidates) {
-                Long uid = c.user().getId();
-                String newStatus = matchedUserIds.contains(uid)
-                        ? MomentEnrollment.STATUS_MATCHED
-                        : MomentEnrollment.STATUS_UNMATCHED;
-
-                enrollmentMapper.update(null, new LambdaUpdateWrapper<MomentEnrollment>()
-                        .eq(MomentEnrollment::getUserId, uid)
-                        .eq(MomentEnrollment::getWeekTag, finalWeekTag)
-                        .set(MomentEnrollment::getStatus, newStatus)
-                );
-
-                if (matchedUserIds.contains(uid)) totalMatched++;
-                else totalUnmatched++;
-            }
-
+            poolSummary.put(pool, Map.of(
+                    "participants", candidates.size(),
+                    "matchedPairs", pairs.size(),
+                    "unmatchedUsers", Math.max(0, candidates.size() - pairs.size() * 2)
+            ));
             log.info("池子 {} 匹配完成: {}人参与, {}对成功", pool, candidates.size(), pairs.size());
+        }
+
+        Set<Long> uniqueUserIds = enrollments.stream()
+                .map(MomentEnrollment::getUserId)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        int unmatchedUsers = 0;
+        int maxStack = config.getPriorityMaxStack() != null ? config.getPriorityMaxStack() : MomentMatchConfig.DEFAULT_PRIORITY_MAX_STACK;
+        for (Long userId : uniqueUserIds) {
+            boolean matched = globalMatchedUserIds.contains(userId);
+            enrollmentMapper.update(null, new LambdaUpdateWrapper<MomentEnrollment>()
+                    .eq(MomentEnrollment::getUserId, userId)
+                    .eq(MomentEnrollment::getWeekTag, finalWeekTag)
+                    .set(MomentEnrollment::getStatus, matched ? MomentEnrollment.STATUS_MATCHED : MomentEnrollment.STATUS_UNMATCHED)
+            );
+
+            User user = userCache.get(userId);
+            if (user != null) {
+                user.setMomentPriorityCount(matched
+                        ? 0
+                        : Math.min(user.getMomentPriorityCountOrDefault() + 1, maxStack));
+                userMapper.updateById(user);
+            }
+            if (!matched) {
+                unmatchedUsers++;
+            }
         }
 
         return Map.of(
                 "weekTag", weekTag,
-                "totalParticipants", enrollments.size(),
-                "matched", totalMatched,
-                "unmatched", totalUnmatched
+                "totalParticipants", uniqueUserIds.size(),
+                "matchedPairs", totalMatchedPairs,
+                "matchedUsers", globalMatchedUserIds.size(),
+                "unmatchedUsers", unmatchedUsers,
+                "baseThreshold", config.getBaseThreshold(),
+                "poolSummary", poolSummary
         );
     }
 
@@ -174,9 +260,26 @@ public class MomentAdminService {
             weekTag = currentWeekTag;
         }
 
+        List<Long> matchResultIds = matchResultMapper.selectList(
+                        new LambdaQueryWrapper<MomentMatchResult>()
+                                .eq(MomentMatchResult::getWeekTag, weekTag))
+                .stream()
+                .map(MomentMatchResult::getId)
+                .toList();
+
+        if (!matchResultIds.isEmpty()) {
+            matchConfirmMapper.delete(new LambdaQueryWrapper<MomentMatchConfirm>()
+                    .in(MomentMatchConfirm::getMatchResultId, matchResultIds));
+        }
+
         matchResultMapper.delete(
                 new LambdaQueryWrapper<MomentMatchResult>()
                         .eq(MomentMatchResult::getWeekTag, weekTag)
+        );
+
+        pairScoreMapper.delete(
+                new LambdaQueryWrapper<MomentPairScore>()
+                        .eq(MomentPairScore::getWeekTag, weekTag)
         );
 
         enrollmentMapper.delete(
@@ -188,5 +291,9 @@ public class MomentAdminService {
 
         log.info("管理员重置本周活动: weekTag={}", weekTag);
         return Map.of("weekTag", weekTag, "message", "本周活动已重置，所有数据已清除，报名已重新开放");
+    }
+
+    private String pairKey(long userIdA, long userIdB) {
+        return userIdA < userIdB ? userIdA + "_" + userIdB : userIdB + "_" + userIdA;
     }
 }

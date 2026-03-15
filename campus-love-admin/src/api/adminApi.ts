@@ -44,6 +44,12 @@ export interface AdminFeedItem {
 export interface DashboardStats {
   userTotal: number
   inviteTotal: number
+  feedTotal: number
+  activeUsersToday: number
+  activeUsers7d: number
+  profileCompleteCount: number
+  newUsersToday: number
+  embeddingCount: number
 }
 
 export interface PageResult<T> {
@@ -151,6 +157,76 @@ export interface MomentEnrollmentItem {
   createdAt: string
 }
 
+export interface MomentMatchConfig {
+  id: number
+  baseThreshold: number
+  prioritizeOffset: number
+  priorityOffset: number
+  priorityMaxStack: number
+}
+
+export interface MomentHistogramBucket {
+  label: string
+  count: number
+}
+
+export interface MomentPoolStat {
+  pool: string
+  participants: number
+  matchedPairs: number
+  unmatchedUsers: number
+}
+
+export interface MomentReasonStat {
+  reason: string
+  count: number
+}
+
+export interface MomentFilteredPairSample {
+  pool: string
+  userIdA: number
+  userIdB: number
+  score: number
+  thresholdRequired: number
+}
+
+export interface MomentDashboardData {
+  weekTag: string
+  participantCount: number
+  matchedUsers: number
+  unmatchedUsers: number
+  successRate: number
+  currentThreshold: number
+  matchedScoreHistogram: MomentHistogramBucket[]
+  unmatchedBestScoreHistogram: MomentHistogramBucket[]
+  filteredPairCount: number
+  poolStats: MomentPoolStat[]
+  hardFilterStats: MomentReasonStat[]
+  softPenaltyStats: MomentReasonStat[]
+  unmatchedReasonStats: MomentReasonStat[]
+  filteredPairSamples: MomentFilteredPairSample[]
+}
+
+export interface MomentUnmatchedUser {
+  userId: number
+  nickname?: string | null
+  pool: string
+  highestAvailableScore?: number | null
+  reason: string
+  priorityCount: number
+  prioritizeMatching: boolean
+}
+
+export interface MomentSimulationResponse {
+  weekTag: string
+  threshold: number
+  matchedPairs: number
+  matchedUsers: number
+  unmatchedUsers: number
+  successRate: number
+  deltaPairs: number
+}
+
 export function getMomentStatus() {
   return request.get<ApiResult<MomentStatusInfo>>('/moment/status')
 }
@@ -177,4 +253,28 @@ export function resetMomentWeek(weekTag?: string) {
   return request.post<ApiResult<Record<string, unknown>>>('/moment/admin/reset', null, {
     params: weekTag ? { weekTag } : {},
   })
+}
+
+export function getMomentMatchDashboard(weekTag?: string) {
+  return request.get<ApiResult<MomentDashboardData>>('/moment/admin/dashboard', {
+    params: weekTag ? { weekTag } : {},
+  })
+}
+
+export function getMomentMatchUnmatched(weekTag?: string) {
+  return request.get<ApiResult<MomentUnmatchedUser[]>>('/moment/admin/dashboard/unmatched', {
+    params: weekTag ? { weekTag } : {},
+  })
+}
+
+export function simulateMomentMatchDashboard(data: { weekTag: string; threshold: number }) {
+  return request.post<ApiResult<MomentSimulationResponse>>('/moment/admin/dashboard/simulate', data)
+}
+
+export function getMomentMatchConfig() {
+  return request.get<ApiResult<MomentMatchConfig>>('/moment/admin/config')
+}
+
+export function updateMomentMatchConfig(data: Omit<MomentMatchConfig, 'id'>) {
+  return request.put<ApiResult<MomentMatchConfig>>('/moment/admin/config', data)
 }

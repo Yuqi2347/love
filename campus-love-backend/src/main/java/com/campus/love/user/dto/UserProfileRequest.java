@@ -25,7 +25,10 @@ public class UserProfileRequest {
     private String grade;
     private String mbti;
     private String bio;
+    /** 旧格式：逗号分隔 */
     private String interests;
+    /** 新格式 JSON：{"dimension":[{"code":"tag_xxx","sharing":0.5,"intensity":0.5}]} */
+    private String interestTags;
     /** 朋友圈展示设置：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见 */
     private String feedVisibility;
 }

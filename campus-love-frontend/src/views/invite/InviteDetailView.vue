@@ -8,7 +8,7 @@
     <div v-else-if="invite" class="detail-content">
       <!-- 顶部返回与操作 -->
       <div class="detail-header">
-        <button class="btn-text" @click="$router.back()">
+        <button class="btn-text" @click="handleBack">
           <el-icon><ArrowLeft /></el-icon>
         </button>
         <div class="header-actions">
@@ -307,7 +307,7 @@
       </div>
 
       <!-- Rating Dialog -->
-      <el-dialog v-model="showRatingDialog" :title="ratingDialogTitle" width="400px" :close-on-click-modal="false" @closed="resetRatingForm">
+      <el-dialog v-model="showRatingDialog" :title="ratingDialogTitle" width="400px" :close-on-click-modal="false" destroy-on-close @closed="resetRatingForm">
         <!-- 发起人：先选择要评价的参与者 -->
         <div v-if="isCreator && !ratingForm.ratedUserId" class="rating-participant-list">
           <p class="rating-hint">选择要评价的参与者</p>
@@ -406,6 +406,14 @@ const router = useRouter()
 const userStore = useUserStore()
 const inviteStore = useInviteStore()
 const chatStore = useChatStore()
+
+function handleBack() {
+  if (route.query.from === 'notify') {
+    router.push({ path: '/chat', query: { tab: 'invites' } })
+  } else {
+    router.back()
+  }
+}
 const { currentMessages: chatCurrentMessages } = storeToRefs(chatStore)
 
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f0f2f5" width="40" height="40" rx="20"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="18">👤</text></svg>'
@@ -763,7 +771,8 @@ function openRatingDialog() {
   if (isCreator.value && participantsToRate.value.length > 0) {
     // 发起人：若只有一个参与者则直接选中
     if (participantsToRate.value.length === 1) {
-      ratingForm.value.ratedUserId = participantsToRate.value[0].userId
+      const participant = participantsToRate.value[0]
+      if (participant) ratingForm.value.ratedUserId = participant.userId
     }
   } else if (!isCreator.value) {
     // 参与者：评价发起人

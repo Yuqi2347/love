@@ -31,6 +31,7 @@ public class MomentProfile {
     private String gradeRangePreference;            // 2.4 年级范围
     private Integer gradeRangeMin;
     private Integer gradeRangeMax;
+    private Boolean prioritizeMatching;             // 是否开启优先匹配
     private String partnerPersonality;               // 2.5 性格偏好
     private String majorPreference;                  // 2.6 专业偏好
     private String careerAmbitionPref;               // 2.7 事业心偏好

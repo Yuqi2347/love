@@ -4,23 +4,19 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
-import com.campus.love.common.utils.BaziCalculator;
+import com.campus.love.common.utils.InterestTagConverter;
 import com.campus.love.follow.entity.Follow;
 import com.campus.love.follow.mapper.FollowMapper;
 import com.campus.love.match.constants.GlobalWeights;
-import com.campus.love.match.constants.MbtiCompatibilityMatrix;
 import com.campus.love.match.constants.ZodiacCompatibilityTable;
 import com.campus.love.match.dto.MatchResultResponse;
+import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
-import java.time.Period;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -29,8 +25,8 @@ import java.util.stream.Collectors;
  *
  * 核心升级：
  * 1. 支持用户个性化动态权重
- * 2. 使用完整四柱八字算法
- * 3. 使用7档专业匹配
+ * 2. 采用 OCEAN/兴趣/价值观/年龄年级/专业/星座 六维模型
+ * 3. 支持真实 OCEAN 与冷启动双权重集
  * 4. 支持权重来源标识（默认/个性化）
  *
  * @author Campus Love Team
@@ -43,9 +39,13 @@ public class MatchService {
 
     private final UserMapper userMapper;
     private final FollowMapper followMapper;
+    private final UserPortraitService userPortraitService;
     private final UserWeightService userWeightService;
     private final InterestMatcher interestMatcher;
     private final MajorCategoryMatcher majorCategoryMatcher;
+    private final OceanMatcher oceanMatcher;
+    private final ValuesMatcher valuesMatcher;
+    private final AgeGradeMatcher ageGradeMatcher;
     private final MatchSummaryService matchSummaryService;
 
     /**
@@ -116,41 +116,55 @@ public class MatchService {
     }
 
     /**
-     * 计算匹配度（使用个性化权重）
-     * V1.1.0：双方任一 bazi_unknown=true 时八字权重清零，使用 WITHOUT_BAZI 配置
+     * 计算匹配度（使用当前用户有效权重）
      */
     private MatchResultResponse calculateMatch(User self, User target, Map<String, Double> weights) {
-        int interestScore = calculateInterestScore(self.getInterests(), target.getInterests());
-        int mbtiScore = MbtiCompatibilityMatrix.getCompatibility(self.getMbti(), target.getMbti());
+        var selfPortrait = userPortraitService.getPortrait(self.getId());
+        var targetPortrait = userPortraitService.getPortrait(target.getId());
+        String selfInterestTags = selfPortrait != null ? selfPortrait.getInterestTags() : null;
+        String targetInterestTags = targetPortrait != null ? targetPortrait.getInterestTags() : null;
+        String selfForMatch = InterestTagConverter.getInterestsForMatching(selfInterestTags, self.getInterests());
+        String targetForMatch = InterestTagConverter.getInterestsForMatching(targetInterestTags, target.getInterests());
+        String selfForDisplay = InterestTagConverter.getInterestsForDisplay(selfInterestTags, self.getInterests());
+        String targetForDisplay = InterestTagConverter.getInterestsForDisplay(targetInterestTags, target.getInterests());
+
+        int oceanScore = oceanMatcher.calculateOceanScore(selfPortrait, targetPortrait);
+        int interestScore = calculateInterestScore(selfForMatch, targetForMatch);
+        OptionalInt valuesScoreOptional = valuesMatcher.calculateValuesScore(selfPortrait, targetPortrait);
+        Integer valuesScore = valuesScoreOptional.isPresent() ? valuesScoreOptional.getAsInt() : null;
+        int ageGradeScore = ageGradeMatcher.calculateAgeGradeScore(self, target);
         int zodiacScore = ZodiacCompatibilityTable.getCompatibility(self.getZodiac(), target.getZodiac());
-        // 八字：任一方 bazi_unknown 则不参与计算；同性用中性分
-        boolean baziAvailable = !Boolean.TRUE.equals(self.getBaziUnknown()) && !Boolean.TRUE.equals(target.getBaziUnknown());
-        boolean isSameSex = self.getGender() != null && self.getGender().equals(target.getGender());
-        int baziScore = !baziAvailable ? 50 : (isSameSex ? 50 : calculateBaziScore(self.getBirthDate(), self.getBirthTime(), target.getBirthDate(), target.getBirthTime()));
         int majorScore = calculateMajorScore(self.getMajor(), target.getMajor());
-        int ageScore = calculateAgeScore(self.getBirthDate(), target.getBirthDate());
 
-        // bazi_unknown 时使用 WITHOUT_BAZI 权重
-        Map<String, Double> effectiveWeights = baziAvailable ? weights : GlobalWeights.WITHOUT_BAZI;
+        Map<String, Double> effectiveWeights = new HashMap<>(weights);
+        if (valuesScore == null) {
+            effectiveWeights.put(
+                    "interest",
+                    effectiveWeights.getOrDefault("interest", GlobalWeights.getDefaultWeight("interest"))
+                            + effectiveWeights.getOrDefault("values", GlobalWeights.getDefaultWeight("values"))
+            );
+            effectiveWeights.put("values", 0.0);
+        }
+        effectiveWeights = GlobalWeights.normalizeWeights(effectiveWeights);
 
-        int totalScore = (int) (
+        int totalScore = (int) Math.round(
+                oceanScore * effectiveWeights.getOrDefault("ocean", GlobalWeights.getDefaultWeight("ocean")) +
                 interestScore * effectiveWeights.getOrDefault("interest", GlobalWeights.getDefaultWeight("interest")) +
-                mbtiScore * effectiveWeights.getOrDefault("mbti", GlobalWeights.getDefaultWeight("mbti")) +
+                (valuesScore != null ? valuesScore : 50) * effectiveWeights.getOrDefault("values", GlobalWeights.getDefaultWeight("values")) +
+                ageGradeScore * effectiveWeights.getOrDefault("age_grade", GlobalWeights.getDefaultWeight("age_grade")) +
                 zodiacScore * effectiveWeights.getOrDefault("zodiac", GlobalWeights.getDefaultWeight("zodiac")) +
-                baziScore * effectiveWeights.getOrDefault("bazi", GlobalWeights.getDefaultWeight("bazi")) +
-                majorScore * effectiveWeights.getOrDefault("major", GlobalWeights.getDefaultWeight("major")) +
-                ageScore * effectiveWeights.getOrDefault("age", GlobalWeights.getDefaultWeight("age"))
+                majorScore * effectiveWeights.getOrDefault("major", GlobalWeights.getDefaultWeight("major"))
         );
 
         MatchResultResponse.MatchDetail detail = MatchResultResponse.MatchDetail.builder()
+                .oceanScore(oceanScore)
                 .interestScore(interestScore)
-                .mbtiScore(mbtiScore)
+                .valuesScore(valuesScore)
+                .ageGradeScore(ageGradeScore)
                 .zodiacScore(zodiacScore)
-                .baziScore(baziAvailable ? baziScore : null)
                 .majorScore(majorScore)
-                .ageScore(ageScore)
                 .build();
-        String aiSummary = matchSummaryService.generateOneLiner(detail, self.getInterests(), target.getInterests());
+        String aiSummary = matchSummaryService.generateOneLiner(detail, selfForDisplay, targetForDisplay);
 
         return MatchResultResponse.builder()
                 .userId(target.getId())
@@ -163,7 +177,7 @@ public class MatchService {
                 .mbti(target.getMbti())
                 .zodiac(target.getZodiac())
                 .bio(target.getBio())
-                .interests(target.getInterests())
+                .interests(targetForDisplay)
                 .matchScore(totalScore)
                 .aiSummary(aiSummary)
                 .detail(detail)
@@ -178,38 +192,10 @@ public class MatchService {
     }
 
     /**
-     * 计算八字匹配度（使用完整四柱算法）
-     */
-    private int calculateBaziScore(LocalDate date1, LocalTime time1, LocalDate date2, LocalTime time2) {
-        LocalDateTime birth1 = null;
-        LocalDateTime birth2 = null;
-
-        if (date1 != null) {
-            birth1 = LocalDateTime.of(date1, time1 != null ? time1 : LocalTime.NOON);
-        }
-        if (date2 != null) {
-            birth2 = LocalDateTime.of(date2, time2 != null ? time2 : LocalTime.NOON);
-        }
-
-        return BaziCalculator.calculateHunYinScore(birth1, birth2);
-    }
-
-    /**
      * 计算专业匹配度（使用MajorCategoryMatcher 7档评分）
      */
     private int calculateMajorScore(String major1, String major2) {
         return majorCategoryMatcher.calculateMajorScore(major1, major2);
-    }
-
-    /**
-     * 计算年龄匹配度
-     */
-    private int calculateAgeScore(LocalDate date1, LocalDate date2) {
-        if (date1 == null || date2 == null) return 50;
-        int diff = Math.abs(Period.between(date1, date2).getYears());
-        if (diff == 0) return 100;
-        if (diff >= GlobalWeights.MAX_AGE_DIFF_YEARS) return 20;
-        return 100 - (diff * 80 / GlobalWeights.MAX_AGE_DIFF_YEARS);
     }
 
     // ==================== 兼容性方法 ====================
@@ -224,7 +210,7 @@ public class MatchService {
         if (currentUser == null || targetUser == null) {
             throw new BusinessException(ResultCode.USER_NOT_FOUND);
         }
-        return calculateMatch(currentUser, targetUser, GlobalWeights.DEFAULT_WEIGHTS);
+        return calculateMatch(currentUser, targetUser, userWeightService.getBaseWeightsForUser(currentUserId));
     }
 
     /**

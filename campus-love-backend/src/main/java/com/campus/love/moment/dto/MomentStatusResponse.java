@@ -10,4 +10,5 @@ public class MomentStatusResponse {
     private String status;            // NOT_ENROLLED / WAITING / MATCHED / UNMATCHED
     private Integer participantCount; // 本周报名人数
     private boolean enrollmentOpen;   // 本周是否仍可报名
+    private String matchedTitle;      // 已匹配时的缘分标题
 }

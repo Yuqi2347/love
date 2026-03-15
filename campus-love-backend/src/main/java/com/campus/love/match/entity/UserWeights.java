@@ -36,9 +36,9 @@ public class UserWeights {
     private BigDecimal weightInterest;
 
     /**
-     * MBTI权重
+     * OCEAN权重
      */
-    private BigDecimal weightMbti;
+    private BigDecimal weightOcean;
 
     /**
      * 星座权重
@@ -46,9 +46,9 @@ public class UserWeights {
     private BigDecimal weightZodiac;
 
     /**
-     * 八字权重
+     * 价值观权重
      */
-    private BigDecimal weightBazi;
+    private BigDecimal weightValues;
 
     /**
      * 专业权重
@@ -56,9 +56,9 @@ public class UserWeights {
     private BigDecimal weightMajor;
 
     /**
-     * 年龄权重
+     * 年龄/年级权重
      */
-    private BigDecimal weightAge;
+    private BigDecimal weightAgeGrade;
 
     /**
      * 累计行为次数
@@ -81,15 +81,16 @@ public class UserWeights {
     /**
      * 创建默认权重对象
      */
-    public static UserWeights defaultWeights(Long userId) {
+    public static UserWeights defaultWeights(Long userId, boolean hasRealOcean) {
         UserWeights weights = new UserWeights();
         weights.setUserId(userId);
-        weights.setWeightInterest(BigDecimal.valueOf(GlobalWeights.getDefaultWeight("interest")));
-        weights.setWeightMbti(BigDecimal.valueOf(GlobalWeights.getDefaultWeight("mbti")));
-        weights.setWeightZodiac(BigDecimal.valueOf(GlobalWeights.getDefaultWeight("zodiac")));
-        weights.setWeightBazi(BigDecimal.valueOf(GlobalWeights.getDefaultWeight("bazi")));
-        weights.setWeightMajor(BigDecimal.valueOf(GlobalWeights.getDefaultWeight("major")));
-        weights.setWeightAge(BigDecimal.valueOf(GlobalWeights.getDefaultWeight("age")));
+        Map<String, Double> defaults = hasRealOcean ? GlobalWeights.DEFAULT_WEIGHTS : GlobalWeights.COLD_START_WEIGHTS;
+        weights.setWeightOcean(BigDecimal.valueOf(defaults.getOrDefault("ocean", 0.0)));
+        weights.setWeightInterest(BigDecimal.valueOf(defaults.getOrDefault("interest", 0.0)));
+        weights.setWeightValues(BigDecimal.valueOf(defaults.getOrDefault("values", 0.0)));
+        weights.setWeightAgeGrade(BigDecimal.valueOf(defaults.getOrDefault("age_grade", 0.0)));
+        weights.setWeightMajor(BigDecimal.valueOf(defaults.getOrDefault("major", 0.0)));
+        weights.setWeightZodiac(BigDecimal.valueOf(defaults.getOrDefault("zodiac", 0.0)));
         weights.setActionCount(0);
         return weights;
     }
@@ -99,12 +100,12 @@ public class UserWeights {
      */
     public Map<String, Double> getWeightMap() {
         Map<String, Double> map = new HashMap<>();
+        map.put("ocean", weightOcean != null ? weightOcean.doubleValue() : GlobalWeights.getDefaultWeight("ocean"));
         map.put("interest", weightInterest != null ? weightInterest.doubleValue() : GlobalWeights.getDefaultWeight("interest"));
-        map.put("mbti", weightMbti != null ? weightMbti.doubleValue() : GlobalWeights.getDefaultWeight("mbti"));
-        map.put("zodiac", weightZodiac != null ? weightZodiac.doubleValue() : GlobalWeights.getDefaultWeight("zodiac"));
-        map.put("bazi", weightBazi != null ? weightBazi.doubleValue() : GlobalWeights.getDefaultWeight("bazi"));
+        map.put("values", weightValues != null ? weightValues.doubleValue() : GlobalWeights.getDefaultWeight("values"));
+        map.put("age_grade", weightAgeGrade != null ? weightAgeGrade.doubleValue() : GlobalWeights.getDefaultWeight("age_grade"));
         map.put("major", weightMajor != null ? weightMajor.doubleValue() : GlobalWeights.getDefaultWeight("major"));
-        map.put("age", weightAge != null ? weightAge.doubleValue() : GlobalWeights.getDefaultWeight("age"));
+        map.put("zodiac", weightZodiac != null ? weightZodiac.doubleValue() : GlobalWeights.getDefaultWeight("zodiac"));
         return map;
     }
 
@@ -112,12 +113,12 @@ public class UserWeights {
      * 更新权重（从Map）
      */
     public void updateWeights(Map<String, Double> newWeights) {
+        this.weightOcean = BigDecimal.valueOf(newWeights.getOrDefault("ocean", GlobalWeights.getDefaultWeight("ocean")));
         this.weightInterest = BigDecimal.valueOf(newWeights.getOrDefault("interest", GlobalWeights.getDefaultWeight("interest")));
-        this.weightMbti = BigDecimal.valueOf(newWeights.getOrDefault("mbti", GlobalWeights.getDefaultWeight("mbti")));
+        this.weightValues = BigDecimal.valueOf(newWeights.getOrDefault("values", GlobalWeights.getDefaultWeight("values")));
+        this.weightAgeGrade = BigDecimal.valueOf(newWeights.getOrDefault("age_grade", GlobalWeights.getDefaultWeight("age_grade")));
         this.weightZodiac = BigDecimal.valueOf(newWeights.getOrDefault("zodiac", GlobalWeights.getDefaultWeight("zodiac")));
-        this.weightBazi = BigDecimal.valueOf(newWeights.getOrDefault("bazi", GlobalWeights.getDefaultWeight("bazi")));
         this.weightMajor = BigDecimal.valueOf(newWeights.getOrDefault("major", GlobalWeights.getDefaultWeight("major")));
-        this.weightAge = BigDecimal.valueOf(newWeights.getOrDefault("age", GlobalWeights.getDefaultWeight("age")));
         this.lastUpdated = LocalDateTime.now();
     }
 
@@ -141,12 +142,12 @@ public class UserWeights {
      */
     public Double getWeight(String dimension) {
         return switch (dimension) {
+            case "ocean" -> weightOcean != null ? weightOcean.doubleValue() : GlobalWeights.getDefaultWeight("ocean");
             case "interest" -> weightInterest != null ? weightInterest.doubleValue() : GlobalWeights.getDefaultWeight("interest");
-            case "mbti" -> weightMbti != null ? weightMbti.doubleValue() : GlobalWeights.getDefaultWeight("mbti");
+            case "values" -> weightValues != null ? weightValues.doubleValue() : GlobalWeights.getDefaultWeight("values");
+            case "age_grade" -> weightAgeGrade != null ? weightAgeGrade.doubleValue() : GlobalWeights.getDefaultWeight("age_grade");
             case "zodiac" -> weightZodiac != null ? weightZodiac.doubleValue() : GlobalWeights.getDefaultWeight("zodiac");
-            case "bazi" -> weightBazi != null ? weightBazi.doubleValue() : GlobalWeights.getDefaultWeight("bazi");
             case "major" -> weightMajor != null ? weightMajor.doubleValue() : GlobalWeights.getDefaultWeight("major");
-            case "age" -> weightAge != null ? weightAge.doubleValue() : GlobalWeights.getDefaultWeight("age");
             default -> GlobalWeights.getDefaultWeight(dimension);
         };
     }
@@ -156,12 +157,12 @@ public class UserWeights {
      */
     public void setWeight(String dimension, Double value) {
         switch (dimension) {
+            case "ocean" -> this.weightOcean = BigDecimal.valueOf(value);
             case "interest" -> this.weightInterest = BigDecimal.valueOf(value);
-            case "mbti" -> this.weightMbti = BigDecimal.valueOf(value);
+            case "values" -> this.weightValues = BigDecimal.valueOf(value);
+            case "age_grade" -> this.weightAgeGrade = BigDecimal.valueOf(value);
             case "zodiac" -> this.weightZodiac = BigDecimal.valueOf(value);
-            case "bazi" -> this.weightBazi = BigDecimal.valueOf(value);
             case "major" -> this.weightMajor = BigDecimal.valueOf(value);
-            case "age" -> this.weightAge = BigDecimal.valueOf(value);
         }
     }
 

@@ -148,7 +148,7 @@
     </aside>
 
     <!-- Post Dialog -->
-    <el-dialog v-model="showPostDialog" title="发布动态" width="560px" :close-on-click-modal="false">
+    <el-dialog v-model="showPostDialog" title="发布动态" width="560px" :close-on-click-modal="false" destroy-on-close>
       <el-input v-model="postContent" type="textarea" :rows="4" placeholder="分享你的校园生活..." maxlength="500" show-word-limit />
 
       <!-- 多媒体上传区域 -->
@@ -246,7 +246,7 @@ const navItems = computed(() => {
     { path: '/match', label: '缘分', icon: 'MagicStick', showDot: false },
     { path: '/moment', label: '心动', icon: 'Aim', showDot: false },
     { path: '/invite', label: '约局', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
-    { path: '/chat', label: '私信', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 },
+    { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 || b.newInviteActivityCount > 0 },
   ]
   if (userStore.user?.isAdmin) {
     items.push({ path: '/admin/reports', label: '举报管理', icon: 'Flag', showDot: false })
@@ -390,14 +390,16 @@ async function loadFollowedMatches() {
     )
     const results: MatchResult[] = []
     details.forEach((d, i) => {
+      const fallbackUser = top[i]
+      if (!fallbackUser) return
       if (d.status === 'fulfilled' && d.value.data.data) {
         results.push(d.value.data.data)
       } else {
         // 接口失败时用基本信息填充
         results.push({
-          userId: top[i].userId,
-          nickname: top[i].nickname,
-          avatarUrl: top[i].avatarUrl,
+          userId: fallbackUser.userId,
+          nickname: fallbackUser.nickname,
+          avatarUrl: fallbackUser.avatarUrl,
           gender: 0,
           school: null,
           major: null,
@@ -407,7 +409,7 @@ async function loadFollowedMatches() {
           bio: null,
           interests: null,
           matchScore: 0,
-          detail: { interestScore: 0, mbtiScore: 0, zodiacScore: 0, baziScore: 0, majorScore: 0, ageScore: 0 },
+          detail: { oceanScore: 0, interestScore: 0, valuesScore: null, ageGradeScore: 0, zodiacScore: 0, majorScore: 0 },
         })
       }
     })

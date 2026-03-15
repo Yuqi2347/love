@@ -3,14 +3,14 @@ package com.campus.love.moment.dto;
 import lombok.Builder;
 import lombok.Data;
 
-import java.math.BigDecimal;
-import java.util.Map;
+import java.util.List;
 
 @Data
 @Builder
 public class MomentResultResponse {
     private boolean matched;
     private String weekTag;
+    private String yuanfenTitle;
 
     // 匹配对象信息（matched=true时有值）
     private Long matchedUserId;
@@ -25,10 +25,12 @@ public class MomentResultResponse {
     private String zodiac;
     private Integer age;
 
-    // 分数
-    private BigDecimal totalScore;
-    private Map<String, Object> scoreDetail;
-
-    /** AI 配对总结（借鉴缘分分析格式，多段落深度内容） */
-    private String summary;
+    private List<String> complementaryModes;
+    private List<String> insightCards;
+    private String goldenSentence;
+    private List<String> dimensionLabels;
+    private String aboutMatchedUser;
+    private String confirmStatus;
+    private String myChoice;
+    private Boolean datePrepUnlocked;
 }

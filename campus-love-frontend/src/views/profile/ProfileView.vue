@@ -50,9 +50,9 @@
         <div v-if="profile" class="profile-info-header">
           <div class="profile-name-row">
             <h2 class="profile-name">
-              {{ !isMe && followStore.getRemarkByUserId(profileId!) ? followStore.getRemarkByUserId(profileId!) : profile.nickname }}
+              {{ !isMe && followStore.getRemarkByUserId(profileId ?? 0) ? followStore.getRemarkByUserId(profileId ?? 0) : profile.nickname }}
             </h2>
-            <span v-if="!isMe && followStore.getRemarkByUserId(profileId!)" class="profile-original-nickname">
+            <span v-if="!isMe && followStore.getRemarkByUserId(profileId ?? 0)" class="profile-original-nickname">
               昵称: {{ profile.nickname }}
             </span>
             <div class="level-display">
@@ -63,7 +63,7 @@
           <button
             v-if="!isMe && followStatus === 'MUTUAL'"
             class="profile-remark-btn"
-            @click="openRemarkEditor({ userId: profileId!, nickname: profile.nickname, remark: followStore.getRemarkByUserId(profileId!) })"
+            @click="openRemarkEditor({ userId: profileId ?? 0, nickname: profile.nickname, avatarUrl: profile.avatarUrl ?? null, isMutual: true, remark: followStore.getRemarkByUserId(profileId ?? 0) ?? undefined })"
           >
             备注
           </button>
@@ -81,7 +81,7 @@
         <button :class="['btn-action', { 'btn-primary': followStatus === 'NONE', 'btn-outline': followStatus !== 'NONE' }]" @click="handleFollowToggle">
           {{ followLabel }}
         </button>
-        <button class="btn-action btn-outline" @click="$router.push(`/chat/${profileId}`)">
+        <button class="btn-action btn-outline" @click="$router.push(`/chat/${profileId ?? 0}`)">
           <el-icon><ChatDotRound /></el-icon> 聊天
         </button>
         <button v-if="followStatus === 'MUTUAL'" class="btn-action btn-primary" @click="handleInviteUser">
@@ -188,8 +188,8 @@
         <span v-if="isMe && profile.bazi" class="meta-item">🔮 {{ profile.bazi }}</span>
       </div>
 
-      <div v-if="profile.interests" class="profile-interests">
-        <span v-for="tag in profile.interests.split(',')" :key="tag" class="interest-tag">{{ tag }}</span>
+      <div v-if="displayInterestNames.length" class="profile-interests">
+        <span v-for="name in displayInterestNames" :key="name" class="interest-tag">{{ name }}</span>
       </div>
 
       <!-- Match detail if not me -->
@@ -202,15 +202,15 @@
         <div class="match-bars">
           <div v-for="(val, key) in matchResult.detail" :key="key" class="bar-item">
             <span class="bar-label">{{ dimensionLabels[key as string] || key }}</span>
-            <div class="bar-track"><div class="bar-fill" :style="{ width: val + '%' }"></div></div>
-            <span class="bar-val">{{ val }}</span>
+            <div class="bar-track"><div class="bar-fill" :style="{ width: `${val ?? 0}%` }"></div></div>
+            <span class="bar-val">{{ val ?? '暂无数据' }}</span>
           </div>
         </div>
       </div>
     </div>
 
     <!-- 动态入口卡片（微信风格） -->
-    <div v-if="profile" class="profile-posts-entry" @click="$router.push(`/profile/${profileId}/posts`)">
+    <div v-if="profile" class="profile-posts-entry" @click="$router.push(`/profile/${profileId ?? 0}/posts`)">
       <div class="posts-entry-thumbnails">
         <img
           v-for="(url, idx) in postSummary.recentImageUrls"
@@ -228,7 +228,7 @@
   </div>
 
   <!-- 关注列表弹窗 -->
-  <el-dialog :title="isMe ? '我关注的' : `${profile?.nickname || 'TA'}关注的`" width="500px" :model-value="showFollowing" @update:model-value="showFollowing = false">
+  <el-dialog :title="isMe ? '我关注的' : `${profile?.nickname || 'TA'}关注的`" width="500px" :model-value="showFollowing" destroy-on-close @update:model-value="showFollowing = false">
     <div v-if="followingList.length" class="user-list">
       <div
         v-for="user in followingList"
@@ -254,7 +254,7 @@
   </el-dialog>
 
   <!-- 粉丝列表弹窗 -->
-  <el-dialog :title="isMe ? '关注我的' : `关注${profile?.nickname || 'TA'}的`" width="500px" :model-value="showFollowers" @update:model-value="showFollowers = false">
+  <el-dialog :title="isMe ? '关注我的' : `关注${profile?.nickname || 'TA'}的`" width="500px" :model-value="showFollowers" destroy-on-close @update:model-value="showFollowers = false">
     <div v-if="followerList.length" class="user-list">
       <div
         v-for="user in followerList"
@@ -281,7 +281,7 @@
   </el-dialog>
 
   <!-- 朋友列表弹窗 -->
-  <el-dialog :title="isMe ? '我的朋友' : `${profile?.nickname || 'TA'}的朋友`" width="500px" :model-value="showMutual" @update:model-value="showMutual = false">
+  <el-dialog :title="isMe ? '我的朋友' : `${profile?.nickname || 'TA'}的朋友`" width="500px" :model-value="showMutual" destroy-on-close @update:model-value="showMutual = false">
     <div v-if="mutualList.length" class="user-list">
       <div v-for="user in mutualList" :key="user.userId" class="user-list-item" @click="goToUserProfile(user.userId)">
         <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
@@ -295,7 +295,7 @@
   </el-dialog>
 
   <!-- 备注编辑弹窗 -->
-  <el-dialog title="设置备注" width="360px" :model-value="showRemarkEditor" @update:model-value="showRemarkEditor = false">
+  <el-dialog title="设置备注" width="360px" :model-value="showRemarkEditor" destroy-on-close @update:model-value="showRemarkEditor = false">
     <el-input
       v-model="remarkInput"
       placeholder="输入备注名（留空清除备注）"
@@ -313,7 +313,7 @@
   <YuanFenAnalysisSheet
     v-if="showYuanFen"
     :model-value="showYuanFen"
-    :target-user-id="profileId"
+    :target-user-id="profileId ?? 0"
     :current-nickname="userStore.user?.nickname || '我'"
     :target-nickname="profile?.nickname || 'TA'"
     @close="showYuanFen = false"
@@ -321,7 +321,7 @@
   />
 
   <!-- 背景设置弹窗 -->
-  <el-dialog title="背景设置" width="420px" :model-value="showCoverSettings" @update:model-value="onCoverDialogClose">
+  <el-dialog title="背景设置" width="420px" :model-value="showCoverSettings" destroy-on-close @update:model-value="onCoverDialogClose">
     <div class="cover-settings-form">
       <div class="cover-preview" :style="coverPreviewStyle">
         <span v-if="!coverPreviewUrl" class="cover-placeholder">选择图片作为个人主页背景</span>
@@ -340,7 +340,7 @@
   </el-dialog>
 
   <!-- 隐私设置弹窗 -->
-  <el-dialog title="隐私设置" width="420px" :model-value="showPrivacySettings" @update:model-value="showPrivacySettings = false">
+  <el-dialog title="隐私设置" width="420px" :model-value="showPrivacySettings" destroy-on-close @update:model-value="showPrivacySettings = false">
     <div class="privacy-settings-form">
       <div class="setting-item">
         <div class="setting-label">谁可以看我的动态</div>
@@ -378,7 +378,7 @@
   </el-dialog>
 
   <!-- 账号安全弹窗 -->
-  <el-dialog title="账号安全" width="420px" :model-value="showAccountSecurity" @update:model-value="showAccountSecurity = false">
+  <el-dialog title="账号安全" width="420px" :model-value="showAccountSecurity" destroy-on-close @update:model-value="showAccountSecurity = false">
     <div class="security-settings-form">
       <div class="security-email-section">
         <div class="setting-label">绑定邮箱</div>
@@ -455,7 +455,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, watch } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
 import { useBadgeStore } from '@/store/badgeStore'
@@ -467,7 +467,7 @@ import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowe
 import { getUserPostsSummary } from '@/api/feedApi'
 import { ElMessage } from 'element-plus'
 import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton, InfoFilled, ArrowLeft, Picture, DataAnalysis } from '@element-plus/icons-vue'
-import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
+import { MATCH_DIMENSION_LABELS, INTEREST_CODE_TO_NAME } from '@/constants/matchConst'
 import { FOLLOW_STATUS_LABELS, FollowStatus } from '@/constants/followConst'
 import { uploadAvatar, uploadCover, clearCover as clearCoverApi, sendPasswordCode, resetPassword as resetPasswordApi } from '@/api/userApi'
 import { getYuanFenCooldown } from '@/api/aiApi'
@@ -477,13 +477,42 @@ import IceBreakPrivacySheet from './components/IceBreakPrivacySheet.vue'
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
 const dimensionLabels = MATCH_DIMENSION_LABELS
 
+/** 从 interestTags 或 interests 解析出展示用的标签名列表 */
+const displayInterestNames = computed(() => {
+  const p = profile.value
+  if (!p) return []
+  if (p.interestTags) {
+    try {
+      const parsed = typeof p.interestTags === 'string' ? JSON.parse(p.interestTags) : p.interestTags
+      const names: string[] = []
+      for (const arr of Object.values(parsed) as { code: string }[][]) {
+        if (Array.isArray(arr)) {
+          arr.forEach((t) => {
+            if (t?.code) {
+              const name = INTEREST_CODE_TO_NAME[t.code]
+              if (name) names.push(name)
+            }
+          })
+        }
+      }
+      return names
+    } catch {
+      return []
+    }
+  }
+  if (p.interests) {
+    return p.interests.split(/[,，、]/).map((t) => t.trim()).filter(Boolean)
+  }
+  return []
+})
+
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const badgeStore = useBadgeStore()
 const followStore = useFollowStore()
 
-const profileId = computed(() => route.params.userId ? Number(route.params.userId) : userStore.user?.id)
+const profileId = computed<number | null>(() => route.params.userId ? Number(route.params.userId) : (userStore.user?.id ?? null))
 const isMe = computed(() => profileId.value === userStore.user?.id)
 
 // 当查看他人主页时显示返回按钮（通过路由参数判断非底部导航直接进入）
@@ -763,6 +792,10 @@ watch(() => route.query.openAiDisclosure, (v) => {
   }
 }, { immediate: true })
 
+onBeforeUnmount(() => {
+  showAiDisclosureSheet.value = false
+})
+
 // 昵称编辑
 
 const followLabel = computed(() => FOLLOW_STATUS_LABELS[followStatus.value as FollowStatus] || '关注')
@@ -822,10 +855,7 @@ async function loadProfile() {
     // 用户未登录，等待登录
     return
   }
-  if (!profileId.value) {
-    // 已登录但无法确定profileId，使用当前用户ID
-    profileId.value = userStore.user.id
-  }
+  if (!profileId.value) return
 
   if (isMe.value) void badgeStore.fetchBadges()
   // 确保关注列表已加载（用于显示备注名）

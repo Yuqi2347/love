@@ -7,6 +7,7 @@ import com.campus.love.admin.dto.AdminFeedItem;
 import com.campus.love.admin.dto.AdminInviteItem;
 import com.campus.love.admin.dto.AdminUserItem;
 import com.campus.love.admin.mapper.AdminUserDeleteMapper;
+import com.campus.love.admin.mapper.AdminStatsMapper;
 import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.chat.entity.ChatGroup;
 import com.campus.love.chat.entity.ChatGroupMember;
@@ -40,14 +41,19 @@ import com.campus.love.match.entity.UserWeights;
 import com.campus.love.match.mapper.UserWeightsMapper;
 import com.campus.love.moment.entity.MomentEnrollment;
 import com.campus.love.moment.entity.MomentMatchResult;
+import com.campus.love.moment.entity.MomentPairScore;
 import com.campus.love.moment.entity.MomentProfile;
 import com.campus.love.moment.mapper.MomentEnrollmentMapper;
 import com.campus.love.moment.mapper.MomentMatchResultMapper;
+import com.campus.love.moment.mapper.MomentPairScoreMapper;
 import com.campus.love.moment.mapper.MomentProfileMapper;
 import com.campus.love.ai.entity.YuanFenAnalysisLog;
 import com.campus.love.ai.mapper.YuanFenAnalysisLogMapper;
 import com.campus.love.ai.skill.UserProfileSkill;
 import com.campus.love.profile.mapper.UserAiProfileMapper;
+import com.campus.love.profile.mapper.UserEmbeddingMapper;
+import com.campus.love.profile.mapper.UserProfileVectorMapper;
+import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.notification.entity.Notification;
 import com.campus.love.notification.mapper.NotificationMapper;
 import com.campus.love.user.entity.ActivityLog;
@@ -96,13 +102,19 @@ public class AdminService {
     private final MomentProfileMapper momentProfileMapper;
     private final MomentEnrollmentMapper momentEnrollmentMapper;
     private final MomentMatchResultMapper momentMatchResultMapper;
+    private final MomentPairScoreMapper momentPairScoreMapper;
     private final ActivityLogMapper activityLogMapper;
     private final RedisTemplate<String, Object> redisTemplate;
     private final UserAiProfileMapper userAiProfileMapper;
     private final UserProfileSkill userProfileSkill;
+    private final UserPortraitService userPortraitService;
+    private final UserEmbeddingMapper userEmbeddingMapper;
+    private final UserProfileVectorMapper userProfileVectorMapper;
+    private final AdminStatsMapper adminStatsMapper;
 
     public IPage<AdminUserItem> listUsers(int page, int size, String keyword) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
+        wrapper.isNull(User::getDeletedAt);
         if (StringUtils.hasText(keyword)) {
             wrapper.and(w -> w
                     .like(User::getNickname, keyword)
@@ -285,6 +297,8 @@ public class AdminService {
         momentEnrollmentMapper.delete(new LambdaQueryWrapper<MomentEnrollment>().eq(MomentEnrollment::getUserId, userId));
         momentMatchResultMapper.delete(new LambdaQueryWrapper<MomentMatchResult>()
                 .eq(MomentMatchResult::getUserIdA, userId).or().eq(MomentMatchResult::getUserIdB, userId));
+        momentPairScoreMapper.delete(new LambdaQueryWrapper<MomentPairScore>()
+                .eq(MomentPairScore::getUserIdA, userId).or().eq(MomentPairScore::getUserIdB, userId));
 
         // 4. 缘分解析
         yuanFenAnalysisLogMapper.delete(new LambdaQueryWrapper<YuanFenAnalysisLog>()
@@ -341,11 +355,19 @@ public class AdminService {
         notificationMapper.delete(new LambdaQueryWrapper<Notification>()
                 .eq(Notification::getUserId, userId).or().eq(Notification::getSenderId, userId));
 
-        // 10. Redis 缓存（避免残留）
+        // 10. 画像/向量/embedding 清空（隐私合规）
+        userPortraitService.clearPortrait(userId);
+        userAiProfileMapper.deleteById(userId);
+        userProfileVectorMapper.deleteById(userId);
+        userEmbeddingMapper.deleteById(userId);
+
+        // 11. Redis 缓存（避免残留）
         clearUserRedisCache(userId);
 
-        // 11. 用户主表
-        userMapper.deleteById(userId);
+        // 12. 用户主表软删除（保留行防重复注册）
+        user.setDeletedAt(java.time.LocalDateTime.now());
+        user.setDeleteReason(1);
+        userMapper.updateById(user);
         log.info("Admin deleted user completely: id={}, email={}", userId, user.getEmail());
     }
 
@@ -372,10 +394,22 @@ public class AdminService {
     }
 
     public DashboardStats getDashboardStats() {
-        long userTotal = userMapper.selectCount(null);
+        long userTotal = userMapper.selectCount(new LambdaQueryWrapper<User>().isNull(User::getDeletedAt));
         long inviteTotal = inviteMapper.selectCount(
                 new LambdaQueryWrapper<Invite>().eq(Invite::getDeleted, false));
-        return new DashboardStats(userTotal, inviteTotal);
+        long feedTotal = feedPostMapper.selectCount(new LambdaQueryWrapper<FeedPost>().eq(FeedPost::getDeleted, false));
+        long activeUsersToday = 0, activeUsers7d = 0, profileCompleteCount = 0, newUsersToday = 0, embeddingCount = 0;
+        try {
+            activeUsersToday = adminStatsMapper.countActiveUsersToday();
+            activeUsers7d = adminStatsMapper.countActiveUsers7d();
+            profileCompleteCount = adminStatsMapper.countProfileComplete();
+            newUsersToday = adminStatsMapper.countNewUsersToday();
+            embeddingCount = adminStatsMapper.countEmbedding();
+        } catch (Exception e) {
+            log.warn("Dashboard stats partial failure (tables may not exist): {}", e.getMessage());
+        }
+        return new DashboardStats(userTotal, inviteTotal, feedTotal,
+                activeUsersToday, activeUsers7d, profileCompleteCount, newUsersToday, embeddingCount);
     }
 
     @lombok.Data
@@ -383,6 +417,12 @@ public class AdminService {
     public static class DashboardStats {
         private long userTotal;
         private long inviteTotal;
+        private long feedTotal;
+        private long activeUsersToday;
+        private long activeUsers7d;
+        private long profileCompleteCount;
+        private long newUsersToday;
+        private long embeddingCount;
     }
 
     // ==================== 人物画像管理 ====================

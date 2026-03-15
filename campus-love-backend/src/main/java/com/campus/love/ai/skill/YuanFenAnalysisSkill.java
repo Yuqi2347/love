@@ -6,7 +6,9 @@ import com.campus.love.ai.dto.YuanFenAnalysisResult;
 import com.campus.love.ai.prompt.YuanFenPromptTemplates;
 import com.campus.love.ai.rag.RagContextBuilder;
 import com.campus.love.ai.service.AiService;
+import com.campus.love.common.utils.InterestTagConverter;
 import com.campus.love.match.dto.MatchResultResponse;
+import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.entity.User;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -26,6 +28,7 @@ public class YuanFenAnalysisSkill {
     private final AiService aiService;
     private final ObjectMapper objectMapper;
     private final RagContextBuilder ragContextBuilder;
+    private final UserPortraitService userPortraitService;
 
     /** 用户 Prompt 模板（异性） */
     private static final String PROMPT_TEMPLATE_OPPOSITE = """
@@ -42,7 +45,7 @@ public class YuanFenAnalysisSkill {
 
             【系统匹配硬指标】
             - 综合缘分评分：{totalScore}/100
-            - 细分维度得分：兴趣={interestScore} | MBTI={mbtiScore} | 星座={zodiacScore} | 八字={baziScore} | 专业跨度={majorScore}
+            - 细分维度得分：OCEAN={oceanScore} | 兴趣={interestScore} | 价值观={valuesScore} | 年龄年级={ageGradeScore} | 星座={zodiacScore} | 专业跨度={majorScore}
 
             【RAG上下文】
             {ragContext}
@@ -98,7 +101,7 @@ public class YuanFenAnalysisSkill {
 
             【系统匹配硬指标】
             - 综合羁绊评分：{totalScore}/100
-            - 细分维度得分：兴趣={interestScore} | MBTI={mbtiScore} | 星座={zodiacScore} | 八字={baziScore} | 专业跨度={majorScore}
+            - 细分维度得分：OCEAN={oceanScore} | 兴趣={interestScore} | 价值观={valuesScore} | 年龄年级={ageGradeScore} | 星座={zodiacScore} | 专业跨度={majorScore}
 
             【RAG上下文】
             {ragContext}
@@ -213,7 +216,10 @@ public class YuanFenAnalysisSkill {
     private String buildPrompt(User a, User b, MatchResultResponse match, boolean sameGender, String ragContext) {
         String template = sameGender ? PROMPT_TEMPLATE_SAME : PROMPT_TEMPLATE_OPPOSITE;
         MatchResultResponse.MatchDetail detail = match.getDetail();
-        String baziStr = detail.getBaziScore() != null ? String.valueOf(detail.getBaziScore()) : "暂无（未参与计算）";
+        var pa = userPortraitService.getPortrait(a.getId());
+        var pb = userPortraitService.getPortrait(b.getId());
+        String interestsA = InterestTagConverter.getInterestsForDisplay(pa != null ? pa.getInterestTags() : null, a.getInterests());
+        String interestsB = InterestTagConverter.getInterestsForDisplay(pb != null ? pb.getInterestTags() : null, b.getInterests());
         return template
                 .replace("{nicknameA}", a.getNickname() != null && !a.getNickname().isBlank() ? a.getNickname().trim() : "匿名")
                 .replace("{genderA}", genderLabel(a.getGender()))
@@ -222,7 +228,7 @@ public class YuanFenAnalysisSkill {
                 .replace("{gradeA}", safe(a.getGrade()))
                 .replace("{mbtiA}", safe(a.getMbti()))
                 .replace("{zodiacA}", safe(a.getZodiac()))
-                .replace("{interestsA}", safe(a.getInterests()))
+                .replace("{interestsA}", safe(interestsA))
                 .replace("{majorA}", safe(a.getMajor()))
                 .replace("{nicknameB}", b.getNickname() != null && !b.getNickname().isBlank() ? b.getNickname().trim() : "匿名")
                 .replace("{genderB}", genderLabel(b.getGender()))
@@ -231,13 +237,14 @@ public class YuanFenAnalysisSkill {
                 .replace("{gradeB}", safe(b.getGrade()))
                 .replace("{mbtiB}", safe(b.getMbti()))
                 .replace("{zodiacB}", safe(b.getZodiac()))
-                .replace("{interestsB}", safe(b.getInterests()))
+                .replace("{interestsB}", safe(interestsB))
                 .replace("{majorB}", safe(b.getMajor()))
                 .replace("{totalScore}", String.valueOf(match.getMatchScore()))
+                .replace("{oceanScore}", String.valueOf(detail.getOceanScore()))
                 .replace("{interestScore}", String.valueOf(detail.getInterestScore()))
-                .replace("{mbtiScore}", String.valueOf(detail.getMbtiScore()))
+                .replace("{valuesScore}", detail.getValuesScore() != null ? String.valueOf(detail.getValuesScore()) : "暂无（并入兴趣）")
+                .replace("{ageGradeScore}", String.valueOf(detail.getAgeGradeScore()))
                 .replace("{zodiacScore}", String.valueOf(detail.getZodiacScore()))
-                .replace("{baziScore}", baziStr)
                 .replace("{majorScore}", String.valueOf(detail.getMajorScore()))
                 .replace("{ragContext}", ragContext != null && !ragContext.isBlank() ? ragContext : "暂无");
     }

@@ -134,4 +134,21 @@ router.beforeEach((to, _from, next) => {
   }
 })
 
+// 路由切换后清理可能残留的 Element Plus overlay，避免遮罩导致无法点击
+router.afterEach(() => {
+  setTimeout(() => {
+    // 仅处理 body 直接子元素中的 overlay 容器
+    Array.from(document.body.children).forEach((child) => {
+      if (!(child instanceof HTMLElement)) return
+      const isOverlay = child.classList.contains('el-overlay') || child.classList.contains('el-overlay-dialog')
+      if (!isOverlay) return
+      const hasDialog = child.querySelector('.el-dialog')
+      const hasDrawer = child.querySelector('.el-drawer')
+      if (!hasDialog && !hasDrawer) {
+        child.remove()
+      }
+    })
+  }, 150)
+})
+
 export default router

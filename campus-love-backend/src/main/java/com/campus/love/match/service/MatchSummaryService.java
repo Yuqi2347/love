@@ -20,16 +20,18 @@ public class MatchSummaryService {
     public String generateOneLiner(MatchResultResponse.MatchDetail detail, String interestsA, String interestsB) {
         if (detail == null) return "你们各有特点，在相处中可以互相欣赏、互相成长。";
 
+        int ocean = detail.getOceanScore() != null ? detail.getOceanScore() : 50;
         int interest = detail.getInterestScore() != null ? detail.getInterestScore() : 50;
-        int mbti = detail.getMbtiScore() != null ? detail.getMbtiScore() : 50;
+        int values = detail.getValuesScore() != null ? detail.getValuesScore() : 50;
         int zodiac = detail.getZodiacScore() != null ? detail.getZodiacScore() : 50;
         int major = detail.getMajorScore() != null ? detail.getMajorScore() : 50;
 
         if (interest >= 80) return "你们在兴趣上很有共鸣，可以从共同爱好聊起。";
-        if (mbti >= 80) return "你们在性格上很有共鸣，相处起来会很舒服。";
+        if (ocean >= 80) return "你们在性格节奏上很契合，相处起来会很舒服。";
+        if (values >= 80) return "你们在关系观念上很接近，更容易建立稳定默契。";
         if (zodiac >= 80) return "星座缘分不错，不妨多了解一下对方。";
         if (major >= 70) return "专业上有交集，学业话题会很自然。";
-        if (interest >= 70 && mbti >= 70) return "你们在兴趣和性格上很有共鸣，值得多相处。";
+        if (interest >= 70 && ocean >= 70) return "你们在兴趣和性格上都比较合拍，值得多相处。";
         return "你们各有特点，在相处中可以互相欣赏、互相成长。";
     }
 }

@@ -164,7 +164,7 @@
     </div>
 
     <!-- 发布动态弹窗 -->
-    <el-dialog v-model="showPostDialog" title="发布动态" width="560px" :close-on-click-modal="false">
+    <el-dialog v-model="showPostDialog" title="发布动态" width="560px" :close-on-click-modal="false" destroy-on-close>
       <el-form @submit.prevent="handlePost">
         <el-form-item>
           <el-input
@@ -418,9 +418,7 @@ watch(() => route.query.type, () => {
   loadInvites(searchKeyword.value.trim() || undefined)
 })
 
-type TimelineItem =
-  | { kind: 'invite'; invite: Invite; time: string; key: string }
-  | { kind: 'post'; post: FeedPost; time: string; key: string }
+type TimelineItem = { kind: 'post'; post: FeedPost; time: string; key: string }
 
 const timelineItems = computed<TimelineItem[]>(() => {
   let postList: FeedPost[] = []

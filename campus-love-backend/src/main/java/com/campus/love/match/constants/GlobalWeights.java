@@ -16,29 +16,28 @@ public final class GlobalWeights {
     // ==================== 全局默认权重 ====================
 
     /**
-     * 全局默认权重（新用户冷启动使用）
+     * 全局默认权重（有真实 OCEAN 时使用）
      * 所有权重之和必须为 1.0
      */
     public static final Map<String, Double> DEFAULT_WEIGHTS = new HashMap<>() {{
-        put("interest", 0.30);
-        put("mbti",     0.25);
-        put("zodiac",   0.15);
-        put("bazi",     0.15);
-        put("major",    0.10);
-        put("age",      0.05);
+        put("ocean",     0.35);
+        put("interest",  0.22);
+        put("values",    0.20);
+        put("age_grade", 0.10);
+        put("major",     0.07);
+        put("zodiac",    0.06);
     }};
 
     /**
-     * 八字权重为零的配置（双方任一 bazi_unknown=true 时使用）
-     * 技术文档 V1.1.0 第 7.3 节
+     * 冷启动权重（无真实 OCEAN 时使用）
      */
-    public static final Map<String, Double> WITHOUT_BAZI = new HashMap<>() {{
-        put("interest", 0.35);
-        put("mbti",     0.30);
-        put("zodiac",   0.17);
-        put("bazi",     0.00);
-        put("major",    0.13);
-        put("age",      0.05);
+    public static final Map<String, Double> COLD_START_WEIGHTS = new HashMap<>() {{
+        put("ocean",     0.00);
+        put("interest",  0.38);
+        put("values",    0.28);
+        put("age_grade", 0.15);
+        put("major",     0.10);
+        put("zodiac",    0.09);
     }};
 
     // ==================== 权重边界配置 ====================
@@ -48,12 +47,12 @@ public final class GlobalWeights {
      * 每个维度：[最小值, 最大值]
      */
     public static final Map<String, double[]> WEIGHT_BOUNDS = new HashMap<>() {{
-        put("interest", new double[]{0.10, 0.50});
-        put("mbti",     new double[]{0.10, 0.40});
-        put("zodiac",   new double[]{0.02, 0.25});
-        put("bazi",     new double[]{0.02, 0.25});
-        put("major",    new double[]{0.03, 0.20});
-        put("age",      new double[]{0.01, 0.15});
+        put("ocean",     new double[]{0.10, 0.50});
+        put("interest",  new double[]{0.10, 0.50});
+        put("values",    new double[]{0.10, 0.35});
+        put("age_grade", new double[]{0.05, 0.20});
+        put("major",     new double[]{0.03, 0.20});
+        put("zodiac",    new double[]{0.02, 0.20});
     }};
 
     // ==================== 匹配阈值配置 ====================
@@ -172,6 +171,6 @@ public final class GlobalWeights {
      * 获取所有维度名称
      */
     public static String[] getAllDimensions() {
-        return new String[]{"interest", "mbti", "zodiac", "bazi", "major", "age"};
+        return new String[]{"ocean", "interest", "values", "age_grade", "major", "zodiac"};
     }
 }

@@ -4,11 +4,18 @@ import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.Result;
 import com.campus.love.common.result.ResultCode;
+import com.campus.love.moment.dto.MomentDashboardSimulateRequest;
+import com.campus.love.moment.dto.MomentConfirmRequest;
+import com.campus.love.moment.dto.MomentDatePrepResponse;
 import com.campus.love.moment.dto.MomentEnrollRequest;
+import com.campus.love.moment.dto.MomentMatchConfigRequest;
 import com.campus.love.moment.dto.MomentResultResponse;
 import com.campus.love.moment.dto.MomentStatusResponse;
+import com.campus.love.moment.entity.MomentMatchConfig;
 import com.campus.love.moment.entity.MomentProfile;
 import com.campus.love.moment.service.MomentAdminService;
+import com.campus.love.moment.service.MomentDashboardService;
+import com.campus.love.moment.service.MomentMatchConfigService;
 import com.campus.love.moment.service.MomentService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
@@ -31,6 +38,8 @@ public class MomentController {
 
     private final MomentService momentService;
     private final MomentAdminService momentAdminService;
+    private final MomentDashboardService momentDashboardService;
+    private final MomentMatchConfigService momentMatchConfigService;
     private final UserMapper userMapper;
 
     private void requireAdmin() {
@@ -57,6 +66,18 @@ public class MomentController {
     @GetMapping("/result")
     public Result<MomentResultResponse> getResult() {
         return Result.success(momentService.getResult());
+    }
+
+    @Operation(summary = "对本次心动匹配做出选择")
+    @PostMapping("/result/confirm")
+    public Result<MomentResultResponse> confirmResult(@Valid @RequestBody MomentConfirmRequest request) {
+        return Result.success(momentService.confirmChoice(request));
+    }
+
+    @Operation(summary = "获取约会准备内容（双方都选择约一次后解锁）")
+    @GetMapping("/result/date-prep")
+    public Result<MomentDatePrepResponse> getDatePrep() {
+        return Result.success(momentService.getDatePrep());
     }
 
     @Operation(summary = "获取已有问卷档案（用于回填）")
@@ -112,5 +133,50 @@ public class MomentController {
             @RequestParam(value = "weekTag", required = false) String weekTag) {
         requireAdmin();
         return Result.success(momentAdminService.resetWeek(weekTag, momentService.getCurrentWeekTag()));
+    }
+
+    @Operation(summary = "获取心动时刻匹配配置")
+    @GetMapping("/admin/config")
+    public Result<MomentMatchConfig> getMatchConfig() {
+        requireAdmin();
+        return Result.success(momentMatchConfigService.getConfig());
+    }
+
+    @Operation(summary = "保存心动时刻匹配配置")
+    @PutMapping("/admin/config")
+    public Result<MomentMatchConfig> saveMatchConfig(@Valid @RequestBody MomentMatchConfigRequest request) {
+        requireAdmin();
+        MomentMatchConfig config = new MomentMatchConfig();
+        config.setBaseThreshold(request.getBaseThreshold());
+        config.setPrioritizeOffset(request.getPrioritizeOffset());
+        config.setPriorityOffset(request.getPriorityOffset());
+        config.setPriorityMaxStack(request.getPriorityMaxStack());
+        return Result.success(momentMatchConfigService.saveConfig(config));
+    }
+
+    @Operation(summary = "获取心动时刻匹配看板")
+    @GetMapping("/admin/dashboard")
+    public Result<MomentDashboardService.MomentDashboardResponse> getDashboard(
+            @RequestParam(value = "weekTag", required = false) String weekTag) {
+        requireAdmin();
+        String resolvedWeekTag = (weekTag == null || weekTag.isBlank()) ? momentService.getCurrentWeekTag() : weekTag;
+        return Result.success(momentDashboardService.getDashboard(resolvedWeekTag));
+    }
+
+    @Operation(summary = "获取未匹配用户明细")
+    @GetMapping("/admin/dashboard/unmatched")
+    public Result<java.util.List<MomentDashboardService.UnmatchedUserResponse>> getUnmatchedUsers(
+            @RequestParam(value = "weekTag", required = false) String weekTag) {
+        requireAdmin();
+        String resolvedWeekTag = (weekTag == null || weekTag.isBlank()) ? momentService.getCurrentWeekTag() : weekTag;
+        return Result.success(momentDashboardService.getUnmatchedUsers(resolvedWeekTag));
+    }
+
+    @Operation(summary = "模拟阈值对匹配结果的影响")
+    @PostMapping("/admin/dashboard/simulate")
+    public Result<MomentDashboardService.SimulationResponse> simulateDashboard(
+            @Valid @RequestBody MomentDashboardSimulateRequest request) {
+        requireAdmin();
+        return Result.success(momentDashboardService.simulate(request.getWeekTag(), request.getThreshold()));
     }
 }

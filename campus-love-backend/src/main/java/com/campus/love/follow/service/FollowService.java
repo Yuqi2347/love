@@ -38,32 +38,18 @@ public class FollowService {
         if (currentUserId.equals(targetUserId)) {
             throw new BusinessException(ResultCode.CANNOT_FOLLOW_SELF);
         }
-
-        Follow existing = followMapper.selectOne(
-                new LambdaQueryWrapper<Follow>()
-                        .eq(Follow::getFollowerId, currentUserId)
-                        .eq(Follow::getFollowingId, targetUserId));
-        if (existing != null) {
+        if (!followInternal(currentUserId, targetUserId, false)) {
             throw new BusinessException(ResultCode.ALREADY_FOLLOWED);
         }
+    }
 
-        Follow follow = new Follow();
-        follow.setFollowerId(currentUserId);
-        follow.setFollowingId(targetUserId);
-        follow.setIsMutual(false);
-        followMapper.insert(follow);
-
-        // Check if target already follows current user -> mutual
-        Follow reverse = followMapper.selectOne(
-                new LambdaQueryWrapper<Follow>()
-                        .eq(Follow::getFollowerId, targetUserId)
-                        .eq(Follow::getFollowingId, currentUserId));
-        if (reverse != null) {
-            follow.setIsMutual(true);
-            followMapper.updateById(follow);
-            reverse.setIsMutual(true);
-            followMapper.updateById(reverse);
+    @Transactional
+    public void mutualFollow(Long userIdA, Long userIdB) {
+        if (userIdA == null || userIdB == null || userIdA.equals(userIdB)) {
+            return;
         }
+        followInternal(userIdA, userIdB, true);
+        followInternal(userIdB, userIdA, true);
     }
 
     @Transactional
@@ -248,5 +234,41 @@ public class FollowService {
                 .isMutual(isMutual)
                 .remark(remark)
                 .build();
+    }
+
+    private boolean followInternal(Long followerId, Long followingId, boolean allowExisting) {
+        Follow existing = followMapper.selectOne(
+                new LambdaQueryWrapper<Follow>()
+                        .eq(Follow::getFollowerId, followerId)
+                        .eq(Follow::getFollowingId, followingId));
+        if (existing != null) {
+            refreshMutual(existing, followerId, followingId);
+            return allowExisting;
+        }
+
+        Follow follow = new Follow();
+        follow.setFollowerId(followerId);
+        follow.setFollowingId(followingId);
+        follow.setIsMutual(false);
+        followMapper.insert(follow);
+        refreshMutual(follow, followerId, followingId);
+        return true;
+    }
+
+    private void refreshMutual(Follow follow, Long followerId, Long followingId) {
+        Follow reverse = followMapper.selectOne(
+                new LambdaQueryWrapper<Follow>()
+                        .eq(Follow::getFollowerId, followingId)
+                        .eq(Follow::getFollowingId, followerId));
+        if (reverse != null) {
+            if (!Boolean.TRUE.equals(follow.getIsMutual())) {
+                follow.setIsMutual(true);
+                followMapper.updateById(follow);
+            }
+            if (!Boolean.TRUE.equals(reverse.getIsMutual())) {
+                reverse.setIsMutual(true);
+                followMapper.updateById(reverse);
+            }
+        }
     }
 }

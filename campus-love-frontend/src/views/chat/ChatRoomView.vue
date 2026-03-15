@@ -199,7 +199,7 @@ import { useNotifyDismissStore } from '@/store/notifyDismissStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { useFollowStore } from '@/store/followStore'
 import { getChatHistory, markAsRead, uploadChatImage, canSendTo, recallMessage } from '@/api/chatApi'
-import { getIceBreakStatus, getIceBreakTopics, updateIceBreakAllow } from '@/api/userApi'
+import { getIceBreakStatus, getIceBreakTopics, updateIceBreakAllow, type IceBreakStatus } from '@/api/userApi'
 import { getUserProfile, type UserProfile } from '@/api/userApi'
 import { joinInvite, declineInvite } from '@/api/inviteApi'
 import { storeToRefs } from 'pinia'
@@ -232,7 +232,7 @@ const inputRef = ref<{ $el: HTMLElement } | null>(null)
 /** 未互关时仅允许发一条，对方回复前不能继续发；互关则始终可发。初始 false，等 canSendTo 返回后再设 */
 const canSend = ref(false)
 /** 破冰功能状态：canShow=互关时显示按钮，targetEnabled=对方已开启时高亮 */
-const iceBreakStatus = ref<{ canShow: boolean; targetEnabled: boolean } | null>(null)
+const iceBreakStatus = ref<IceBreakStatus | null>(null)
 /** 破冰话题面板 */
 const showIceBreakPanel = ref(false)
 const iceBreakAnalysis = ref('')

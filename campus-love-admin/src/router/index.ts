@@ -37,8 +37,18 @@ const router = createRouter({
         },
         {
           path: 'moment',
-          name: 'Moment',
+          name: 'MomentManage',
           component: () => import('@/views/MomentManageView.vue'),
+        },
+        {
+          path: 'moment/dashboard',
+          name: 'MomentDashboard',
+          component: () => import('@/views/MomentMatchDashboardView.vue'),
+        },
+        {
+          path: 'moment/config',
+          name: 'MomentConfig',
+          component: () => import('@/views/MomentMatchConfigView.vue'),
         },
         {
           path: 'ai-token-stats',

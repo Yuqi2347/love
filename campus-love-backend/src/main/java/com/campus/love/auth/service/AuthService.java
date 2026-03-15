@@ -8,6 +8,10 @@ import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.common.service.RateLimitService;
 import com.campus.love.common.utils.JwtUtil;
+import com.campus.love.profile.entity.UserPortrait;
+import com.campus.love.profile.service.OceanUpdateService;
+import com.campus.love.profile.service.UserPortraitService;
+import com.campus.love.profile.service.UserStatsService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -24,6 +28,9 @@ public class AuthService {
     private final com.campus.love.auth.service.EmailVerifyService emailVerifyService;
     private final com.campus.love.auth.service.SchoolService schoolService;
     private final RateLimitService rateLimitService;
+    private final UserPortraitService userPortraitService;
+    private final UserStatsService userStatsService;
+    private final OceanUpdateService oceanUpdateService;
 
     public AuthResponse register(RegisterRequest request) {
         String email = request.getEmail();
@@ -59,6 +66,9 @@ public class AuthService {
         user.setStatus(1);
         userMapper.insert(user);
 
+        userPortraitService.savePortrait(createEmptyPortrait(user.getId()));
+        userStatsService.createStats(user.getId());
+
         return buildAuthResponse(user);
     }
 
@@ -71,6 +81,8 @@ public class AuthService {
         if (!passwordEncoder.matches(request.getPassword(), user.getPassword())) {
             throw new BusinessException(ResultCode.INVALID_CREDENTIALS);
         }
+
+        handleOceanReactivation(user.getId());
 
         return buildAuthResponse(user);
     }
@@ -95,5 +107,28 @@ public class AuthService {
                 .accessToken(accessToken)
                 .refreshToken(refreshToken)
                 .build();
+    }
+
+    private UserPortrait createEmptyPortrait(Long userId) {
+        UserPortrait p = new UserPortrait();
+        p.setUserId(userId);
+        p.setQuestionnaireVersion(1);
+        p.setProfileVersion(1);
+        return p;
+    }
+
+    private void handleOceanReactivation(Long userId) {
+        if (userId == null) return;
+        try {
+            UserPortrait portrait = userPortraitService.getPortrait(userId);
+            if (portrait == null) return;
+            if (portrait.getLastShortUpdate() != null
+                    && portrait.getLastShortUpdate().isBefore(java.time.LocalDate.now().minusDays(30))) {
+                oceanUpdateService.resetShortToLong(userId);
+            }
+            oceanUpdateService.updateShortOceanAsync(userId);
+        } catch (Exception e) {
+            // 登录流程不应因画像更新失败而中断
+        }
     }
 }

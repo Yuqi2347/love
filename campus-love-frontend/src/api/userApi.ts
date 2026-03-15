@@ -25,7 +25,10 @@ export interface UserProfile {
   baziUnknown?: boolean
   avatarUrl: string | null
   bio: string | null
-  interests: string | null
+  /** 旧格式（兼容），新格式用 interestTags */
+  interests?: string | null
+  /** 新格式：{ dimension: [{code, sharing, intensity}] } */
+  interestTags?: Record<string, { code: string; sharing: number; intensity: number }[]> | null
   profileComplete: boolean
   /** 朋友圈可见性：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见 */
   feedVisibility?: string
@@ -51,7 +54,10 @@ export interface UpdateProfileParams {
   grade?: string
   mbti?: string
   bio?: string
+  /** 旧格式（兼容） */
   interests?: string
+  /** 新格式 JSON 字符串：{"dimension":[{"code":"tag_xxx","sharing":0.5,"intensity":0.5}]} */
+  interestTags?: string
   /** 朋友圈可见性：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见 */
   feedVisibility?: string
 }

@@ -197,9 +197,12 @@ async function handleTrigger() {
   try {
     const res = await triggerMomentMatching()
     const data = res.data.data
-    const matchedPairs = data?.matchedPairs ?? '?'
-    const unmatchedUsers = data?.unmatchedUsers ?? '?'
-    lastResult.value = `匹配完成！配对 ${matchedPairs} 对，未匹配 ${unmatchedUsers} 人`
+    const matchedPairs = typeof data?.matchedPairs === 'number' ? data.matchedPairs : 0
+    const unmatchedUsers = typeof data?.unmatchedUsers === 'number' ? data.unmatchedUsers : 0
+    const baseThreshold = data?.baseThreshold
+    lastResult.value = baseThreshold != null
+      ? `匹配完成！配对 ${matchedPairs} 对，未匹配 ${unmatchedUsers} 人，当前基础阈值 ${baseThreshold}`
+      : `匹配完成！配对 ${matchedPairs} 对，未匹配 ${unmatchedUsers} 人`
     lastResultType.value = 'success'
     await loadStatus()
   } catch {

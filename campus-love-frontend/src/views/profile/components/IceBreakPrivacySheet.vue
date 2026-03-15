@@ -5,6 +5,7 @@
     direction="btt"
     size="auto"
     :close-on-click-modal="true"
+    destroy-on-close
   >
     <div class="privacy-sheet">
       <p class="sheet-desc">按画像三层架构，仅开放部分可配置项。聊天内容、行为数据、OCEAN 原始分数等永不进入 AI。</p>

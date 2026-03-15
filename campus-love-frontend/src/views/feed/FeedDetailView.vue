@@ -16,7 +16,7 @@
       <div class="post-card">
         <div class="post-header">
           <img
-            :src="imageUrl(post.avatarUrl) || defaultAvatar"
+            :src="imageUrl(post.avatarUrl || '') || defaultAvatar"
             class="post-avatar"
             @click="$router.push(`/profile/${post.userId}`)"
           />
@@ -581,7 +581,8 @@ async function handleCommentImageSelect(e: Event) {
   const files = target.files
   if (!files?.length) return
   for (let i = 0; i < files.length; i++) {
-    const file = files[i]
+    const file = files.item(i)
+    if (!file) continue
     if (!file.type.startsWith('image/')) continue
     try {
       const res = await uploadImage(file)
@@ -604,8 +605,8 @@ async function submitComment() {
   if ((!text && !imagesStr) || !post.value) return
   submitting.value = true
   try {
-    const parentId = replyingTo.value ? replyingTo.value.rootCommentId : null
-    const repliedUserId = replyingTo.value ? replyingTo.value.repliedUserId : null
+    const parentId = replyingTo.value?.rootCommentId ?? undefined
+    const repliedUserId = replyingTo.value?.repliedUserId ?? undefined
 
     await addComment({ postId: post.value.id, content: text || '', images: imagesStr || undefined, parentId, repliedUserId })
 
@@ -616,7 +617,7 @@ async function submitComment() {
       avatarUrl: userStore.user!.avatarUrl,
       content: text,
       images: imagesStr || null,
-      parentId: parentId,
+      parentId: parentId ?? null,
       repliedToName: replyingTo.value?.nickname || null,
       createdAt: new Date().toISOString(),
     }

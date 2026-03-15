@@ -65,6 +65,8 @@ public class User {
     /** 心动时刻：是否被禁止参加 */
     @TableField("moment_banned")
     private Boolean momentBanned;
+    /** 心动时刻：连续未匹配优先权计数 */
+    private Integer momentPriorityCount;
     /** 上次查看邀约活动时间（我的邀约有人加入/发言、等待邀约匹配成功） */
     private LocalDateTime lastInviteActivityViewedAt;
 
@@ -83,6 +85,11 @@ public class User {
     /** V24：AI信息公开授权设置 JSON */
     private String aiDisclosureSettings;
 
+    /** V30：软删除，NULL=正常，有值=已注销 */
+    private LocalDateTime deletedAt;
+    /** V30：注销原因枚举 */
+    private Integer deleteReason;
+
     /** 信用分默认值 100，用于邀约等模块 */
     public static final int DEFAULT_CREDIT_SCORE = 100;
 
@@ -96,6 +103,10 @@ public class User {
 
     public int getInviteCountOrDefault() {
         return inviteCount != null ? inviteCount : 0;
+    }
+
+    public int getMomentPriorityCountOrDefault() {
+        return momentPriorityCount != null ? momentPriorityCount : 0;
     }
 
     /** 任一方 bazi_unknown=true 时八字不参与计算 */

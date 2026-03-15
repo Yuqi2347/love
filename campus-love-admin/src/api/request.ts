@@ -10,7 +10,7 @@ export interface ApiResult<T = unknown> {
 }
 
 const service: AxiosInstance = axios.create({
-  baseURL: '/api',
+  baseURL: 'http://127.0.0.1:8082/api',
   timeout: 15000,
 })
 

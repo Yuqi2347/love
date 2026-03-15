@@ -20,6 +20,8 @@ public class MomentEnrollRequest {
     @NotBlank(message = "期望匹配性别不能为空")
     private String targetGender; // male / female / any
 
+    private Boolean prioritizeMatching;
+
     // 第一步：关于你自己
     @NotBlank private String socialStyle;           // 1.2
     @NotBlank private String lifeRhythm;             // 1.3

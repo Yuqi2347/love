@@ -125,6 +125,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, reactive } from 'vue'
+import type { CSSProperties } from 'vue'
 import { getRecommendations, reportUserAction, updateWeightPreferences, resetWeights, getWeightStats, type MatchResult } from '@/api/matchApi'
 import { followUser } from '@/api/followApi'
 import { useFollowStore } from '@/store/followStore'
@@ -146,20 +147,20 @@ const dimensionLabels = MATCH_DIMENSION_LABELS
 const showWeightPanel = ref(false)
 const weightSaving = ref(false)
 const weightDimensions = [
+  { key: 'ocean', label: 'OCEAN契合', icon: '🧠' },
   { key: 'interest', label: '兴趣匹配', icon: '🎯' },
-  { key: 'mbti', label: 'MBTI性格', icon: '🧠' },
+  { key: 'values', label: '价值观念', icon: '💎' },
+  { key: 'age_grade', label: '年龄年级', icon: '👤' },
   { key: 'zodiac', label: '星座匹配', icon: '⭐' },
-  { key: 'bazi', label: '八字合婚', icon: '🔮' },
   { key: 'major', label: '专业匹配', icon: '📚' },
-  { key: 'age', label: '年龄匹配', icon: '👤' },
 ]
 const weightPreferences = reactive<Record<string, 'high' | 'medium' | 'low'>>({
+  ocean: 'high',
   interest: 'high',
-  mbti: 'medium',
+  values: 'medium',
+  age_grade: 'medium',
   zodiac: 'medium',
-  bazi: 'medium',
   major: 'low',
-  age: 'low',
 })
 
 async function handleSaveWeights() {
@@ -180,12 +181,12 @@ async function handleSaveWeights() {
 async function handleResetWeights() {
   try {
     await resetWeights()
+    weightPreferences.ocean = 'high'
     weightPreferences.interest = 'high'
-    weightPreferences.mbti = 'medium'
+    weightPreferences.values = 'medium'
+    weightPreferences.age_grade = 'medium'
     weightPreferences.zodiac = 'medium'
-    weightPreferences.bazi = 'medium'
     weightPreferences.major = 'low'
-    weightPreferences.age = 'low'
     ElMessage.success('已恢复默认权重')
     matchStore.bumpWeightVersion()
     await loadCards()
@@ -238,8 +239,9 @@ const visibleCards = computed(() => {
   // 显示当前卡片及其上下各1张
   for (let i = -1; i <= 1; i++) {
     const index = currentIndex.value + i
-    if (index >= 0 && index < len) {
-      result.push(filteredCards.value[index])
+    const card = filteredCards.value[index]
+    if (index >= 0 && index < len && card) {
+      result.push(card)
     }
   }
 
@@ -311,7 +313,7 @@ async function setGenderFilter(filter: 'all' | 'same' | 'opposite') {
   await loadCards()
 }
 
-function getCardStyle(card: CardWithState, index: number) {
+function getCardStyle(card: CardWithState, index: number): CSSProperties {
   const isCurrent = index === centerCardOffset.value && !card.isRemoving
 
   // 竖直堆叠：当前卡片正常大小，上下卡片变小变暗

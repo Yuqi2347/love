@@ -79,12 +79,38 @@
             v-for="opt in TARGET_GENDER_OPTIONS" :key="opt.value"
             class="option-card"
             :class="{ selected: form.targetGender === opt.value }"
-            @click="form.targetGender = opt.value"
+            @click="form.targetGender = normalizeTargetGender(opt.value)"
           >
             <span class="option-emoji">{{ opt.emoji }}</span>
             <span class="option-label">{{ opt.label }}</span>
           </div>
         </div>
+      </div>
+
+      <!-- 年龄接受范围（滑块） -->
+      <div class="age-range-section">
+        <div class="section-label">年龄方面，你可以接受的范围？</div>
+        <div class="age-no-matter">
+          <el-checkbox v-model="ageNoMatter" @change="onAgeNoMatterChange">
+            年龄不是问题，合适最重要
+          </el-checkbox>
+        </div>
+        <div v-if="!ageNoMatter" class="slider-wrap">
+          <span class="slider-min">比我小 10 岁</span>
+          <el-slider
+            v-model="ageRange"
+            range
+            :min="-10"
+            :max="10"
+            :step="1"
+            :marks="ageRangeMarks"
+            show-stops
+          />
+          <span class="slider-max">比我大 10 岁</span>
+        </div>
+        <p v-if="!ageNoMatter" class="slider-hint">
+          当前接受：{{ ageRangeLabel }}
+        </p>
       </div>
 
       <!-- Step 2 题目 -->
@@ -117,6 +143,13 @@
 
       <!-- 确认提交区 -->
       <div class="confirm-section">
+        <div class="priority-card">
+          <div class="priority-title">优先匹配</div>
+          <el-checkbox v-model="form.prioritizeMatching">
+            我接受适当降低匹配度，优先达成匹配
+          </el-checkbox>
+          <p class="priority-hint">勾选后会适度降低你的匹配阈值，用来提高进入候选边的机会。</p>
+        </div>
         <div class="confirm-check">
           <el-checkbox v-model="agreed">我已确认以上信息真实有效</el-checkbox>
         </div>
@@ -152,7 +185,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, reactive } from 'vue'
+import { ref, computed, onMounted, reactive, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { enrollMoment, getMomentProfile, uploadMomentPhoto } from '@/api/momentApi'
@@ -174,7 +207,8 @@ const existingPhotoUrl = ref<string>('')
 
 const form = reactive<MomentEnrollRequest>({
   selfScore: 5,
-  targetGender: '',
+  targetGender: 'any',
+  prioritizeMatching: false,
   socialStyle: '',
   lifeRhythm: '',
   personalityBase: '',
@@ -182,7 +216,8 @@ const form = reactive<MomentEnrollRequest>({
   emotionStyle: '',
   companionshipStyle: '',
   appearanceRequirement: '',
-  ageRangePreference: '',
+  agePreferenceMin: -2,
+  agePreferenceMax: 2,
   gradeRangePreference: '',
   partnerPersonality: '',
   majorPreference: '',
@@ -209,6 +244,57 @@ const form = reactive<MomentEnrollRequest>({
 
 const selfScoreMarks: Record<number, string> = { 1: '1', 5: '5', 10: '10' }
 
+// 年龄范围滑块：相对年龄 [min, max]，负=比我小，正=比我大
+const ageRange = ref<[number, number]>([-2, 2])
+const ageNoMatter = ref(false)
+const ageRangeMarks: Record<number, string> = {
+  [-10]: '-10',
+  [-5]: '-5',
+  0: '同龄',
+  5: '+5',
+  10: '+10',
+}
+const ageRangeLabel = computed(() => {
+  const [min, max] = ageRange.value
+  const fmt = (n: number) => n === 0 ? '同龄' : n > 0 ? `比我大 ${n} 岁` : `比我小 ${-n} 岁`
+  if (min === max) return fmt(min)
+  return `${fmt(min)} ~ ${fmt(max)}`
+})
+watch(ageRange, (val) => {
+  form.agePreferenceMin = val[0]
+  form.agePreferenceMax = val[1]
+}, { deep: true })
+function onAgeNoMatterChange(checked: boolean) {
+  if (checked) {
+    ageRange.value = [-10, 10]
+    form.agePreferenceMin = -10
+    form.agePreferenceMax = 10
+  } else {
+    ageRange.value = [-2, 2]
+    form.agePreferenceMin = -2
+    form.agePreferenceMax = 2
+  }
+}
+
+/** 从旧版 ageRangePreference (A/B/C/D 多选) 迁移到 [min, max] */
+function migrateAgeRangeFromLegacy(pref?: string | null): [number, number] {
+  if (!pref) return [-2, 2]
+  const parts = pref.split(',').map((s) => s.trim()).filter(Boolean)
+  if (parts.length === 0) return [-2, 2]
+  let min = 10
+  let max = -10
+  for (const p of parts) {
+    switch (p) {
+      case 'A': min = Math.min(min, 1); max = Math.max(max, 2); break   // 比我大1-2岁
+      case 'B': min = Math.min(min, -1); max = Math.max(max, 1); break  // 同龄±1
+      case 'C': min = Math.min(min, -2); max = Math.max(max, -1); break // 比我小1-2岁
+      case 'D': return [-10, 10]  // 无所谓
+      default: break
+    }
+  }
+  return [min, max]
+}
+
 // 步骤校验
 const canProceed = computed(() => {
   if (currentStep.value === 1) {
@@ -220,6 +306,7 @@ const canProceed = computed(() => {
   if (currentStep.value === 2) {
     return !!(
       form.targetGender && form.appearanceRequirement &&
+      form.agePreferenceMin != null && form.agePreferenceMax != null &&
       form.gradeRangePreference && form.partnerPersonality &&
       form.majorPreference && form.careerAmbitionPref &&
       form.companionshipStyle && form.dateStyle && form.intimacyPace
@@ -276,6 +363,10 @@ function removePhoto() {
   existingPhotoUrl.value = ''
 }
 
+function normalizeTargetGender(value?: string | null): MomentEnrollRequest['targetGender'] {
+  return value === 'male' || value === 'female' || value === 'any' ? value : 'any'
+}
+
 async function handleSubmit() {
   if (!canSubmit.value || submitting.value) return
   submitting.value = true
@@ -306,7 +397,8 @@ onMounted(async () => {
     const res = await getMomentProfile()
     const profile = res.data.data
     if (profile) {
-      form.targetGender = profile.targetGender || ''
+      form.targetGender = normalizeTargetGender(profile.targetGender)
+      form.prioritizeMatching = !!profile.prioritizeMatching
       form.socialStyle = profile.socialStyle || ''
       form.lifeRhythm = profile.lifeRhythm || ''
       form.personalityBase = profile.personalityBase || ''
@@ -314,7 +406,19 @@ onMounted(async () => {
       form.emotionStyle = profile.emotionStyle || ''
       form.companionshipStyle = profile.companionshipStyle || ''
       form.appearanceRequirement = profile.appearanceRequirement || ''
-      form.ageRangePreference = profile.ageRangePreference || ''
+      if (profile.agePreferenceMin != null && profile.agePreferenceMax != null) {
+        form.agePreferenceMin = profile.agePreferenceMin
+        form.agePreferenceMax = profile.agePreferenceMax
+        ageRange.value = [profile.agePreferenceMin, profile.agePreferenceMax]
+        ageNoMatter.value = profile.agePreferenceMin <= -10 && profile.agePreferenceMax >= 10
+      } else {
+        // 兼容旧数据：从 ageRangePreference 迁移
+        const migrated = migrateAgeRangeFromLegacy(profile.ageRangePreference)
+        form.agePreferenceMin = migrated[0]
+        form.agePreferenceMax = migrated[1]
+        ageRange.value = migrated
+        ageNoMatter.value = migrated[0] <= -10 && migrated[1] >= 10
+      }
       form.gradeRangePreference = profile.gradeRangePreference || ''
       form.partnerPersonality = profile.partnerPersonality || ''
       form.majorPreference = profile.majorPreference || ''
@@ -506,6 +610,14 @@ onMounted(async () => {
   color: $text-muted;
 }
 
+.age-range-section {
+  margin-bottom: 28px;
+
+  .age-no-matter {
+    margin-bottom: 12px;
+  }
+}
+
 .question-block {
   margin-bottom: 24px;
 }
@@ -574,6 +686,28 @@ onMounted(async () => {
   padding: 20px;
   background: $bg-secondary;
   border-radius: $radius-lg;
+}
+
+.priority-card {
+  margin-bottom: 16px;
+  padding: 16px;
+  background: rgba($primary, 0.05);
+  border: 1px solid rgba($primary, 0.12);
+  border-radius: $radius-md;
+}
+
+.priority-title {
+  margin-bottom: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.priority-hint {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: $text-muted;
+  line-height: 1.6;
 }
 
 .confirm-check {

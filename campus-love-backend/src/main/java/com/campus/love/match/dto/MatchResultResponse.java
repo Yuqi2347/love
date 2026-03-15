@@ -26,11 +26,11 @@ public class MatchResultResponse {
     @Data
     @Builder
     public static class MatchDetail {
+        private Integer oceanScore;
         private Integer interestScore;
-        private Integer mbtiScore;
+        private Integer valuesScore;
+        private Integer ageGradeScore;
         private Integer zodiacScore;
-        private Integer baziScore;
         private Integer majorScore;
-        private Integer ageScore;
     }
 }

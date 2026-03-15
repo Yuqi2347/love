@@ -5,6 +5,7 @@
     width="460px"
     class="yuanfen-dialog"
     :close-on-click-modal="true"
+    destroy-on-close
     @close="$emit('close')"
   >
     <!-- 加载状态 -->

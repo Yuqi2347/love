@@ -48,7 +48,15 @@ v-model="form.birthDate" type="date" placeholder="选择生日"
             <el-input v-model="form.school" placeholder="你的学校" />
           </el-form-item>
           <el-form-item label="专业">
-            <el-input v-model="form.major" placeholder="你的专业" />
+            <el-cascader
+              v-model="majorCascaderValue"
+              :options="MAJOR_CASCADER_OPTIONS"
+              placeholder="选择学科门类与专业类"
+              :props="{ expandTrigger: 'hover' }"
+              style="width:100%"
+              clearable
+              @change="onMajorCascaderChange"
+            />
           </el-form-item>
           <el-form-item label="年级">
             <el-select v-model="form.grade" placeholder="选择年级" style="width:100%">
@@ -81,47 +89,21 @@ v-for="mbti in mbtiTypes" :key="mbti"
       </div>
 
       <!-- Step 3: Interests -->
-      <div v-if="step === 3" class="step-content">
-        <p class="interest-hint">选择你感兴趣的标签（至少3个）</p>
-        <div class="interest-grid">
-          <div
-            v-for="tag in interestTags" :key="tag"
-            class="interest-tag" :class="{ active: selectedInterests.includes(tag) }"
-            @click="toggleInterest(tag)">
-            {{ tag }}
-          </div>
-          <div
-            class="interest-tag" :class="{ active: selectedInterests.includes('其他') }"
-            @click="toggleInterest('其他')">
-            其他
-          </div>
-        </div>
-
-        <!-- 自定义兴趣输入区域 -->
-        <div v-if="selectedInterests.includes('其他')" class="custom-interest-section">
-          <div class="custom-interest-input-row">
-            <el-input
-              v-model="customInterestInput"
-              placeholder="输入自定义兴趣标签"
-              maxlength="10"
-              show-word-limit
-              class="custom-interest-input"
-              @keyup.enter="addCustomInterest"
-            />
-            <button class="btn-add-interest" @click="addCustomInterest">
-              添加
-            </button>
-          </div>
-          <!-- 已添加的自定义兴趣 -->
-          <div v-if="customInterests.length" class="custom-interest-list">
-            <span
-              v-for="(tag, idx) in customInterests"
-              :key="`custom-${idx}`"
-              class="custom-interest-tag"
-            >
-              {{ tag }}
-              <button class="custom-tag-remove" @click="removeCustomInterest(idx)">×</button>
-            </span>
+      <div v-if="step === 3" class="step-content step-interests">
+        <p class="interest-hint">选择你感兴趣的标签（至少 3 个，可多选），尽量涉及所有维度</p>
+        <div class="interest-dimensions">
+          <div v-for="dim in interestMatrix" :key="dim.key" class="interest-dimension">
+            <div class="dimension-title">{{ dim.name }}</div>
+            <div class="interest-grid">
+              <div
+                v-for="tag in dim.tags"
+                :key="tag.code"
+                class="interest-tag"
+                :class="{ active: selectedTagCodes.has(tag.code) }"
+                @click="toggleInterest(tag.code)">
+                {{ tag.name }}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -150,23 +132,26 @@ import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { updateProfile, getMyProfile } from '@/api/userApi'
 import { useUserStore } from '@/store/userStore'
-import { MBTI_TYPES, MBTI_LABELS, INTEREST_TAGS } from '@/constants/matchConst'
+import { MBTI_TYPES, MBTI_LABELS, INTEREST_TAG_MATRIX, LEGACY_INTEREST_TO_CODE } from '@/constants/matchConst'
 import { GENDER_OPTIONS } from '@/constants/genderConst'
+import { MAJOR_CASCADER_OPTIONS, getMajorCascaderPath } from '@/constants/majorConst'
 
 const router = useRouter()
 const userStore = useUserStore()
 const step = ref(1)
 const saving = ref(false)
-const selectedInterests = ref<string[]>([])
-const customInterests = ref<string[]>([])
-const customInterestInput = ref('')
+/** 已选中的 tag code 集合 */
+const selectedTagCodes = ref<Set<string>>(new Set())
 const isEditMode = ref(false)
 
 const mbtiTypes = MBTI_TYPES
 const mbtiLabels = MBTI_LABELS
-const interestTags = INTEREST_TAGS
+const interestMatrix = INTEREST_TAG_MATRIX
 const genderOptions = GENDER_OPTIONS
 const grades = ['大一', '大二', '大三', '大四', '研一', '研二', '研三', '博士']
+
+/** 专业级联选择器绑定值 [学科门类, 专业类]，存储时只存专业类 */
+const majorCascaderValue = ref<string[]>([])
 
 const stepTitles = ['完善基础信息', '选择你的MBTI', '选择兴趣爱好']
 const stepDescs = ['让大家更好地认识你', '性格匹配的重要依据', '找到志同道合的朋友']
@@ -206,14 +191,30 @@ onMounted(async () => {
         form.baziUnknown = data.baziUnknown ?? false
         form.school = data.school ?? ''
         form.major = data.major ?? ''
+        majorCascaderValue.value = getMajorCascaderPath(data.major)
         form.grade = data.grade ?? ''
         form.mbti = data.mbti ?? ''
         form.bio = data.bio ?? ''
-        if (data.interests) {
-          const allInterests = data.interests.split(',')
-          // 分离预定义标签和自定义标签
-          selectedInterests.value = allInterests.filter(t => INTEREST_TAGS.includes(t as any) || t === '其他')
-          customInterests.value = allInterests.filter(t => !INTEREST_TAGS.includes(t as any) && t !== '其他')
+        if (data.interestTags) {
+          // 新格式 JSON: { dimension: [{code, sharing, intensity}] }
+          try {
+            const parsed = typeof data.interestTags === 'string' ? JSON.parse(data.interestTags) : data.interestTags
+            const codes = new Set<string>()
+            for (const arr of Object.values(parsed) as { code: string }[][]) {
+              if (Array.isArray(arr)) arr.forEach((t) => t?.code && codes.add(t.code))
+            }
+            selectedTagCodes.value = codes
+          } catch {
+            selectedTagCodes.value = new Set()
+          }
+        } else if (data.interests) {
+          // 旧格式逗号分隔：映射到新 code
+          const codes = new Set<string>()
+          data.interests.split(/[,，、]/).forEach((t) => {
+            const trimmed = t.trim()
+            if (LEGACY_INTEREST_TO_CODE[trimmed]) codes.add(LEGACY_INTEREST_TO_CODE[trimmed])
+          })
+          selectedTagCodes.value = codes
         }
       }
     } catch {
@@ -222,51 +223,36 @@ onMounted(async () => {
   }
 })
 
-function toggleInterest(tag: string) {
-  const idx = selectedInterests.value.indexOf(tag)
-  if (idx >= 0) {
-    selectedInterests.value.splice(idx, 1)
-  } else {
-    selectedInterests.value.push(tag)
-  }
+function onMajorCascaderChange(val: string[] | undefined) {
+  const last = val?.length ? val[val.length - 1] : undefined
+  form.major = last ?? ''
 }
 
-// 添加自定义兴趣
-function addCustomInterest() {
-  const val = customInterestInput.value.trim()
-  if (!val) {
-    ElMessage.warning('请输入自定义兴趣标签')
-    return
-  }
-  if (val.length > 10) {
-    ElMessage.warning('标签长度不能超过10个字符')
-    return
-  }
-  // 检查是否已存在
-  if (customInterests.value.includes(val) || INTEREST_TAGS.includes(val as any)) {
-    ElMessage.warning('该标签已存在')
-    return
-  }
-  customInterests.value.push(val)
-  customInterestInput.value = ''
+function toggleInterest(code: string) {
+  const set = new Set(selectedTagCodes.value)
+  if (set.has(code)) set.delete(code)
+  else set.add(code)
+  selectedTagCodes.value = set
 }
 
-// 删除自定义兴趣
-function removeCustomInterest(idx: number) {
-  customInterests.value.splice(idx, 1)
+/** 构建新格式 interest_tags JSON */
+function buildInterestTagsJson(): Record<string, { code: string; sharing: number; intensity: number }[]> {
+  const result: Record<string, { code: string; sharing: number; intensity: number }[]> = {}
+  for (const dim of INTEREST_TAG_MATRIX) {
+    const selected = dim.tags.filter((t) => selectedTagCodes.value.has(t.code))
+    if (selected.length) {
+      result[dim.key] = selected.map((t) => ({ code: t.code, sharing: 0.5, intensity: 0.5 }))
+    }
+  }
+  return result
 }
 
 async function handleSave() {
-  const totalInterests = [
-    ...selectedInterests.value.filter(t => t !== '其他'),
-    ...customInterests.value
-  ]
-  if (totalInterests.length < 3) {
-    ElMessage.warning('请至少选择3个兴趣标签')
+  if (selectedTagCodes.value.size < 3) {
+    ElMessage.warning('请至少选择 3 个兴趣标签')
     return
   }
-
-  await doSave(totalInterests.join(','))
+  await doSave(buildInterestTagsJson())
 }
 
 async function handleSkipAll() {
@@ -300,7 +286,7 @@ async function handleSkipAll() {
       grade: form.grade,
       mbti: '',
       bio: form.bio || undefined,
-      interests: '',
+      interestTags: undefined,
     })
     await userStore.fetchProfile()
     ElMessage.success('已保存必填信息，可稍后在个人主页完善')
@@ -312,7 +298,7 @@ async function handleSkipAll() {
   }
 }
 
-async function doSave(interests: string) {
+async function doSave(interestTags: Record<string, { code: string; sharing: number; intensity: number }[]>) {
   saving.value = true
   try {
     await updateProfile({
@@ -326,7 +312,7 @@ async function doSave(interests: string) {
       grade: form.grade,
       mbti: form.mbti,
       bio: form.bio,
-      interests,
+      interestTags: JSON.stringify(interestTags),
     })
     await userStore.fetchProfile()
     const message = isEditMode.value ? '资料更新成功！' : '资料完善成功！'
@@ -478,10 +464,30 @@ async function doSave(interests: string) {
   &:hover { border-color: $primary-light; }
 }
 
+.step-interests {
+  max-height: 420px;
+  overflow-y: auto;
+}
+
 .interest-hint {
   font-size: 14px;
   color: $text-secondary;
   margin-bottom: 16px;
+}
+
+.interest-dimensions {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.interest-dimension {
+  .dimension-title {
+    font-size: 13px;
+    font-weight: 600;
+    color: $text-primary;
+    margin-bottom: 10px;
+  }
 }
 
 .interest-grid {
@@ -508,85 +514,6 @@ async function doSave(interests: string) {
   &:hover:not(.active) {
     border-color: $primary-light;
     color: $primary;
-  }
-}
-
-// 自定义兴趣输入区域
-.custom-interest-section {
-  margin-top: 20px;
-  padding: 16px;
-  background: rgba($primary, 0.04);
-  border-radius: $radius-lg;
-  border: 1px dashed $border-color;
-}
-
-.custom-interest-input-row {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.custom-interest-input {
-  flex: 1;
-
-  :deep(.el-input__wrapper) {
-    border-radius: $radius-md;
-  }
-}
-
-.btn-add-interest {
-  padding: 8px 20px;
-  background: $primary;
-  color: white;
-  border: none;
-  border-radius: $radius-md;
-  font-size: 14px;
-  font-weight: 500;
-  cursor: pointer;
-  transition: all $transition-fast;
-  white-space: nowrap;
-
-  &:hover {
-    opacity: 0.9;
-  }
-}
-
-.custom-interest-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-}
-
-.custom-interest-tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  background: $primary-gradient;
-  color: white;
-  border-radius: $radius-full;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.custom-tag-remove {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.3);
-  border: none;
-  color: white;
-  font-size: 14px;
-  line-height: 1;
-  cursor: pointer;
-  transition: all $transition-fast;
-
-  &:hover {
-    background: rgba(255, 255, 255, 0.5);
   }
 }
 

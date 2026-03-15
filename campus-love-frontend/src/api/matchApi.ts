@@ -2,15 +2,12 @@ import request from './request'
 import type { ApiResult } from './request'
 
 export interface MatchDetail {
+  oceanScore: number
   interestScore: number
-  mbtiScore: number
+  valuesScore: number | null
+  ageGradeScore: number
   zodiacScore: number
-  /** 任一方 bazi_unknown 时为 null，前端展示「暂无数据」 */
-  baziScore: number | null
   majorScore: number
-  ageScore: number
-  /** V1.1.0：OCEAN 契合度，无真实 OCEAN 时为 null */
-  oceanScore?: number | null
 }
 
 export interface MatchResult {

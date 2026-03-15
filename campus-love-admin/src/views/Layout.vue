@@ -4,6 +4,7 @@
       <div class="logo">管理后台</div>
       <el-menu
         :default-active="$route.path"
+        :default-openeds="['/moment-group']"
         router
         class="menu"
         background-color="#1a1a2e"
@@ -26,10 +27,15 @@
           <el-icon><Document /></el-icon>
           <span>帖子管理</span>
         </el-menu-item>
-        <el-menu-item index="/moment">
-          <el-icon><MagicStick /></el-icon>
-          <span>心动时刻</span>
-        </el-menu-item>
+        <el-sub-menu index="/moment-group">
+          <template #title>
+            <el-icon><MagicStick /></el-icon>
+            <span>心动时刻</span>
+          </template>
+          <el-menu-item index="/moment">活动管理</el-menu-item>
+          <el-menu-item index="/moment/dashboard">匹配看板</el-menu-item>
+          <el-menu-item index="/moment/config">匹配配置</el-menu-item>
+        </el-sub-menu>
         <el-menu-item index="/ai-token-stats">
           <el-icon><TrendCharts /></el-icon>
           <span>AI Token 统计</span>
@@ -72,6 +78,8 @@ const currentTitle = computed(() => {
     '/invites': '邀约管理',
     '/feeds': '帖子管理',
     '/moment': '心动时刻',
+    '/moment/dashboard': '心动时刻匹配看板',
+    '/moment/config': '心动时刻匹配配置',
     '/ai-token-stats': 'AI Token 统计',
     '/reports': '举报管理',
   }

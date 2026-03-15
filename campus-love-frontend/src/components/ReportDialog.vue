@@ -3,6 +3,7 @@
     :model-value="modelValue"
     title="举报"
     width="400px"
+    destroy-on-close
     @update:model-value="$emit('update:modelValue', $event)"
   >
     <div class="report-form">

@@ -1,5 +1,8 @@
 package com.campus.love.ai.privacy;
 
+import com.campus.love.common.utils.InterestTagConverter;
+import com.campus.love.profile.entity.UserPortrait;
+import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import com.fasterxml.jackson.databind.JsonNode;
@@ -24,6 +27,7 @@ import java.util.List;
 public class ProfileDisclosureFilter {
 
     private final UserMapper userMapper;
+    private final UserPortraitService userPortraitService;
     private final ObjectMapper objectMapper;
 
     private static final String DEFAULT_SETTINGS = "{\"mbti\":true,\"zodiac\":true,\"majorCategory\":true,\"interestTags\":true,\"naturalLangTags\":false,\"baziInfo\":false,\"questionnaireHints\":false}";
@@ -37,18 +41,24 @@ public class ProfileDisclosureFilter {
 
         JsonNode s = parseSettings(user.getAiDisclosureSettings());
         DisclosedProfile d = new DisclosedProfile();
+        UserPortrait portrait = userPortraitService.getPortrait(targetUserId);
 
         if (bool(s, "mbti")) d.setMbti(user.getMbti());
         if (bool(s, "zodiac")) d.setZodiac(user.getZodiac());
         if (bool(s, "majorCategory")) d.setMajorCategory(majorToCategory(user.getMajor()));
-        if (bool(s, "interestTags")) d.setInterestTags(parseInterests(user.getInterests()));
-
-        // 默认关闭，需用户主动开启
-        if (bool(s, "naturalLangTags")) d.setNaturalLangTags(Collections.emptyList()); // TODO: t_user_ai_profile
+        if (bool(s, "interestTags")) {
+            String display = InterestTagConverter.getInterestsForDisplay(portrait != null ? portrait.getInterestTags() : null, user.getInterests());
+            d.setInterestTags(parseInterests(display));
+        }
+        if (bool(s, "naturalLangTags")) {
+            d.setNaturalLangTags(parseNaturalLangTags(portrait != null ? portrait.getNaturalLanguageTags() : null));
+        }
         if (bool(s, "baziInfo") && user.getBazi() != null && !Boolean.TRUE.equals(user.getBaziUnknown())) {
             d.setBaziSummary(user.getBazi());
         }
-        if (bool(s, "questionnaireHints")) d.setQuestionnaireHints(null); // TODO: 问卷摘要
+        if (bool(s, "questionnaireHints")) {
+            d.setQuestionnaireHints(buildQuestionnaireHints(portrait));
+        }
 
         return d;
     }
@@ -88,5 +98,33 @@ public class ProfileDisclosureFilter {
     private List<String> parseInterests(String interests) {
         if (interests == null || interests.isBlank()) return Collections.emptyList();
         return Arrays.stream(interests.split("[,，、]")).map(String::trim).filter(s -> !s.isBlank()).toList();
+    }
+
+    private List<String> parseNaturalLangTags(String json) {
+        if (json == null || json.isBlank()) return Collections.emptyList();
+        try {
+            return objectMapper.readValue(json, new com.fasterxml.jackson.core.type.TypeReference<List<String>>() {});
+        } catch (Exception e) {
+            return Collections.emptyList();
+        }
+    }
+
+    private String buildQuestionnaireHints(UserPortrait portrait) {
+        if (portrait == null) return null;
+        List<String> hints = new ArrayList<>();
+        if ("A".equals(portrait.getSocialStyle())) hints.add("偏外向热闹");
+        else if ("B".equals(portrait.getSocialStyle())) hints.add("偏小圈深聊");
+
+        if ("A".equals(portrait.getLifeRhythm())) hints.add("偏计划型");
+        else if ("D".equals(portrait.getLifeRhythm())) hints.add("偏随感觉生活");
+
+        if ("A".equals(portrait.getIntimacyPace())) hints.add("亲密升温较快");
+        else if ("B".equals(portrait.getIntimacyPace())) hints.add("感情节奏偏慢热");
+
+        if ("A".equals(portrait.getRelationshipCoreValue())) hints.add("重视灵魂契合");
+        else if ("C".equals(portrait.getRelationshipCoreValue())) hints.add("重视共同成长");
+
+        if (hints.isEmpty()) return null;
+        return String.join("、", hints.stream().limit(4).toList());
     }
 }

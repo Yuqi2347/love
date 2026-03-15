@@ -5,10 +5,14 @@ import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.common.service.FileUploadService;
 import com.campus.love.common.utils.BaziUtil;
+import com.campus.love.common.utils.InterestTagConverter;
 import com.campus.love.common.utils.ZodiacUtil;
 import com.campus.love.ai.skill.UserProfileSkill;
+import com.campus.love.profile.entity.UserPortrait;
 import com.campus.love.profile.mapper.UserAiProfileMapper;
 import com.campus.love.profile.entity.UserAiProfile;
+import com.campus.love.profile.service.OceanConfidenceService;
+import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.dto.UserAiProfileResponse;
 import com.campus.love.user.dto.UserProfileRequest;
 import com.campus.love.user.dto.UserProfileResponse;
@@ -44,6 +48,8 @@ public class UserService {
     private final FileUploadService fileUploadService;
     private final UserProfileSkill userProfileSkill;
     private final UserAiProfileMapper userAiProfileMapper;
+    private final UserPortraitService userPortraitService;
+    private final OceanConfidenceService oceanConfidenceService;
     private final UserIceBreakAllowMapper userIceBreakAllowMapper;
     private final FollowService followService;
     private final org.springframework.security.crypto.password.PasswordEncoder passwordEncoder;
@@ -80,7 +86,7 @@ public class UserService {
         if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
         Long currentUserId = CurrentUser.getId();
         boolean isSelf = userId.equals(currentUserId);
-        return toProfileResponse(user, isSelf);
+        return toProfileResponse(userId, user, isSelf);
     }
 
     public UserProfileResponse updateProfile(UserProfileRequest request) {
@@ -95,7 +101,7 @@ public class UserService {
         user.setGrade(request.getGrade());
         user.setMbti(request.getMbti());
         user.setBio(request.getBio());
-        user.setInterests(request.getInterests());
+        if (request.getInterests() != null) user.setInterests(request.getInterests());
         if (request.getFeedVisibility() != null && !request.getFeedVisibility().isEmpty()) {
             String v = request.getFeedVisibility().toUpperCase();
             if (VisibilityConstants.ALL.equals(v) || VisibilityConstants.FOLLOWING.equals(v)
@@ -120,18 +126,37 @@ public class UserService {
             user.setBazi(BaziUtil.getBazi(birthDate, birthTime));
         }
 
+        String interestTagsJson = null;
+        if (request.getInterestTags() != null && !request.getInterestTags().isBlank()) {
+            if (InterestTagConverter.isValidNonEmpty(request.getInterestTags())) {
+                interestTagsJson = request.getInterestTags();
+            }
+        } else if (request.getInterests() != null && !request.getInterests().isBlank()) {
+            interestTagsJson = InterestTagConverter.legacyToNewFormat(request.getInterests());
+        }
+        boolean hasInterests = InterestTagConverter.isValidNonEmpty(interestTagsJson)
+                || (user.getInterests() != null && !user.getInterests().isEmpty());
         boolean complete = user.getNickname() != null && user.getGender() != null
-                && user.getBirthDate() != null && user.getMbti() != null
-                && user.getInterests() != null && !user.getInterests().isEmpty();
+                && user.getBirthDate() != null && user.getMbti() != null && hasInterests;
         boolean wasIncomplete = !Boolean.TRUE.equals(user.getProfileComplete());
         user.setProfileComplete(complete);
 
         userMapper.updateById(user);
 
+        UserPortrait portrait = userPortraitService.getPortrait(userId);
+        if (portrait == null) portrait = new UserPortrait();
+        portrait.setUserId(userId);
+        portrait.setMbti(user.getMbti());
+        portrait.setZodiac(user.getZodiac());
+        portrait.setBazi(user.getBazi());
+        portrait.setBio(user.getBio());
+        if (interestTagsJson != null) portrait.setInterestTags(interestTagsJson);
+        userPortraitService.savePortrait(portrait);
+
         if (complete && wasIncomplete && userAiProfileMapper.selectById(userId) == null) {
             userProfileSkill.generateInitialProfile(userId, user);
         }
-        return toProfileResponse(user, true);
+        return toProfileResponse(user.getId(), user, true);
     }
 
     public UserProfileResponse updateNickname(String nickname) {
@@ -143,7 +168,7 @@ public class UserService {
         }
         user.setNickname(nickname.trim());
         userMapper.updateById(user);
-        return toProfileResponse(user, true);
+        return toProfileResponse(user.getId(), user, true);
     }
 
     public UserProfileResponse updateFeedVisibility(String visibility) {
@@ -158,7 +183,7 @@ public class UserService {
         }
         user.setFeedVisibility(v);
         userMapper.updateById(user);
-        return toProfileResponse(user, true);
+        return toProfileResponse(user.getId(), user, true);
     }
 
     public UserProfileResponse updateIceBreakEnabled(boolean enabled) {
@@ -167,7 +192,7 @@ public class UserService {
         if (user == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
         user.setIceBreakEnabled(enabled);
         userMapper.updateById(user);
-        return toProfileResponse(user, true);
+        return toProfileResponse(user.getId(), user, true);
     }
 
     /** 按好友单独设置：允许/禁止对方使用破冰（需互关） */
@@ -211,7 +236,7 @@ public class UserService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "授权设置格式错误");
         }
         userMapper.updateById(user);
-        return toProfileResponse(user, true);
+        return toProfileResponse(user.getId(), user, true);
     }
 
     public UserProfileResponse updateFeedVisibilityTime(Integer days) {
@@ -221,7 +246,7 @@ public class UserService {
         int d = (days != null && (days == 3 || days == 30 || days == 180 || days == -1)) ? days : -1;
         user.setFeedVisibilityTime(d);
         userMapper.updateById(user);
-        return toProfileResponse(user, true);
+        return toProfileResponse(user.getId(), user, true);
     }
 
     public String uploadAvatar(MultipartFile file) throws IOException {
@@ -260,8 +285,10 @@ public class UserService {
      */
     public UserAiProfileResponse getMyAiProfile() {
         Long userId = CurrentUser.getId();
-        UserAiProfile p = userAiProfileMapper.selectById(userId);
-        if (p == null) {
+        UserPortrait portrait = userPortraitService.getPortrait(userId);
+        UserAiProfile p = portrait != null ? userPortraitService.getAiProfileView(userId) : null;
+        if (p == null) p = userAiProfileMapper.selectById(userId);
+        if (p == null && portrait == null) {
             return UserAiProfileResponse.builder()
                     .userId(userId)
                     .hasRealOcean(false)
@@ -273,14 +300,23 @@ public class UserService {
                     .naturalLanguageTags(List.of())
                     .build();
         }
+        var effective = portrait != null
+                ? oceanConfidenceService.getEffectiveOcean(portrait)
+                : java.util.Map.<String, java.math.BigDecimal>of(
+                "O", p.getOceanOLong() != null ? p.getOceanOLong() : p.getOceanOShort(),
+                "C", p.getOceanCLong() != null ? p.getOceanCLong() : p.getOceanCShort(),
+                "E", p.getOceanELong() != null ? p.getOceanELong() : p.getOceanEShort(),
+                "A", p.getOceanALong() != null ? p.getOceanALong() : p.getOceanAShort(),
+                "N", p.getOceanNLong() != null ? p.getOceanNLong() : p.getOceanNShort()
+        );
         return UserAiProfileResponse.builder()
                 .userId(userId)
                 .hasRealOcean(Boolean.TRUE.equals(p.getHasRealOcean()))
-                .oceanO(p.getOceanOLong() != null ? p.getOceanOLong() : p.getOceanOShort())
-                .oceanC(p.getOceanCLong() != null ? p.getOceanCLong() : p.getOceanCShort())
-                .oceanE(p.getOceanELong() != null ? p.getOceanELong() : p.getOceanEShort())
-                .oceanA(p.getOceanALong() != null ? p.getOceanALong() : p.getOceanAShort())
-                .oceanN(p.getOceanNLong() != null ? p.getOceanNLong() : p.getOceanNShort())
+                .oceanO(effective.get("O"))
+                .oceanC(effective.get("C"))
+                .oceanE(effective.get("E"))
+                .oceanA(effective.get("A"))
+                .oceanN(effective.get("N"))
                 .naturalLanguageTags(parseTags(p.getNaturalLanguageTags()))
                 .build();
     }
@@ -314,7 +350,7 @@ public class UserService {
         userMapper.updateById(user);
     }
 
-    private UserProfileResponse toProfileResponse(User user, boolean isSelf) {
+    private UserProfileResponse toProfileResponse(Long userId, User user, boolean isSelf) {
         String birthDate = null;
         String birthTime = null;
         String bazi = null;
@@ -326,6 +362,10 @@ public class UserService {
         } else if (user.getBirthDate() != null) {
             age = Period.between(user.getBirthDate(), LocalDate.now()).getYears();
         }
+        UserPortrait portrait = userPortraitService.getPortrait(userId);
+        String interestTags = portrait != null ? portrait.getInterestTags() : null;
+        String interests = (interestTags != null && InterestTagConverter.isValidNonEmpty(interestTags))
+                ? null : user.getInterests();
         return UserProfileResponse.builder()
                 .id(user.getId())
                 .email(isSelf ? user.getEmail() : null)
@@ -350,7 +390,8 @@ public class UserService {
                 .avatarUrl(user.getAvatarUrl())
                 .coverImageUrl(user.getCoverImageUrl())
                 .bio(user.getBio())
-                .interests(user.getInterests())
+                .interests(interests)
+                .interestTags(interestTags)
                 .profileComplete(user.getProfileComplete())
                 .feedVisibility(user.getFeedVisibility() != null ? user.getFeedVisibility() : VisibilityConstants.ALL)
                 .feedVisibilityTime(user.getFeedVisibilityTime() != null ? user.getFeedVisibilityTime() : -1)

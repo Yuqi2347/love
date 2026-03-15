@@ -1,5 +1,8 @@
 package com.campus.love.match.service;
 
+import com.campus.love.common.utils.InterestTagConverter;
+import com.campus.love.profile.entity.UserPortrait;
+import com.campus.love.profile.mapper.UserPortraitMapper;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +39,7 @@ import java.util.stream.Collectors;
 public class TagWeightCache {
 
     private final UserMapper userMapper;
+    private final UserPortraitMapper userPortraitMapper;
     private final RedisTemplate<String, Object> redisTemplate;
 
     /**
@@ -243,56 +247,62 @@ public class TagWeightCache {
     }
 
     /**
-     * 获取所有活跃用户的兴趣标签
+     * 获取所有活跃用户的兴趣标签（tag code，新格式优先）
      */
     private Set<String> getAllActiveTags() {
+        Set<String> allTags = new HashSet<>();
+        List<UserPortrait> portraits = userPortraitMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UserPortrait>()
+                        .isNotNull(UserPortrait::getInterestTags)
+                        .ne(UserPortrait::getInterestTags, "")
+        );
+        for (UserPortrait p : portraits) {
+            allTags.addAll(InterestTagConverter.extractCodesFromNewFormat(p.getInterestTags()));
+        }
         List<User> activeUsers = userMapper.selectList(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<User>()
                         .eq(User::getStatus, 1)
                         .isNotNull(User::getInterests)
                         .ne(User::getInterests, "")
         );
-
-        return activeUsers.stream()
-                .map(User::getInterests)
-                .filter(Objects::nonNull)
-                .flatMap(interests -> Arrays.stream(interests.split(",")))
-                .map(String::trim)
-                .filter(s -> !s.isEmpty())
-                .collect(Collectors.toSet());
+        for (User u : activeUsers) {
+            String converted = InterestTagConverter.legacyToNewFormat(u.getInterests());
+            if (converted != null) allTags.addAll(InterestTagConverter.extractCodesFromNewFormat(converted));
+        }
+        return allTags;
     }
 
     /**
-     * 统计每个标签的使用人数
+     * 统计每个标签的使用人数（按 tag code）
      */
     private Map<String, Integer> countTagUsage(Collection<String> tags) {
-        if (tags == null || tags.isEmpty()) {
-            return Collections.emptyMap();
-        }
-
+        if (tags == null || tags.isEmpty()) return Collections.emptyMap();
         Map<String, Integer> tagCounts = new HashMap<>();
-
+        List<UserPortrait> portraits = userPortraitMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<UserPortrait>()
+                        .isNotNull(UserPortrait::getInterestTags)
+                        .ne(UserPortrait::getInterestTags, "")
+        );
+        for (UserPortrait p : portraits) {
+            Set<String> userCodes = InterestTagConverter.extractCodesFromNewFormat(p.getInterestTags());
+            for (String tag : userCodes) {
+                if (tags.contains(tag)) tagCounts.merge(tag, 1, Integer::sum);
+            }
+        }
         List<User> activeUsers = userMapper.selectList(
                 new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<User>()
                         .eq(User::getStatus, 1)
                         .isNotNull(User::getInterests)
                         .ne(User::getInterests, "")
         );
-
-        for (User user : activeUsers) {
-            String interests = user.getInterests();
-            if (interests == null || interests.isEmpty()) continue;
-
-            Set<String> userTags = Arrays.stream(interests.split(","))
-                    .map(String::trim)
-                    .filter(tags::contains)
-                    .collect(Collectors.toSet());
-
-            for (String tag : userTags) {
-                tagCounts.merge(tag, 1, Integer::sum);
+        for (User u : activeUsers) {
+            String converted = InterestTagConverter.legacyToNewFormat(u.getInterests());
+            if (converted == null) continue;
+            Set<String> userCodes = InterestTagConverter.extractCodesFromNewFormat(converted);
+            for (String tag : userCodes) {
+                if (tags.contains(tag)) tagCounts.merge(tag, 1, Integer::sum);
             }
         }
-
         return tagCounts;
     }
 

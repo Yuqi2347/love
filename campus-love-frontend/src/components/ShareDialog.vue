@@ -2,6 +2,7 @@
   <el-dialog
     v-model="showPopup"
     title="分享帖子"
+    destroy-on-close
     width="500px"
     :close-on-click-modal="false"
     @close="handleClose"

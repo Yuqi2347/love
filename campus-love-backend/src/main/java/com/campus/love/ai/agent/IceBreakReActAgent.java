@@ -8,6 +8,8 @@ import com.campus.love.ai.service.AiService;
 import com.campus.love.ai.service.YuanFenService;
 import com.campus.love.feed.entity.FeedPost;
 import com.campus.love.feed.mapper.FeedPostMapper;
+import com.campus.love.common.utils.InterestTagConverter;
+import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -38,6 +40,7 @@ public class IceBreakReActAgent {
     private final RagContextBuilder ragContextBuilder;
     private final FeedPostMapper feedPostMapper;
     private final UserMapper userMapper;
+    private final UserPortraitService userPortraitService;
     private final MessageMapper messageMapper;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -152,13 +155,17 @@ public class IceBreakReActAgent {
         return new FeedCheckResult(!posts.isEmpty(), tags, snippet);
     }
 
-    /** 工具：获取共同兴趣 */
+    /** 工具：获取共同兴趣（标签名） */
     public List<String> getCommonInterests(Long selfId, Long targetId) {
         User u1 = userMapper.selectById(selfId);
         User u2 = userMapper.selectById(targetId);
         if (u1 == null || u2 == null) return Collections.emptyList();
-        Set<String> s1 = parseInterests(u1.getInterests());
-        Set<String> s2 = parseInterests(u2.getInterests());
+        var p1 = userPortraitService.getPortrait(selfId);
+        var p2 = userPortraitService.getPortrait(targetId);
+        String d1 = InterestTagConverter.getInterestsForDisplay(p1 != null ? p1.getInterestTags() : null, u1.getInterests());
+        String d2 = InterestTagConverter.getInterestsForDisplay(p2 != null ? p2.getInterestTags() : null, u2.getInterests());
+        Set<String> s1 = parseInterests(d1);
+        Set<String> s2 = parseInterests(d2);
         s1.retainAll(s2);
         return new ArrayList<>(s1);
     }

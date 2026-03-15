@@ -1,7 +1,7 @@
 <template>
   <div class="message-page">
     <div class="page-header">
-      <h2 class="page-title">私信</h2>
+      <h2 class="page-title">消息</h2>
     </div>
 
     <!-- 通知类型 Tabs -->
@@ -128,6 +128,40 @@
       </div>
     </div>
 
+    <!-- 邀约通知 -->
+    <div v-if="activeTab === 'invites'" class="notify-list">
+      <div v-if="displayedInvites.length" class="notify-list-inner">
+        <div class="notify-list-header">
+          <span class="notify-count">共 {{ displayedInvites.length }} 条</span>
+          <button v-if="displayedInvites.length" class="clear-all-btn" @click="clearTab('invites')">清空</button>
+        </div>
+        <div
+          v-for="item in displayedInvites"
+          :key="item.id"
+          :class="['notify-item', { 'is-read': item.isRead }]"
+          @click="handleInviteNotifyClick(item)"
+        >
+          <div class="invite-notify-icon">
+            <el-icon :size="22"><Calendar /></el-icon>
+          </div>
+          <div class="notify-body">
+            <span class="notify-text invite-notify-title">{{ item.title }}</span>
+            <div class="notify-content-text">{{ item.content }}</div>
+            <div class="notify-time">{{ formatConvTime(item.createdAt) }}</div>
+          </div>
+          <span v-if="!item.isRead" class="unread-indicator" />
+          <button class="notify-delete-btn" title="从列表移除" @click.stop.prevent="dismissInviteNotify(item.id)">
+            <el-icon :size="16"><Delete /></el-icon>
+          </button>
+        </div>
+      </div>
+      <div v-else class="empty-state">
+        <el-icon class="empty-icon" :size="48"><Calendar /></el-icon>
+        <p>暂无邀约通知</p>
+        <p class="empty-hint">加入或发起邀约后，相关动态会在这里提醒你</p>
+      </div>
+    </div>
+
     <!-- 评论和@ -->
     <div v-if="activeTab === 'comments'" class="notify-list">
       <div v-if="displayedComments.length" class="notify-list-inner">
@@ -163,19 +197,20 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useChatStore } from '@/store/chatStore'
 import { useFollowStore } from '@/store/followStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { useNotifyDismissStore } from '@/store/notifyDismissStore'
 import { followUser, getFollowerList, type FollowUser } from '@/api/followApi'
 import { ElMessage } from 'element-plus'
-import { Delete } from '@element-plus/icons-vue'
+import { Delete, Calendar } from '@element-plus/icons-vue'
 import { storeToRefs } from 'pinia'
 import request from '@/api/request'
 import type { ApiResult } from '@/api/request'
 
 const router = useRouter()
+const route = useRoute()
 const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect fill="%23f0f2f5" width="48" height="48" rx="24"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="22">👤</text></svg>'
 const chatStore = useChatStore()
 const followStore = useFollowStore()
@@ -215,8 +250,35 @@ interface SocialNotification {
   createdAt: string
 }
 
+interface InviteNotification {
+  id: number
+  inviteId: number | null
+  type: string
+  title: string
+  content: string
+  isRead: boolean
+  createdAt: string
+}
+
 const socialNotifications = ref<SocialNotification[]>([])
 const followerUsers = ref<FollowUser[]>([])
+const inviteNotifications = ref<InviteNotification[]>([])
+
+// 邀约通知本地已移除 ID
+const INVITE_DISMISSED_KEY = 'campus_love_invite_notify_dismissed'
+function loadDismissedInviteIds(): Set<number> {
+  try {
+    const s = localStorage.getItem(INVITE_DISMISSED_KEY)
+    if (s) return new Set(JSON.parse(s) as number[])
+  } catch { /* ignore */ }
+  return new Set()
+}
+function saveDismissedInviteIds() {
+  try {
+    localStorage.setItem(INVITE_DISMISSED_KEY, JSON.stringify([...dismissedInviteIds.value]))
+  } catch { /* ignore */ }
+}
+const dismissedInviteIds = ref<Set<number>>(loadDismissedInviteIds())
 
 const likeNotifications = computed(() => socialNotifications.value.filter(n => n.type === 'LIKE'))
 const followerNotifications = computed(() => {
@@ -244,6 +306,9 @@ const displayedFollowers = computed(() =>
 const displayedComments = computed(() =>
   commentNotifications.value.filter(n => !notifyDismissStore.raw.comments.includes(n.id))
 )
+const displayedInvites = computed(() =>
+  inviteNotifications.value.filter(n => !dismissedInviteIds.value.has(n.id))
+)
 
 function dismissLike(id: number) {
   if (notifyDismissStore.dismissLike(id)) ElMessage.success('已移除')
@@ -261,13 +326,22 @@ function dismissConversation(userId: number) {
   if (notifyDismissStore.dismissChat(userId)) ElMessage.success('已移除')
 }
 
-function clearTab(tab: 'chat' | 'likes' | 'followers' | 'comments') {
+function dismissInviteNotify(id: number) {
+  dismissedInviteIds.value.add(id)
+  saveDismissedInviteIds()
+  ElMessage.success('已移除')
+}
+
+function clearTab(tab: 'chat' | 'likes' | 'followers' | 'comments' | 'invites') {
   if (tab === 'chat') {
     notifyDismissStore.clearChats(conversations.value.map(c => c.userId))
   } else if (tab === 'likes') {
     notifyDismissStore.clearLikes(likeNotifications.value.map(n => n.id))
   } else if (tab === 'followers') {
     notifyDismissStore.clearFollowers(followerNotifications.value.map(n => n.senderId))
+  } else if (tab === 'invites') {
+    inviteNotifications.value.forEach(n => dismissedInviteIds.value.add(n.id))
+    saveDismissedInviteIds()
   } else {
     notifyDismissStore.clearComments(commentNotifications.value.map(n => n.id))
   }
@@ -284,10 +358,14 @@ const unreadFollowerCount = computed(() =>
 const unreadCommentCount = computed(() =>
   displayedComments.value.filter(n => !readIds.value.has(n.id)).length
 )
+const unreadInviteCount = computed(() =>
+  displayedInvites.value.filter(n => !n.isRead).length
+)
 
 const notifyTabs = computed(() => {
   return [
-    { key: 'chat', label: '消息', icon: 'ChatDotRound', count: displayedConversations.value.reduce((s, c) => s + (c.unreadCount || 0), 0) },
+    { key: 'chat', label: '私信', icon: 'ChatDotRound', count: displayedConversations.value.reduce((s, c) => s + (c.unreadCount || 0), 0) },
+    { key: 'invites', label: '邀约', icon: 'Calendar', count: unreadInviteCount.value },
     { key: 'likes', label: '赞', icon: 'StarFilled', count: unreadLikeCount.value },
     { key: 'followers', label: '新增关注', icon: 'UserFilled', count: unreadFollowerCount.value },
     { key: 'comments', label: '评论@', icon: 'ChatDotRound', count: unreadCommentCount.value },
@@ -308,6 +386,9 @@ watch(activeTab, (tab) => {
     commentNotifications.value.forEach(n => readIds.value.add(n.id))
     badgeStore.markFeedActivityViewed()
     saveReadIds()
+  } else if (tab === 'invites') {
+    markAllInviteNotificationsRead()
+    badgeStore.markInviteActivityViewed()
   }
 })
 
@@ -316,8 +397,59 @@ async function loadSocialNotifications() {
     const res = await request.get<ApiResult<SocialNotification[]>>('/feed/social-notifications')
     socialNotifications.value = res.data.data || []
   } catch {
-    // 如果后端接口还未实现，静默处理
     socialNotifications.value = []
+  }
+}
+
+async function loadInviteNotifications() {
+  try {
+    const res = await request.get<ApiResult<Array<{
+      id: number
+      inviteId: number | null
+      type: string
+      title: string
+      content: string
+      isRead: boolean
+      createdAt: string
+    }>>>('/notification?unreadOnly=false')
+    const all = res.data.data || []
+    // 只保留邀约相关通知
+    inviteNotifications.value = all
+      .filter(n => n.type && n.type.startsWith('INVITE_'))
+      .map(n => ({
+        id: n.id,
+        inviteId: n.inviteId,
+        type: n.type,
+        title: n.title,
+        content: n.content,
+        isRead: n.isRead,
+        createdAt: n.createdAt ? String(n.createdAt) : '',
+      }))
+  } catch {
+    inviteNotifications.value = []
+  }
+}
+
+async function markAllInviteNotificationsRead() {
+  const unread = displayedInvites.value.filter(n => !n.isRead)
+  for (const n of unread) {
+    try {
+      await request.post(`/notification/${n.id}/read`)
+      n.isRead = true
+    } catch { /* ignore */ }
+  }
+}
+
+async function handleInviteNotifyClick(item: InviteNotification) {
+  // 标记已读
+  if (!item.isRead) {
+    try {
+      await request.post(`/notification/${item.id}/read`)
+      item.isRead = true
+    } catch { /* ignore */ }
+  }
+  if (item.inviteId) {
+    router.push({ path: `/invite/${item.inviteId}`, query: { from: 'notify' } })
   }
 }
 
@@ -427,6 +559,11 @@ onMounted(() => {
   chatStore.fetchConversations()
   loadSocialNotifications()
   loadFollowers()
+  loadInviteNotifications()
+  // 如果从邀约通知跳转回来，自动切换到邀约 tab
+  if (route.query.tab === 'invites') {
+    activeTab.value = 'invites'
+  }
   // 确保关注列表已加载（用于显示备注名）
   if (followStore.followedIds.length === 0) {
     followStore.loadFollowedIds()
@@ -756,5 +893,32 @@ async function loadFollowers() {
   .empty-icon { font-size: 64px; margin-bottom: 8px; }
   p { color: $text-muted; font-size: 15px; }
   .empty-hint { font-size: 13px; }
+}
+
+.invite-notify-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: $radius-full;
+  background: rgba($primary, 0.1);
+  color: $primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.invite-notify-title {
+  font-weight: 600;
+  color: $text-primary;
+  font-size: 14px;
+  display: block;
+  margin-bottom: 2px;
+}
+
+.notify-content-text {
+  font-size: 13px;
+  color: $text-secondary;
+  line-height: 1.5;
+  margin-top: 2px;
 }
 </style>
