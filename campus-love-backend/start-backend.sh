@@ -22,9 +22,11 @@ resolve_env_file() {
   return 1
 }
 
+LOADED_COUNT=0
+
 load_env_file() {
   local file="$1"
-  local count=0
+  LOADED_COUNT=0
   while IFS= read -r line || [[ -n "$line" ]]; do
     line="${line%$'\r'}"
     [[ -z "$line" ]] && continue
@@ -34,10 +36,9 @@ load_env_file() {
       local value="${line#*=}"
       name="$(echo "$name" | xargs)"
       export "$name=$value"
-      count=$((count + 1))
+      LOADED_COUNT=$((LOADED_COUNT + 1))
     fi
   done < "$file"
-  echo "$count"
 }
 
 start_backend() {
@@ -59,7 +60,7 @@ start_backend() {
 }
 
 RESOLVED_ENV_FILE="$(resolve_env_file "$ENV_FILE")"
-LOADED_COUNT="$(load_env_file "$RESOLVED_ENV_FILE")"
+load_env_file "$RESOLVED_ENV_FILE"
 echo "Loaded ${LOADED_COUNT} environment variables from ${RESOLVED_ENV_FILE}"
 
 if [[ "$SKIP_RUN" == "true" ]]; then

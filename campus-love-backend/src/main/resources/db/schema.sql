@@ -3,7 +3,7 @@
 -- 新环境首次初始化时只需执行本脚本一次：
 --   mysql -uroot -p campus_love < schema.sql
 -- 或在客户端：SOURCE /绝对路径/schema.sql;
--- 已有数据库升级请使用增量脚本 V2～V24。
+-- 已有数据库升级请使用增量脚本 V2～V36。
 -- =============================================
 
 CREATE DATABASE IF NOT EXISTS campus_love
@@ -44,6 +44,7 @@ CREATE TABLE IF NOT EXISTS t_user (
     last_feed_activity_viewed_at  DATETIME DEFAULT NULL COMMENT '上次查看朋友圈动态活动时间',
     last_invite_activity_viewed_at DATETIME DEFAULT NULL COMMENT '上次查看邀约活动时间',
     feed_visibility               VARCHAR(16) DEFAULT 'ALL' COMMENT '朋友圈可见性：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见（V15）',
+    feed_visibility_time         INT          DEFAULT -1 COMMENT '动态可见时间(天)：3=近三天，30=近一月，180=近半年，-1=全部（V20）',
     moment_photo_url              VARCHAR(256) DEFAULT NULL COMMENT '心动一刻照片URL（V13）',
     moment_self_score             TINYINT      DEFAULT NULL COMMENT '自评颜值分1-10（V13）',
     moment_banned                 TINYINT(1)   DEFAULT 0   COMMENT '是否被禁止参加心动一刻（V13）',
@@ -51,6 +52,9 @@ CREATE TABLE IF NOT EXISTS t_user (
     bazi_unknown                   TINYINT(1)   DEFAULT 0   COMMENT '生辰时辰是否不知道（V24）',
     ice_break_enabled              TINYINT(1)   DEFAULT 0   COMMENT '是否开启破冰功能（V24）',
     ai_disclosure_settings         JSON         DEFAULT (JSON_OBJECT('mbti', true, 'zodiac', true, 'majorCategory', true, 'interestTags', true, 'naturalLangTags', false, 'baziInfo', false, 'questionnaireHints', false)) COMMENT 'AI信息公开授权（V24）',
+    cover_image_url                VARCHAR(512) DEFAULT NULL COMMENT '个人主页背景图URL（V19）',
+    deleted_at                     DATETIME     DEFAULT NULL COMMENT 'NULL=正常，有值=已注销（V30）',
+    delete_reason                  TINYINT      DEFAULT NULL COMMENT '注销原因枚举（V30）',
     UNIQUE KEY uk_email (email)
 ) COMMENT '用户基础信息';
 
@@ -125,6 +129,7 @@ CREATE TABLE IF NOT EXISTS t_feed_comment (
     post_id         BIGINT          NOT NULL,
     user_id         BIGINT          NOT NULL,
     content         VARCHAR(512)    NOT NULL,
+    images          VARCHAR(1024)   DEFAULT NULL COMMENT '评论图片URL，逗号分隔（V21）',
     parent_id       BIGINT          DEFAULT NULL COMMENT '父评论ID，用于回复',
     replied_user_id BIGINT          DEFAULT NULL COMMENT '被回复的用户ID（V16）',
     deleted         TINYINT(1)      DEFAULT 0 COMMENT '0=正常 1=已删除（V17）',
@@ -167,6 +172,7 @@ CREATE TABLE IF NOT EXISTS t_invite (
     invite_period   VARCHAR(16)     DEFAULT 'ONCE' COMMENT '周期：ONCE/WEEKLY/MONTHLY',
     period_config   VARCHAR(128)    DEFAULT NULL COMMENT '周期配置JSON',
     invite_time     DATETIME        NOT NULL COMMENT '邀约时间',
+    invite_end_time DATETIME        DEFAULT NULL COMMENT '邀约结束时间（可选）（V18）',
     location        VARCHAR(256)    DEFAULT NULL COMMENT '地点',
     max_participants INT            DEFAULT NULL COMMENT '最大人数',
     participant_count INT           DEFAULT 0 COMMENT '当前参与人数',
@@ -267,12 +273,13 @@ CREATE TABLE IF NOT EXISTS t_chat_group_member (
     INDEX idx_user (user_id)
 ) COMMENT '聊天群成员表';
 
--- 站内通知表（V5，含 V7 索引）
+-- 站内通知表（V5，含 V7 索引、V23 post_id）
 CREATE TABLE IF NOT EXISTS t_notification (
     id              BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id         BIGINT          NOT NULL COMMENT '接收通知的用户ID',
     sender_id       BIGINT          DEFAULT NULL COMMENT '触发通知的用户ID',
     invite_id       BIGINT          DEFAULT NULL COMMENT '关联的邀约ID',
+    post_id         BIGINT          DEFAULT NULL COMMENT '关联的动态ID（评论/回复通知）（V23）',
     type            VARCHAR(32)     NOT NULL COMMENT '通知类型',
     title           VARCHAR(128)    NOT NULL COMMENT '通知标题',
     content         VARCHAR(512)    DEFAULT NULL COMMENT '通知内容',
@@ -281,10 +288,11 @@ CREATE TABLE IF NOT EXISTS t_notification (
     read_at         DATETIME        DEFAULT NULL COMMENT '阅读时间',
     INDEX idx_user_read (user_id, is_read),
     INDEX idx_invite (invite_id),
+    INDEX idx_notification_post (post_id),
     INDEX idx_notification_list (user_id, is_read, created_at)
 ) COMMENT '站内通知表';
 
--- 用户个性化匹配权重表（V6）
+-- 用户个性化匹配权重表（V6、V33、V30）
 CREATE TABLE IF NOT EXISTS t_user_match_weights (
     id              BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id         BIGINT          NOT NULL UNIQUE COMMENT '用户ID',
@@ -294,6 +302,15 @@ CREATE TABLE IF NOT EXISTS t_user_match_weights (
     weight_age_grade DECIMAL(5,4)   DEFAULT 0.1000 COMMENT '年龄年级权重',
     weight_major    DECIMAL(5,4)    DEFAULT 0.0700 COMMENT '专业权重',
     weight_zodiac   DECIMAL(5,4)    DEFAULT 0.0600 COMMENT '星座权重',
+    weight_lifestyle DECIMAL(3,2)   DEFAULT 0.20 COMMENT '生活方式权重（V30）',
+    similarity_complement_bias DECIMAL(4,3) DEFAULT 0 COMMENT '-1相似+1互补（V30）',
+    filter_gender   VARCHAR(10)     DEFAULT NULL COMMENT '性别筛选（V30）',
+    filter_age_min   INT            DEFAULT NULL COMMENT '年龄下限（V30）',
+    filter_age_max   INT            DEFAULT NULL COMMENT '年龄上限（V30）',
+    filter_grade_min INT            DEFAULT NULL COMMENT '年级下限（V30）',
+    filter_grade_max INT            DEFAULT NULL COMMENT '年级上限（V30）',
+    filter_school_only TINYINT(1)   DEFAULT 1 COMMENT '是否仅同校（V30）',
+    source          VARCHAR(16)    DEFAULT 'default' COMMENT 'default/user_set/inferred（V30）',
     action_count    INT             DEFAULT 0 COMMENT '累计行为次数',
     last_updated    DATETIME        DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
@@ -471,13 +488,14 @@ CREATE TABLE IF NOT EXISTS t_moment_pair_score (
     INDEX idx_week_user_b (week_tag, user_id_b)
 ) COMMENT '心动时刻候选对分数缓存';
 
--- 举报记录表（V17）
+-- 举报记录表（V17、V22）
 CREATE TABLE IF NOT EXISTS t_report (
     id            BIGINT PRIMARY KEY AUTO_INCREMENT,
     reporter_id   BIGINT NOT NULL COMMENT '举报人',
     target_type   VARCHAR(16) NOT NULL COMMENT 'POST/COMMENT/USER/MESSAGE',
     target_id     BIGINT NOT NULL COMMENT '目标ID',
-    reason        VARCHAR(500) NOT NULL COMMENT '举报理由',
+    violation_types VARCHAR(256) DEFAULT NULL COMMENT '违规类型，逗号分隔（V22）',
+    reason        VARCHAR(500) DEFAULT NULL COMMENT '举报理由（选填）（V22）',
     status        VARCHAR(16) DEFAULT 'PENDING' COMMENT 'PENDING/REVIEWED/RESOLVED',
     admin_note    VARCHAR(500) DEFAULT NULL COMMENT '管理员备注',
     created_at    DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -568,3 +586,121 @@ CREATE TABLE IF NOT EXISTS t_relation_milestone (
     notified_at    DATETIME    DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_milestone (user_id_a, user_id_b, milestone_type)
 ) COMMENT '关系节点提醒记录（V24）';
+
+-- 破冰功能按好友授权表（V26）
+CREATE TABLE IF NOT EXISTS t_user_ice_break_allow (
+    user_id         BIGINT NOT NULL COMMENT '用户ID（我）',
+    allowed_user_id BIGINT NOT NULL COMMENT '允许使用破冰的好友ID',
+    created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+    PRIMARY KEY (user_id, allowed_user_id),
+    INDEX idx_user (user_id)
+) COMMENT '破冰功能按好友授权（互关后可单独允许某人使用）';
+
+-- 用户统计表（V30：从 t_user 迁出）
+CREATE TABLE IF NOT EXISTS t_user_stats (
+    user_id             BIGINT PRIMARY KEY,
+    activity_score      INT DEFAULT 0,
+    user_level          INT DEFAULT 1,
+    invite_count        INT DEFAULT 0,
+    participate_count   INT DEFAULT 0,
+    credit_score        INT DEFAULT 100,
+    created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) COMMENT '用户统计（从 t_user 迁出）';
+
+-- 用户画像表（V30：基础+问卷+OCEAN 合并）
+CREATE TABLE IF NOT EXISTS t_user_portrait (
+    user_id                 BIGINT PRIMARY KEY,
+    mbti                    VARCHAR(8) DEFAULT NULL,
+    zodiac                  VARCHAR(16) DEFAULT NULL,
+    bazi                    VARCHAR(64) DEFAULT NULL,
+    bio                     VARCHAR(256) DEFAULT NULL,
+    interest_tags           JSON DEFAULT NULL COMMENT '{"body_space":[{"code":"tag_fitness","sharing":0.5,"intensity":0.5}]}',
+    target_gender           VARCHAR(10) DEFAULT NULL,
+    social_style            CHAR(1) DEFAULT NULL,
+    life_rhythm             CHAR(1) DEFAULT NULL,
+    companionship_style    CHAR(1) DEFAULT NULL,
+    appearance_requirement CHAR(1) DEFAULT NULL,
+    partner_personality     CHAR(1) DEFAULT NULL,
+    major_preference        CHAR(1) DEFAULT NULL,
+    age_range_preference    VARCHAR(20) DEFAULT NULL,
+    age_preference_min      INT DEFAULT -10,
+    age_preference_max      INT DEFAULT 10,
+    grade_range_min         INT DEFAULT 1,
+    grade_range_max         INT DEFAULT 11,
+    grade_range_preference  CHAR(1) DEFAULT NULL,
+    date_style              CHAR(1) DEFAULT NULL,
+    intimacy_pace           CHAR(1) DEFAULT NULL,
+    loyalty_value           CHAR(1) DEFAULT NULL,
+    premarital_cohabitation CHAR(1) DEFAULT NULL,
+    future_lifestyle        CHAR(1) DEFAULT NULL,
+    relationship_core_value CHAR(1) DEFAULT NULL COMMENT 'Q15/3.4 核心价值',
+    appearance_score        DECIMAL(3,1) DEFAULT NULL,
+    personality_base        CHAR(1) DEFAULT NULL,
+    campus_focus            CHAR(1) DEFAULT NULL,
+    emotion_style           CHAR(1) DEFAULT NULL,
+    career_ambition_pref    CHAR(1) DEFAULT NULL,
+    honesty_level           CHAR(1) DEFAULT NULL,
+    premarital_sex          CHAR(1) DEFAULT NULL,
+    conflict_style          CHAR(1) DEFAULT NULL,
+    social_boundary         CHAR(1) DEFAULT NULL,
+    campus_love_plan        CHAR(1) DEFAULT NULL,
+    idol_role               CHAR(1) DEFAULT NULL,
+    temptation_response     CHAR(1) DEFAULT NULL,
+    reality_condition       CHAR(1) DEFAULT NULL,
+    human_nature_view       CHAR(1) DEFAULT NULL,
+    breakup_view            CHAR(1) DEFAULT NULL,
+    career_love_conflict    CHAR(1) DEFAULT NULL,
+    emotion_priority        CHAR(1) DEFAULT NULL,
+    life_goal_priority      CHAR(1) DEFAULT NULL,
+    questionnaire_snapshot JSON DEFAULT NULL COMMENT '问卷完整快照',
+    questionnaire_version   INT DEFAULT 1,
+    ocean_o_long            DECIMAL(4,1) DEFAULT NULL,
+    ocean_c_long            DECIMAL(4,1) DEFAULT NULL,
+    ocean_e_long            DECIMAL(4,1) DEFAULT NULL,
+    ocean_a_long            DECIMAL(4,1) DEFAULT NULL,
+    ocean_n_long            DECIMAL(4,1) DEFAULT NULL,
+    ocean_o_short           DECIMAL(4,1) DEFAULT NULL,
+    ocean_c_short           DECIMAL(4,1) DEFAULT NULL,
+    ocean_e_short           DECIMAL(4,1) DEFAULT NULL,
+    ocean_a_short           DECIMAL(4,1) DEFAULT NULL,
+    ocean_n_short           DECIMAL(4,1) DEFAULT NULL,
+    ocean_confidence        JSON DEFAULT NULL COMMENT 'OCEAN置信度 {"O":0.75,...}',
+    has_real_ocean          TINYINT(1) DEFAULT 0,
+    natural_language_tags   JSON DEFAULT NULL,
+    love_attachment_type    VARCHAR(20) DEFAULT NULL,
+    attracted_to_traits     JSON DEFAULT NULL,
+    friction_points         JSON DEFAULT NULL,
+    profile_version         INT DEFAULT 1,
+    last_long_update        DATE DEFAULT NULL,
+    last_short_update       DATE DEFAULT NULL,
+    prioritize_matching     TINYINT(1) DEFAULT 0 COMMENT '是否开启优先匹配（V34）',
+    created_at              DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at              DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) COMMENT '用户画像（基础+问卷+OCEAN）';
+
+-- 兴趣标签元数据表（V30）
+CREATE TABLE IF NOT EXISTS t_interest_tag_meta (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    tag_code    VARCHAR(64) NOT NULL UNIQUE,
+    tag_name    VARCHAR(64) NOT NULL,
+    dimension   VARCHAR(32) NOT NULL COMMENT 'body_space/aesthetics_creation 等',
+    signals     JSON DEFAULT NULL COMMENT '人格信号',
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_dimension (dimension)
+) COMMENT '兴趣标签元数据';
+
+-- 问卷元数据表（V30）
+CREATE TABLE IF NOT EXISTS t_questionnaire_meta (
+    id          BIGINT PRIMARY KEY AUTO_INCREMENT,
+    version     INT NOT NULL UNIQUE,
+    questions   JSON NOT NULL COMMENT '值域定义 [{"field":"social_style","options":{"A":"...","B":"..."}}]',
+    created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
+) COMMENT '问卷元数据（值域权威定义）';
+
+-- 用户 embedding 表（V30）
+CREATE TABLE IF NOT EXISTS t_user_embedding (
+    user_id     BIGINT PRIMARY KEY,
+    embedding   JSON NOT NULL,
+    updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+) COMMENT 'embedding暂用JSON存储-技术债-用户量超5000或ANN查询P99超500ms时迁移至pgvector或Milvus';
