@@ -23,7 +23,7 @@
         </nav>
 
         <div v-if="userStore.user" class="sidebar-user" @click="$router.push('/profile')">
-          <img :src="userStore.user.avatarUrl || defaultAvatar" class="avatar" width="40" height="40" />
+          <AppAvatar :src="userStore.user.avatarUrl" :name="userStore.user.nickname" :size="40" class="avatar" />
           <div class="user-info">
             <div class="user-name text-ellipsis">{{ userStore.user.nickname }}</div>
             <div class="user-email text-ellipsis">{{ userStore.user.email }}</div>
@@ -62,7 +62,7 @@
             class="search-item"
             @click="goToProfile(u.id)"
           >
-            <img :src="u.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
+            <AppAvatar :src="u.avatarUrl" :name="u.nickname" :size="36" class="avatar" />
             <span class="search-item-name text-ellipsis">{{ u.nickname }}</span>
             <button
               :class="['btn-sm', followStore.isFollowed(u.id) ? 'btn-followed' : 'btn-outline']"
@@ -83,7 +83,7 @@
             class="recommend-item"
             @click="$router.push(`/profile/${m.userId}`)"
           >
-            <img :src="m.avatarUrl || defaultAvatar" class="avatar" width="40" height="40" />
+            <AppAvatar :src="m.avatarUrl" :name="m.nickname" :size="40" class="avatar" />
             <div class="recommend-info">
               <div class="recommend-name text-ellipsis">{{ m.nickname }}</div>
               <div class="recommend-meta">匹配度 {{ m.matchScore }}%</div>
@@ -108,7 +108,7 @@
             class="recommend-item"
             @click="$router.push(`/profile/${m.userId}`)"
           >
-            <img :src="m.avatarUrl || defaultAvatar" class="avatar" width="40" height="40" />
+            <AppAvatar :src="m.avatarUrl" :name="m.nickname" :size="40" class="avatar" />
             <div class="recommend-info">
               <div class="recommend-name text-ellipsis">{{ followStore.getDisplayName(m.userId, m.nickname) }}</div>
               <div class="recommend-meta">匹配度 {{ m.matchScore }}%</div>
@@ -245,8 +245,9 @@ import { ElMessage } from 'element-plus'
 // 右侧面板不再展示”热门标签”，改为热门邀约看板
 import { getHotInviteTypeCounts, type InviteTypeCount } from '@/api/inviteApi'
 import { InviteType, INVITE_TYPE_LABELS } from '@/constants/inviteConst'
-import { DEFAULT_AVATAR, getMediaUrl, getTypeColor } from '@/utils/shared'
+import { getMediaUrl, getTypeColor } from '@/utils/shared'
 import { getSchoolTheme } from '@/constants/schoolThemes'
+import AppAvatar from '@/components/AppAvatar.vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -255,10 +256,8 @@ const badgeStore = useBadgeStore()
 const followStore = useFollowStore()
 const matchStore = useMatchStore()
 
-const defaultAvatar = DEFAULT_AVATAR
-
 // 学校主题色注入
-const schoolTheme = computed(() => getSchoolTheme(userStore.user?.school))
+const schoolTheme = computed(() => getSchoolTheme(userStore.user?.school ?? undefined))
 const schoolColorStyle = computed(() => ({
   '--school-color': schoolTheme.value.primaryColor,
   '--school-color-light': `${schoolTheme.value.primaryColor}15`,

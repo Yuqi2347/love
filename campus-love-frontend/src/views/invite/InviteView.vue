@@ -95,12 +95,12 @@
             <template v-if="invite.inviteMode === 'PRIVATE'">
               <div class="invite-1v1-users">
                 <div class="invite-1v1-user" @click.stop="$router.push(`/profile/${invite.creatorId}`)">
-                  <AppAvatar :src="invite.creator?.avatarUrl" :size="28" @click.stop="$router.push(`/profile/${invite.creatorId}`)" />
+                  <AppAvatar :src="invite.creator?.avatarUrl" :name="invite.creator?.nickname" :size="28" @click.stop="$router.push(`/profile/${invite.creatorId}`)" />
                   <span class="invite-1v1-name">{{ invite.creator?.nickname || '未知' }}</span>
                 </div>
                 <span class="invite-1v1-vs">↔</span>
                 <div class="invite-1v1-user" @click.stop="$router.push(`/profile/${invite.targetUserId}`)">
-                  <AppAvatar :src="invite.targetUser?.avatarUrl" :size="28" @click.stop="$router.push(`/profile/${invite.targetUserId}`)" />
+                  <AppAvatar :src="invite.targetUser?.avatarUrl" :name="invite.targetUser?.nickname" :size="28" @click.stop="$router.push(`/profile/${invite.targetUserId}`)" />
                   <span class="invite-1v1-name">{{ invite.targetUser?.nickname || 'TA' }}</span>
                 </div>
               </div>

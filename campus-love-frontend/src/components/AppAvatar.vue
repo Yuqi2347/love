@@ -12,14 +12,16 @@
 
 <script setup lang="ts">
 import { computed, ref } from 'vue'
-import { DEFAULT_AVATAR, getMediaUrl } from '@/utils/shared'
+import { buildDefaultAvatar, getMediaUrl } from '@/utils/shared'
 
 const props = withDefaults(defineProps<{
   src?: string | null
+  name?: string | null
   size?: number
   alt?: string
 }>(), {
   src: null,
+  name: null,
   size: 40,
   alt: '',
 })
@@ -31,9 +33,10 @@ defineEmits<{
 const hasFailed = ref(false)
 
 const resolvedSrc = computed(() => {
-  if (hasFailed.value) return DEFAULT_AVATAR
+  const fallback = buildDefaultAvatar(props.name)
+  if (hasFailed.value) return fallback
   const url = getMediaUrl(props.src ?? null)
-  return url || DEFAULT_AVATAR
+  return url || fallback
 })
 
 const sizeClass = computed(() => {

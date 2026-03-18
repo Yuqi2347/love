@@ -28,8 +28,14 @@ export const useUserStore = defineStore('user', () => {
     try {
       const res = await getMyProfile()
       user.value = res.data.data
-    } catch {
-      logout()
+    } catch (error: any) {
+      const status = error?.response?.status
+      if (status === 401 || status === 403) {
+        logout()
+        return
+      }
+      // 非鉴权类错误（如网络抖动）不主动登出，避免用户被误踢回登录页
+      console.warn('[userStore] fetchProfile failed without auth error, keep login state', error)
     }
   }
 

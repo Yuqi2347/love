@@ -4,10 +4,15 @@
       <button class="back-btn" @click="$router.push('/chat')">
         <el-icon><ArrowLeft /></el-icon>
       </button>
-      <img :src="otherUser?.avatarUrl || defaultAvatar" class="avatar clickable-avatar" width="36" height="36" @click="$router.push(`/profile/${otherUserId}`)" />
+      <AppAvatar
+        :src="otherUser?.avatarUrl"
+        :name="otherUser?.nickname"
+        :size="36"
+        class="avatar clickable-avatar"
+        @click="$router.push(`/profile/${otherUserId}`)"
+      />
       <div class="header-info">
         <div class="header-name">{{ otherUser ? followStore.getDisplayName(otherUser.id, otherUser.nickname) : '加载中...' }}</div>
-        <div class="header-status">{{ chatStore.connected ? '在线' : '离线' }}</div>
       </div>
       <button class="more-btn" @click="$router.push(`/profile/${otherUserId}`)">
         <el-icon><User /></el-icon>
@@ -21,12 +26,12 @@
         :key="msg.id"
         :class="['message-row', { mine: msg.senderId === myId }]"
       >
-        <img
+        <AppAvatar
           v-if="msg.senderId !== myId"
-          :src="msg.senderAvatar || defaultAvatar"
+          :src="msg.senderAvatar"
+          :name="msg.senderNickname"
+          :size="36"
           class="avatar msg-avatar clickable-avatar"
-          width="36"
-          height="36"
           @click="$router.push(`/profile/${msg.senderId}`)"
         />
         <!-- 邀约/帖子分享：独立卡片，不用气泡包裹 -->
@@ -146,7 +151,7 @@
     </Transition>
 
     <div class="chat-input-area">
-      <div v-if="!canSend" class="chat-limit-hint">未回复前只能发送两条消息</div>
+      <div v-if="!canSend" class="chat-limit-hint">未回复前只能发送一条消息</div>
       <!-- 允许对方获取破冰灵感（按好友单独设置） -->
       <div v-if="iceBreakStatus?.canAllow" class="ice-break-allow-row">
         <span class="ice-break-allow-label">允许TA获取破冰灵感</span>
@@ -178,7 +183,7 @@
           <el-icon :size="20"><Picture /></el-icon>
         </button>
         <EmojiPicker @insert="insertEmoji" />
-        <el-input ref="inputRef" v-model="inputText" :placeholder="canSend ? '输入消息...' : '未回复前只能发送两条消息，等待对方回复后可继续发送'" size="large" :disabled="!canSend" @keyup.enter="handleSend">
+        <el-input ref="inputRef" v-model="inputText" :placeholder="canSend ? '输入消息...' : '未回复前只能发送一条消息，等待对方回复后可继续发送'" size="large" :disabled="!canSend" @keyup.enter="handleSend">
           <template #append>
             <button class="send-btn" :disabled="!inputText.trim() || !canSend" @click="handleSend">
               <el-icon :size="20"><Promotion /></el-icon>
@@ -206,10 +211,8 @@ import { storeToRefs } from 'pinia'
 import { ElMessage } from 'element-plus'
 import { formatLocalDateTime } from '@/utils/dateTime'
 import EmojiPicker from '@/components/EmojiPicker.vue'
+import AppAvatar from '@/components/AppAvatar.vue'
 import { Close } from '@element-plus/icons-vue'
-import { DEFAULT_AVATAR } from '@/utils/shared'
-
-const defaultAvatar = DEFAULT_AVATAR
 
 const route = useRoute()
 const router = useRouter()
@@ -653,7 +656,6 @@ async function handleMediaSelect(e: Event) {
 
   .header-info { flex: 1; }
   .header-name { font-size: 15px; font-weight: 600; }
-  .header-status { font-size: 12px; color: $success; }
 }
 
 .message-list {

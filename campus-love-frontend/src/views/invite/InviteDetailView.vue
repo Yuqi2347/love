@@ -53,7 +53,7 @@
           <div class="meta-row">
             <span class="meta-label">人数:</span>
             <span class="meta-value">
-              {{ invite.participantCount }}/{{ invite.inviteMode === 'PRIVATE' ? 1 : (invite.maxParticipants || '不限') }}
+              {{ participantCountLabel }}/{{ invite.inviteMode === 'PRIVATE' ? 1 : (invite.maxParticipants || '不限') }}
             </span>
           </div>
         </div>
@@ -100,12 +100,12 @@
         <!-- 参与者区（同一主卡片内） -->
         <div v-if="invite.inviteMode === 'PUBLIC'" class="participants-section">
           <div class="participants-header">
-            <h3 class="section-title">参与者 ({{ invite.participantCount }})</h3>
+            <h3 class="section-title">参与者 ({{ participantDisplayCount }})</h3>
           </div>
           <div v-if="invite.participants && invite.participants.length" class="participants-list">
             <!-- 发起人单独展示在列表最上方 -->
             <div class="participant-item" @click="$router.push(`/profile/${invite.creatorId}`)">
-              <img :src="invite.creator?.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
+              <AppAvatar :src="invite.creator?.avatarUrl" :name="invite.creator?.nickname" :size="36" class="avatar" />
               <span class="participant-name">
                 {{ invite.creator?.nickname || '发起人' }}
                 <span class="participant-tag">发起人</span>
@@ -120,7 +120,7 @@
               class="participant-item"
               @click="$router.push(`/profile/${p.userId}`)"
             >
-              <img :src="p.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" />
+              <AppAvatar :src="p.avatarUrl" :name="p.nickname" :size="36" class="avatar" />
               <span class="participant-name">
                 {{ p.nickname }}
                 <span v-if="p.userId === myId" class="participant-tag participant-tag-me">我</span>
@@ -154,7 +154,7 @@
               class="rejoin-item"
               @click="$router.push(`/profile/${r.userId}`)"
             >
-              <img :src="r.avatarUrl || defaultAvatar" class="avatar" width="36" height="36" alt="" />
+              <AppAvatar :src="r.avatarUrl" :name="r.nickname" :size="36" class="avatar" />
               <div class="rejoin-info">
                 <span class="rejoin-name">{{ r.nickname || '用户' }}</span>
                 <span class="rejoin-time">{{ formatRequestTime(r.requestedAt) }}</span>
@@ -200,12 +200,11 @@
                 :key="msg.id"
                 class="comment-item"
               >
-                <img
-                  :src="msg.senderAvatar || defaultAvatar"
+                <AppAvatar
+                  :src="msg.senderAvatar"
+                  :name="msg.senderNickname"
+                  :size="36"
                   class="comment-avatar"
-                  width="36"
-                  height="36"
-                  alt=""
                 />
                 <div class="comment-main">
                   <div class="comment-header">
@@ -317,7 +316,7 @@
             class="rating-participant-item"
             @click="selectParticipantForRating(p)"
           >
-            <img :src="p.avatarUrl || defaultAvatar" class="avatar" width="32" height="32" />
+            <AppAvatar :src="p.avatarUrl" :name="p.nickname" :size="32" class="avatar" />
             <span>{{ p.nickname || '用户' }}</span>
           </div>
           <p v-if="!participantsToRate.length" class="rating-empty">暂无可评价的参与者</p>
@@ -391,6 +390,7 @@ import type { ChatMessage } from '@/api/chatApi'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft } from '@element-plus/icons-vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
+import AppAvatar from '@/components/AppAvatar.vue'
 import {
   InviteType,
   InviteStatus,
@@ -400,7 +400,7 @@ import {
   ATMOSPHERE_TAGS,
   formatInviteTimeRange,
 } from '@/constants/inviteConst'
-import { DEFAULT_AVATAR, getTypeColor } from '@/utils/shared'
+import { getTypeColor } from '@/utils/shared'
 
 const route = useRoute()
 const router = useRouter()
@@ -416,8 +416,6 @@ function handleBack() {
   }
 }
 const { currentMessages: chatCurrentMessages } = storeToRefs(chatStore)
-
-const defaultAvatar = DEFAULT_AVATAR
 
 const invite = ref<Invite | null>(null)
 const loading = ref(true)
@@ -454,6 +452,22 @@ const isCreator = computed(() => {
 const hasJoined = computed(() => {
   return invite.value?.participants?.some(p => p.userId === userStore.user?.id)
 })
+
+// 页面展示口径：以实际参与者列表为准，确保顶部人数与卡片内参与者列表一致
+const participantDisplayCount = computed(() => {
+  if (!invite.value) return 0
+  const participants = invite.value.participants
+  if (participants && participants.length > 0) {
+    const ids = new Set<number>()
+    ids.add(invite.value.creatorId)
+    for (const p of participants) ids.add(p.userId)
+    return ids.size
+  }
+  return invite.value.participantCount ?? 0
+})
+
+// 顶部人数与参与者列表保持一致（有 participants 时用实际列表数量）
+const participantCountLabel = computed(() => participantDisplayCount.value)
 
 // 是否已退出（曾参与过且已退出）
 const hasLeft = computed(() => invite.value?.myRole === 'LEFT')

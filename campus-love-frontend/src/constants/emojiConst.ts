@@ -92,7 +92,7 @@ export const MBTI_GROUPS = {
 
 export function getMbtiGroup(mbti: string) {
   for (const [key, group] of Object.entries(MBTI_GROUPS)) {
-    if (group.types.includes(mbti)) return { key, ...group }
+    if ((group.types as readonly string[]).includes(mbti)) return { key, ...group }
   }
   return null
 }

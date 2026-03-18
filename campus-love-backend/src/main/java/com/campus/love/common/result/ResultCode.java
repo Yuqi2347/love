@@ -30,7 +30,7 @@ public enum ResultCode {
     NOT_FOLLOWED(2003, "尚未关注该用户"),
 
     // 聊天模块 3xxx
-    CHAT_LIMIT_EXCEEDED(3001, "今日单向聊天次数已达上限"),
+    CHAT_LIMIT_EXCEEDED(3001, "未互关时，对方回复前仅可发送一条消息"),
     MESSAGE_SEND_FAILED(3002, "消息发送失败"),
 
     // 朋友圈模块 4xxx

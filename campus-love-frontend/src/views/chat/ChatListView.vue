@@ -33,7 +33,7 @@
           @click="$router.push(`/chat/${conv.userId}`)"
         >
           <div class="conv-avatar-wrap">
-            <img :src="conv.avatarUrl || defaultAvatar" class="avatar conv-avatar-clickable" width="48" height="48" alt="" @click.stop="$router.push(`/profile/${conv.userId}`)" />
+            <AppAvatar :src="conv.avatarUrl" :name="conv.nickname" :size="48" class="avatar conv-avatar-clickable" @click.stop="$router.push(`/profile/${conv.userId}`)" />
             <span v-if="conv.unreadCount" class="unread-dot">{{ conv.unreadCount > 99 ? '99+' : conv.unreadCount }}</span>
           </div>
           <div class="conv-content">
@@ -72,7 +72,7 @@
           :class="['notify-item', { 'is-read': readIds.has(item.id) }]"
           @click="handleNotifyClick(item, 'post')"
         >
-          <img :src="item.senderAvatarUrl || defaultAvatar" class="avatar" width="40" height="40" @click.stop="goToProfile(item.senderId)" />
+          <AppAvatar :src="item.senderAvatarUrl" :name="item.senderNickname" :size="40" class="avatar" @click.stop="goToProfile(item.senderId)" />
           <div class="notify-body">
             <span class="notify-sender" @click.stop="goToProfile(item.senderId)">{{ item.senderNickname }}</span>
             <span class="notify-text">赞了你的动态</span>
@@ -102,7 +102,7 @@
           :class="['notify-item', { 'is-read': readIds.has(item.id) }]"
           @click="handleNotifyClick(item, 'profile')"
         >
-          <img :src="item.senderAvatarUrl || defaultAvatar" class="avatar" width="40" height="40" @click.stop="goToProfile(item.senderId)" />
+          <AppAvatar :src="item.senderAvatarUrl" :name="item.senderNickname" :size="40" class="avatar" @click.stop="goToProfile(item.senderId)" />
           <div class="notify-body">
             <span class="notify-sender">{{ item.senderNickname }}</span>
             <span class="notify-text">关注了你</span>
@@ -169,7 +169,7 @@
           :class="['notify-item', { 'is-read': readIds.has(item.id) }]"
           @click="handleNotifyClick(item, 'post')"
         >
-          <img :src="item.senderAvatarUrl || defaultAvatar" class="avatar" width="40" height="40" @click.stop="goToProfile(item.senderId)" />
+          <AppAvatar :src="item.senderAvatarUrl" :name="item.senderNickname" :size="40" class="avatar" @click.stop="goToProfile(item.senderId)" />
           <div class="notify-body">
             <span class="notify-sender" @click.stop="goToProfile(item.senderId)">{{ item.senderNickname }}</span>
             <span class="notify-text">{{ item.content }}</span>
@@ -201,12 +201,11 @@ import { Delete, Calendar } from '@element-plus/icons-vue'
 import { storeToRefs } from 'pinia'
 import request from '@/api/request'
 import type { ApiResult } from '@/api/request'
-import { DEFAULT_AVATAR } from '@/utils/shared'
 import AppEmptyState from '@/components/AppEmptyState.vue'
+import AppAvatar from '@/components/AppAvatar.vue'
 
 const router = useRouter()
 const route = useRoute()
-const defaultAvatar = DEFAULT_AVATAR
 const chatStore = useChatStore()
 const followStore = useFollowStore()
 const badgeStore = useBadgeStore()
