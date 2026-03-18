@@ -31,6 +31,14 @@ export interface AuthResponse {
   refreshToken: string
 }
 
+export interface PublicStatsResponse {
+  activeUserCount: number
+}
+
+export function getPublicStats() {
+  return request.get<ApiResult<PublicStatsResponse>>('/auth/stats')
+}
+
 export function searchSchools(keyword?: string) {
   return request.get<ApiResult<SchoolItem[]>>('/auth/schools', { params: { keyword } })
 }

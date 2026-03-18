@@ -18,6 +18,9 @@ public class MomentMatchConfig {
     public static final int DEFAULT_PRIORITIZE_OFFSET = 10;
     public static final int DEFAULT_PRIORITY_OFFSET = 5;
     public static final int DEFAULT_PRIORITY_MAX_STACK = 2;
+    public static final boolean DEFAULT_AUTO_MATCH_ENABLED = false;
+    public static final int DEFAULT_AUTO_MATCH_DAY_OF_WEEK = 1; // Monday
+    public static final String DEFAULT_AUTO_MATCH_TIME = "16:00";
 
     @TableId(type = IdType.INPUT)
     private Long id;
@@ -26,6 +29,10 @@ public class MomentMatchConfig {
     private Integer prioritizeOffset;
     private Integer priorityOffset;
     private Integer priorityMaxStack;
+
+    private Boolean autoMatchEnabled;
+    private Integer autoMatchDayOfWeek;
+    private String autoMatchTime;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

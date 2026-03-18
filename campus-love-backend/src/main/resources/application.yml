@@ -1,6 +1,6 @@
 server:
-  port: 8082
-  address: 0.0.0.0   # 监听所有网卡，支持局域网/外网访问（默认仅 localhost）
+  port: ${SERVER_PORT:8082}
+  address: ${SERVER_ADDRESS:0.0.0.0}
   servlet:
     context-path: /api
 
@@ -9,24 +9,23 @@ spring:
     name: campus-love
 
   datasource:
-    url: jdbc:mysql://localhost:3306/campus_love?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:campus123}
+    url: ${DB_URL:jdbc:mysql://localhost:3306/campus_love?useUnicode=true&characterEncoding=utf-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   data:
     redis:
-      host: localhost
-      port: 6379
-      database: 0
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      database: ${REDIS_DB:0}
 
-  # 邮件配置（用于注册验证码，发件人必须与认证邮箱一致）
   mail:
     host: ${MAIL_HOST:smtp.qq.com}
     port: ${MAIL_PORT:465}
-    username: ${MAIL_USERNAME:1553304293@qq.com}
-    password: ${MAIL_PASSWORD:vwvybmuifperbafg}
-    from: ${MAIL_USERNAME:1553304293@qq.com}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    from: ${MAIL_FROM:${MAIL_USERNAME:}}
     properties:
       mail.smtp.ssl.enable: true
       mail.smtp.auth: true
@@ -55,28 +54,26 @@ mybatis-plus:
 
 app:
   jwt:
-    secret: ${JWT_SECRET:campusLoveSecretKeyForJwtTokenGeneration2026MustBeLongEnough256Bits!!}
-    access-token-expiration: 7200000    # 2 hours
-    refresh-token-expiration: 604800000 # 7 days
+    secret: ${JWT_SECRET:}
+    access-token-expiration: ${JWT_ACCESS_EXPIRATION:7200000}
+    refresh-token-expiration: ${JWT_REFRESH_EXPIRATION:604800000}
   upload:
-    # 跨平台绝对路径：Windows/Linux 均可用。可通过 APP_UPLOAD_PATH 覆盖（如 /var/www/uploads/）
     path: ${APP_UPLOAD_PATH:${user.home}/campus-love/uploads/}
-    max-size: 10485760  # 10MB
+    max-size: 10485760
   follow:
     daily-chat-limit: 5
     daily-invite-limit: 3
+  security:
+    enforce-secrets: ${APP_ENFORCE_SECRETS:true}
+    allowed-origins: ${APP_ALLOWED_ORIGINS:http://localhost:5179,http://127.0.0.1:5179,http://localhost:5174,http://127.0.0.1:5174}
+    ws-allowed-origins: ${APP_WS_ALLOWED_ORIGINS:http://localhost:5179,http://127.0.0.1:5179,http://localhost:5174,http://127.0.0.1:5174}
 
-# AI 配置（通义千问 Qwen，OpenAI 兼容接口）
 ai:
-  api-key: ${AI_API_KEY:sk-6d110762b8914167b80ba848e3166bc0}  # 请填写你的 DashScope API Key
-  # qwen3.5-flash 需用 compatible-mode；原生 api/v1 text-generation 不支持该模型
+  api-key: ${AI_API_KEY:}
   base-url: ${AI_BASE_URL:https://dashscope.aliyuncs.com/compatible-mode/v1}
   model: ${AI_MODEL:qwen3-max}
-  max-tokens: 4096
-  # 调用 AI API 的超时秒数（缘分解析等长文本生成建议 90 秒以上）
+  max-tokens: ${AI_MAX_TOKENS:4096}
   timeout-seconds: ${AI_TIMEOUT:90}
-  # 缘分解析冷却：-1=永久缓存（一经解析永不重复调用），0=每次调用AI，>0=冷却N小时
-  # 调试时设为 0 可强制每次调用 AI，便于排查问题
   yuanfen-cooldown-hours: ${YUANFEN_COOLDOWN:0}
 
 springdoc:

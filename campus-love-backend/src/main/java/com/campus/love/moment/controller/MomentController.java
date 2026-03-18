@@ -151,6 +151,9 @@ public class MomentController {
         config.setPrioritizeOffset(request.getPrioritizeOffset());
         config.setPriorityOffset(request.getPriorityOffset());
         config.setPriorityMaxStack(request.getPriorityMaxStack());
+        config.setAutoMatchEnabled(request.getAutoMatchEnabled());
+        config.setAutoMatchDayOfWeek(request.getAutoMatchDayOfWeek());
+        config.setAutoMatchTime(request.getAutoMatchTime());
         return Result.success(momentMatchConfigService.saveConfig(config));
     }
 

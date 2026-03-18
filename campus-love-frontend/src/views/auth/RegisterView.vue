@@ -1,22 +1,37 @@
 <template>
   <div class="auth-page">
+    <!-- Left: Brand showcase（与登录页一致） -->
     <div class="auth-left">
+      <div class="bg-layer">
+        <div class="mesh-gradient"></div>
+        <div v-for="i in 80" :key="i" class="star" :style="starStyle(i)"></div>
+        <div class="shooting-star s1"></div>
+        <div class="shooting-star s2"></div>
+        <div class="shooting-star s3"></div>
+        <div class="glow-orb orb-1"></div>
+        <div class="glow-orb orb-2"></div>
+      </div>
+
       <div class="brand-area">
-        <img src="/logo.png" alt="Campal" class="auth-logo" />
         <h1 class="brand-title">Campal</h1>
-        <p class="brand-subtitle">加入校园交友，开启缘分之旅</p>
+        <p class="brand-subtitle">遇见TA，从校园开始</p>
+
         <div class="brand-features">
-          <div class="feature-item">
-            <span class="feature-icon">🎓</span>
-            <span>邮箱认证，安全可靠</span>
+          <div v-for="(f, i) in features" :key="i" class="feature-item" :style="{ animationDelay: `${0.3 + i * 0.15}s` }">
+            <div class="feature-icon-wrap">
+              <span class="feature-icon">{{ f.icon }}</span>
+            </div>
+            <div class="feature-text">
+              <span class="feature-label">{{ f.title }}</span>
+              <span class="feature-desc">{{ f.desc }}</span>
+            </div>
           </div>
-          <div class="feature-item">
-            <span class="feature-icon">✨</span>
-            <span>多维匹配算法，找到契合的TA</span>
-          </div>
-          <div class="feature-item">
-            <span class="feature-icon">🔒</span>
-            <span>隐私保护，渐进式社交</span>
+        </div>
+
+        <div class="brand-stats">
+          <div class="stat-item stat-item-single">
+            <span class="stat-num">{{ activeUserCountDisplay }}</span>
+            <span class="stat-label">活跃用户</span>
           </div>
         </div>
       </div>
@@ -102,10 +117,10 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
-import { register, sendVerifyCode, searchSchools as searchSchoolsApi, type SchoolItem } from '@/api/authApi'
+import { register, sendVerifyCode, searchSchools as searchSchoolsApi, getPublicStats, type SchoolItem } from '@/api/authApi'
 import { useUserStore } from '@/store/userStore'
 
 const router = useRouter()
@@ -113,6 +128,64 @@ const userStore = useUserStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
 const sendCodeCooldown = ref(0)
+const activeUserCount = ref(0)
+
+const activeUserCountDisplay = computed(() => {
+  const n = activeUserCount.value
+  if (n >= 1000) return `${Math.floor(n / 1000)}000+`
+  if (n > 0) return `${n}+`
+  return '-'
+})
+
+onMounted(async () => {
+  try {
+    const res = await getPublicStats()
+    if (res.data?.data?.activeUserCount != null) {
+      activeUserCount.value = res.data.data.activeUserCount
+    }
+  } catch {
+    // 忽略，展示默认值
+  }
+})
+
+const features = [
+  { icon: '🎯', title: '多维匹配', desc: 'MBTI · 星座 · 八字精准推荐' },
+  { icon: '💬', title: '即时社交', desc: '聊天 · 邀约 · 渐进信任' },
+  { icon: '🛡️', title: '安全可信', desc: '校园认证 · 隐私保护' },
+]
+
+function starStyle(i: number) {
+  const left = ((i * 73 + 17) % 1000) / 10
+  const top = ((i * 47 + 31) % 1000) / 10
+  const delay = ((i * 37) % 50) / 10
+  const dur = 2 + ((i * 13) % 30) / 10
+  const tier = i % 10
+  let size: number, opacity: number, color: string
+  if (tier === 0) {
+    size = 2.5 + (i % 3)
+    opacity = 0.9
+    color = '#E8EAFF'
+  } else if (tier < 4) {
+    size = 1.5 + (i % 2)
+    opacity = 0.5 + (i % 3) * 0.1
+    color = '#C8CDFF'
+  } else {
+    size = 0.8 + (i % 2) * 0.5
+    opacity = 0.2 + (i % 4) * 0.05
+    color = '#A0A8D0'
+  }
+  return {
+    width: `${size}px`,
+    height: `${size}px`,
+    left: `${left}%`,
+    top: `${top}%`,
+    opacity,
+    background: color,
+    animationDelay: `${delay}s`,
+    animationDuration: `${dur}s`,
+    boxShadow: tier === 0 ? `0 0 ${size * 2}px ${color}` : 'none',
+  }
+}
 const sendingCode = ref(false)
 let cooldownTimer: ReturnType<typeof setInterval> | null = null
 
@@ -274,36 +347,270 @@ onBeforeUnmount(() => {
 </script>
 
 <style lang="scss" scoped>
+@use '@/styles/variables' as *;
+
 .auth-page {
   display: flex;
   min-height: 100vh;
 }
 
+// === Left Panel（与登录页一致）===
 .auth-left {
-  flex: 1;
-  background: $primary-gradient;
+  flex: 1.1;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
   padding: 60px;
+  overflow: hidden;
+  background: linear-gradient(135deg, #070B14 0%, #0D1321 35%, #111827 65%, #0F172A 100%);
+}
 
-  .brand-area {
-    max-width: 420px;
-    color: $text-inverse;
-  }
+.bg-layer {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
 
-  .auth-logo { width: 64px; height: 64px; object-fit: contain; margin-bottom: 16px; }
-  .brand-title { font-size: 42px; font-weight: 800; letter-spacing: -1px; margin-bottom: 8px; }
-  .brand-subtitle { font-size: 18px; opacity: 0.9; margin-bottom: 48px; }
-  .brand-features { display: flex; flex-direction: column; gap: 20px; }
-  .feature-item {
-    display: flex; align-items: center; gap: 12px; font-size: 16px; opacity: 0.95;
-    .feature-icon { font-size: 22px; }
+.mesh-gradient {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(ellipse at 15% 60%, rgba(79, 70, 229, 0.1) 0%, transparent 45%),
+    radial-gradient(ellipse at 75% 20%, rgba(6, 182, 212, 0.06) 0%, transparent 40%),
+    radial-gradient(ellipse at 50% 80%, rgba(139, 92, 246, 0.07) 0%, transparent 45%),
+    radial-gradient(ellipse at 85% 70%, rgba(59, 130, 246, 0.05) 0%, transparent 35%);
+  animation: nebula-shift 20s ease-in-out infinite alternate;
+}
+
+@keyframes nebula-shift {
+  0% { filter: blur(0px); opacity: 1; }
+  50% { filter: blur(2px); opacity: 0.8; }
+  100% { filter: blur(0px); opacity: 1; }
+}
+
+.star {
+  position: absolute;
+  border-radius: 50%;
+  animation: star-flicker ease-in-out infinite;
+}
+
+@keyframes star-flicker {
+  0%, 100% { opacity: var(--o, 0.3); transform: scale(1); }
+  50% { opacity: 1; transform: scale(1.3); }
+}
+
+.shooting-star {
+  position: absolute;
+  width: 80px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.8), transparent);
+  border-radius: 1px;
+  opacity: 0;
+  animation: shoot ease-in infinite;
+
+  &::before {
+    content: '';
+    position: absolute;
+    left: 0;
+    top: -1px;
+    width: 4px;
+    height: 3px;
+    border-radius: 50%;
+    background: white;
+    box-shadow: 0 0 6px 2px rgba(200, 210, 255, 0.6);
   }
 }
 
-.auth-right {
+.s1 {
+  top: 15%;
+  left: 60%;
+  transform: rotate(-35deg);
+  animation-duration: 6s;
+  animation-delay: 1s;
+}
+
+.s2 {
+  top: 40%;
+  left: 30%;
+  transform: rotate(-30deg);
+  animation-duration: 8s;
+  animation-delay: 4s;
+  width: 60px;
+}
+
+.s3 {
+  top: 65%;
+  left: 70%;
+  transform: rotate(-40deg);
+  animation-duration: 7s;
+  animation-delay: 7s;
+  width: 50px;
+}
+
+@keyframes shoot {
+  0% { opacity: 0; transform: rotate(var(--r, -35deg)) translateX(0); }
+  2% { opacity: 1; }
+  8% { opacity: 0; transform: rotate(var(--r, -35deg)) translateX(-200px); }
+  100% { opacity: 0; }
+}
+
+.glow-orb {
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  animation: orb-float 8s ease-in-out infinite;
+}
+
+.orb-1 {
+  width: 250px;
+  height: 250px;
+  top: 10%;
+  left: -5%;
+  background: rgba($primary, 0.15);
+}
+
+.orb-2 {
+  width: 200px;
+  height: 200px;
+  bottom: 10%;
+  right: -5%;
+  background: rgba($accent, 0.1);
+  animation-delay: -4s;
+}
+
+@keyframes orb-float {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(20px, -15px) scale(1.1); }
+}
+
+.brand-area {
+  position: relative;
+  z-index: 1;
+  max-width: 420px;
+  animation: brand-in 0.8s ease both;
+}
+
+@keyframes brand-in {
+  from { opacity: 0; transform: translateY(20px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.brand-title {
+  font-family: 'Pacifico', cursive;
+  font-size: 48px;
+  font-weight: 400;
+  color: white;
+  margin-bottom: 8px;
+  text-shadow: 0 2px 20px rgba(0, 0, 0, 0.2);
+}
+
+.brand-subtitle {
+  font-size: 18px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 48px;
+  letter-spacing: 1px;
+}
+
+.brand-features {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  margin-bottom: 48px;
+}
+
+.feature-item {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  opacity: 0;
+  animation: feature-slide 0.5s ease forwards;
+}
+
+@keyframes feature-slide {
+  from { opacity: 0; transform: translateX(-20px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.feature-icon-wrap {
+  width: 44px;
+  height: 44px;
+  border-radius: $radius-md;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.feature-icon {
+  font-size: 20px;
+}
+
+.feature-text {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.feature-label {
+  font-size: 15px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.feature-desc {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+.brand-stats {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 20px 24px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: $radius-lg;
+  backdrop-filter: blur(8px);
+  animation: stats-in 0.6s ease 0.8s both;
+}
+
+@keyframes stats-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.stat-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
   flex: 1;
+}
+
+.stat-num {
+  font-size: 22px;
+  font-weight: 800;
+  color: white;
+}
+
+.stat-label {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.4);
+  white-space: nowrap;
+}
+
+.stat-divider {
+  width: 1px;
+  height: 28px;
+  background: rgba(255, 255, 255, 0.1);
+}
+
+// === Right Panel ===
+.auth-right {
+  flex: 0.9;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -311,10 +618,36 @@ onBeforeUnmount(() => {
   background: $bg-primary;
 }
 
-.auth-card { width: 100%; max-width: 400px; position: relative; }
-.auth-title { font-size: 28px; font-weight: 700; margin-bottom: 8px; color: $text-primary; }
-.auth-desc { font-size: 15px; color: $text-secondary; margin-bottom: 36px; }
-.auth-btn { width: 100%; height: 48px; font-size: 16px; }
+.auth-card {
+  width: 100%;
+  max-width: 400px;
+  position: relative;
+  animation: card-in 0.5s ease 0.2s both;
+}
+
+@keyframes card-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.auth-title {
+  font-size: 28px;
+  font-weight: 700;
+  margin-bottom: 8px;
+  color: $text-primary;
+}
+
+.auth-desc {
+  font-size: 15px;
+  color: $text-secondary;
+  margin-bottom: 36px;
+}
+
+.auth-btn {
+  width: 100%;
+  height: 48px;
+  font-size: 16px;
+}
 
 .email-input-wrapper {
   display: flex;
@@ -352,7 +685,32 @@ onBeforeUnmount(() => {
 }
 
 .auth-footer {
-  text-align: center; margin-top: 24px; font-size: 14px; color: $text-secondary;
-  .auth-link { color: $primary; font-weight: 600; margin-left: 4px; &:hover { text-decoration: underline; } }
+  text-align: center;
+  margin-top: 24px;
+  font-size: 14px;
+  color: $text-muted;
+
+  .auth-link {
+    color: $primary;
+    font-weight: 600;
+    margin-left: 4px;
+    transition: color $transition-fast;
+
+    &:hover { color: $primary-dark; }
+  }
+}
+
+// === Mobile（与登录页一致）===
+@media (max-width: $bp-mobile) {
+  .auth-left { display: none; }
+  .auth-page { flex-direction: column; }
+  .auth-right { flex: 1; min-height: 100vh; padding: 40px 24px; }
+}
+
+@media (max-width: $bp-tablet) and (min-width: $bp-mobile) {
+  .auth-left { padding: 40px; }
+  .auth-right { padding: 40px; }
+  .brand-title { font-size: 36px; }
+  .brand-stats { gap: 12px; padding: 16px; }
 }
 </style>

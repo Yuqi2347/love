@@ -2,9 +2,11 @@ package com.campus.love.auth.controller;
 
 import com.campus.love.auth.dto.AuthResponse;
 import com.campus.love.auth.dto.LoginRequest;
+import com.campus.love.auth.dto.PublicStatsResponse;
 import com.campus.love.auth.dto.RegisterRequest;
 import com.campus.love.auth.dto.SchoolItem;
 import com.campus.love.auth.service.AuthService;
+import com.campus.love.common.service.PublicStatsService;
 import com.campus.love.auth.service.EmailVerifyService;
 import com.campus.love.auth.service.SchoolService;
 import com.campus.love.common.result.Result;
@@ -27,6 +29,13 @@ public class AuthController {
     private final AuthService authService;
     private final SchoolService schoolService;
     private final EmailVerifyService emailVerifyService;
+    private final PublicStatsService publicStatsService;
+
+    @Operation(summary = "公开统计", description = "登录/注册页展示用，无需鉴权")
+    @GetMapping("/stats")
+    public Result<PublicStatsResponse> getPublicStats() {
+        return Result.success(new PublicStatsResponse(publicStatsService.getActiveUserCount()));
+    }
 
     @Operation(summary = "搜索学校", description = "根据关键词搜索支持的学校列表")
     @GetMapping("/schools")

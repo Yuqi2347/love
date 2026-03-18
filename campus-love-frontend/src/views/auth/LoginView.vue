@@ -31,19 +31,9 @@
         </div>
 
         <div class="brand-stats">
-          <div class="stat-item">
-            <span class="stat-num">1000+</span>
+          <div class="stat-item stat-item-single">
+            <span class="stat-num">{{ activeUserCountDisplay }}</span>
             <span class="stat-label">活跃用户</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat-item">
-            <span class="stat-num">98%</span>
-            <span class="stat-label">匹配满意度</span>
-          </div>
-          <div class="stat-divider"></div>
-          <div class="stat-item">
-            <span class="stat-num">50+</span>
-            <span class="stat-label">每日邀约</span>
           </div>
         </div>
       </div>
@@ -85,16 +75,35 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive } from 'vue'
+import { ref, reactive, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
-import { login } from '@/api/authApi'
+import { login, getPublicStats } from '@/api/authApi'
 import { useUserStore } from '@/store/userStore'
 
 const router = useRouter()
 const userStore = useUserStore()
 const formRef = ref<FormInstance>()
 const loading = ref(false)
+const activeUserCount = ref(0)
+
+const activeUserCountDisplay = computed(() => {
+  const n = activeUserCount.value
+  if (n >= 1000) return `${Math.floor(n / 1000)}000+`
+  if (n > 0) return `${n}+`
+  return '-'
+})
+
+onMounted(async () => {
+  try {
+    const res = await getPublicStats()
+    if (res.data?.data?.activeUserCount != null) {
+      activeUserCount.value = res.data.data.activeUserCount
+    }
+  } catch {
+    // 忽略，展示默认值
+  }
+})
 
 const features = [
   { icon: '🎯', title: '多维匹配', desc: 'MBTI · 星座 · 八字精准推荐' },

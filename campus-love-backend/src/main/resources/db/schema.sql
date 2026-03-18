@@ -430,6 +430,9 @@ CREATE TABLE IF NOT EXISTS t_moment_match_config (
     prioritize_offset   INT NOT NULL DEFAULT 10 COMMENT '优先匹配阈值减免',
     priority_offset     INT NOT NULL DEFAULT 5 COMMENT '优先权单次阈值减免',
     priority_max_stack  INT NOT NULL DEFAULT 2 COMMENT '优先权最大叠加次数',
+    auto_match_enabled  TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否开启每周自动匹配',
+    auto_match_day_of_week TINYINT NOT NULL DEFAULT 1 COMMENT '每周几触发(1=周一..7=周日)',
+    auto_match_time     VARCHAR(5) NOT NULL DEFAULT '16:00' COMMENT '触发时间(24h HH:mm)',
     created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) COMMENT '心动时刻匹配配置';

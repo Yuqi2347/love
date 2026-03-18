@@ -35,10 +35,10 @@ public class AiService {
      * 调用 chat/completions（OpenAI 兼容格式），返回内容与 Token 消耗
      */
     public AiChatResult chatCompletion(String systemPrompt, String userMessage) {
-        String url = aiConfig.getBaseUrl() + "/chat/completions";
+        String url = aiConfig.requiredBaseUrl() + "/chat/completions";
 
         Map<String, Object> body = Map.of(
-                "model", aiConfig.getModel(),
+                "model", aiConfig.requiredModel(),
                 "max_tokens", aiConfig.getMaxTokens(),
                 "stream", false,
                 "messages", List.of(
@@ -47,7 +47,7 @@ public class AiService {
                 )
         );
 
-        log.info("AI request start -> model={}, url={}", aiConfig.getModel(), url);
+        log.info("AI request start -> model={}, url={}", aiConfig.requiredModel(), url);
         long start = System.currentTimeMillis();
 
         try {
@@ -56,7 +56,7 @@ public class AiService {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json; charset=UTF-8")
-                    .header("Authorization", "Bearer " + aiConfig.getApiKey())
+                    .header("Authorization", "Bearer " + aiConfig.requiredApiKey())
                     .timeout(java.time.Duration.ofSeconds(timeoutSec))
                     .POST(HttpRequest.BodyPublishers.ofString(bodyJson, StandardCharsets.UTF_8))
                     .build();

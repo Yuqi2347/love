@@ -43,7 +43,7 @@ public class EmbeddingService {
         if (text == null || text.isBlank()) {
             return null;
         }
-        String embeddingUrl = aiConfig.getBaseUrl().replaceFirst("/?$", "") + "/embeddings";
+        String embeddingUrl = aiConfig.requiredBaseUrl() + "/embeddings";
         try {
             Map<String, Object> body = Map.of(
                     "model", getEmbeddingModel(),
@@ -53,7 +53,7 @@ public class EmbeddingService {
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(embeddingUrl))
                     .header("Content-Type", "application/json; charset=UTF-8")
-                    .header("Authorization", "Bearer " + aiConfig.getApiKey())
+                    .header("Authorization", "Bearer " + aiConfig.requiredApiKey())
                     .timeout(java.time.Duration.ofSeconds(30))
                     .POST(HttpRequest.BodyPublishers.ofString(bodyJson, StandardCharsets.UTF_8))
                     .build();
