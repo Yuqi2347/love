@@ -1,20 +1,20 @@
 <template>
-  <div class="main-layout">
+  <div class="main-layout" :style="schoolColorStyle">
     <!-- Left Sidebar -->
     <aside class="sidebar">
       <div class="sidebar-inner">
         <router-link to="/" class="logo-link">
-          <img src="/logo.png" alt="Campal" class="logo-img" />
           <span class="logo-text">Campal</span>
         </router-link>
 
-        <nav class="nav-menu">
+        <nav class="nav-menu" role="navigation" aria-label="主导航">
           <router-link
             v-for="item in navItems"
             :key="item.path"
             :to="item.path"
             class="nav-item"
             :class="{ active: isActive(item.path) }"
+            :aria-current="isActive(item.path) ? 'page' : undefined"
           >
             <el-icon :size="24"><component :is="item.icon" /></el-icon>
             <span class="nav-label">{{ item.label }}</span>
@@ -147,6 +147,22 @@
       </div>
     </aside>
 
+    <!-- Mobile Bottom Tab Bar -->
+    <nav class="mobile-tab-bar" role="navigation" aria-label="主导航">
+      <router-link
+        v-for="item in mobileNavItems"
+        :key="item.path"
+        :to="item.path"
+        class="mobile-tab-item"
+        :class="{ active: isActive(item.path) }"
+        :aria-current="isActive(item.path) ? 'page' : undefined"
+      >
+        <el-icon :size="22"><component :is="item.icon" /></el-icon>
+        <span class="mobile-tab-label">{{ item.label }}</span>
+        <span v-if="item.showDot" class="mobile-tab-dot" />
+      </router-link>
+    </nav>
+
     <!-- Post Dialog -->
     <el-dialog v-model="showPostDialog" title="发布动态" width="560px" :close-on-click-modal="false" destroy-on-close>
       <el-input v-model="postContent" type="textarea" :rows="4" placeholder="分享你的校园生活..." maxlength="500" show-word-limit />
@@ -229,6 +245,8 @@ import { ElMessage } from 'element-plus'
 // 右侧面板不再展示”热门标签”，改为热门邀约看板
 import { getHotInviteTypeCounts, type InviteTypeCount } from '@/api/inviteApi'
 import { InviteType, INVITE_TYPE_LABELS } from '@/constants/inviteConst'
+import { DEFAULT_AVATAR, getMediaUrl, getTypeColor } from '@/utils/shared'
+import { getSchoolTheme } from '@/constants/schoolThemes'
 
 const route = useRoute()
 const router = useRouter()
@@ -237,7 +255,15 @@ const badgeStore = useBadgeStore()
 const followStore = useFollowStore()
 const matchStore = useMatchStore()
 
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f0f2f5" width="40" height="40" rx="20"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="18">👤</text></svg>'
+const defaultAvatar = DEFAULT_AVATAR
+
+// 学校主题色注入
+const schoolTheme = computed(() => getSchoolTheme(userStore.user?.school))
+const schoolColorStyle = computed(() => ({
+  '--school-color': schoolTheme.value.primaryColor,
+  '--school-color-light': `${schoolTheme.value.primaryColor}15`,
+  '--school-color-mid': `${schoolTheme.value.primaryColor}40`,
+}))
 
 const navItems = computed(() => {
   const b = badgeStore.badges
@@ -256,6 +282,17 @@ const navItems = computed(() => {
 })
 
 const isActive = (path: string) => route.path.startsWith(path)
+
+const mobileNavItems = computed(() => {
+  const b = badgeStore.badges
+  return [
+    { path: '/discover', label: '发现', icon: 'Compass', showDot: false },
+    { path: '/match', label: '缘分', icon: 'MagicStick', showDot: false },
+    { path: '/moment', label: '心动', icon: 'Aim', showDot: false },
+    { path: '/invite', label: '约局', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
+    { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 },
+  ]
+})
 
 const topMatches = ref<MatchResult[]>([])
 const followedMatches = ref<MatchResult[]>([])
@@ -576,26 +613,6 @@ function typeLabel(t: string) {
   return INVITE_TYPE_LABELS[t as InviteType] || t
 }
 
-function getTypeColor(type: string): string {
-  const colors: Record<string, string> = {
-    DINNER: '#ff6b9d',
-    SPORT: '#52c41a',
-    STUDY: '#1890ff',
-    DRAMA: '#722ed1',
-    OTHER: '#8c8c8c',
-  }
-  return colors[type] || '#8c8c8c'
-}
-
-function getMediaUrl(url: string | null): string {
-  if (!url) return ''
-  // 如果是完整 URL 或已包含 /api 前缀，直接返回
-  if (url.startsWith('http') || url.startsWith('/api')) {
-    return url
-  }
-  // 添加 /api 前缀
-  return '/api' + (url.startsWith('/') ? url : '/' + url)
-}
 
 async function loadInviteBoard() {
   boardLoading.value = true
@@ -651,11 +668,25 @@ onMounted(loadInviteBoard)
   gap: 10px;
   padding: 8px 12px;
   margin-bottom: 24px;
+  position: relative;
 
-  .logo-img { width: 32px; height: 32px; object-fit: contain; }
+  // 学校色细线
+  &::after {
+    content: '';
+    position: absolute;
+    bottom: -4px;
+    left: 12px;
+    right: 12px;
+    height: 2px;
+    background: var(--school-color, transparent);
+    border-radius: 1px;
+    opacity: 0.6;
+  }
+
   .logo-text {
-    font-size: 22px;
-    font-weight: 800;
+    font-family: 'Pacifico', cursive;
+    font-size: 26px;
+    font-weight: 400;
     color: $primary;
   }
 }
@@ -856,6 +887,11 @@ onMounted(loadInviteBoard)
 
   &:hover { background: $bg-tertiary; }
 
+  // 学校色头像边框
+  .avatar {
+    border: 1.5px solid var(--school-color, transparent);
+  }
+
   .user-info { flex: 1; min-width: 0; }
   .user-name { font-size: 14px; font-weight: 600; }
   .user-email { font-size: 12px; color: $text-muted; }
@@ -948,6 +984,19 @@ onMounted(loadInviteBoard)
   font-weight: 700;
   margin-bottom: 16px;
   color: $text-primary;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+
+  // 学校色圆点
+  &::before {
+    content: '';
+    width: 4px;
+    height: 16px;
+    border-radius: 2px;
+    background: var(--school-color, $primary);
+    flex-shrink: 0;
+  }
 }
 
 .panel-title-row {
@@ -1074,7 +1123,7 @@ onMounted(loadInviteBoard)
 
   .recommend-info { flex: 1; min-width: 0; }
   .recommend-name { font-size: 14px; font-weight: 600; }
-  .recommend-meta { font-size: 12px; color: $primary; margin-top: 2px; }
+  .recommend-meta { font-size: 12px; color: var(--school-color, $primary); margin-top: 2px; }
 }
 
 .btn-sm { padding: 4px 12px; font-size: 12px; }
@@ -1121,6 +1170,120 @@ onMounted(loadInviteBoard)
   &:hover {
     background: rgba($primary, 0.1);
     color: $primary;
+  }
+}
+
+// === Mobile Tab Bar (hidden on desktop) ===
+.mobile-tab-bar {
+  display: none;
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 64px;
+  background: rgba($bg-primary, 0.95);
+  backdrop-filter: blur(16px);
+  border-top: 1px solid $border-light;
+  z-index: $z-overlay;
+  padding: 0 8px;
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+.mobile-tab-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  flex: 1;
+  color: $text-muted;
+  font-size: 11px;
+  transition: color $transition-fast;
+  position: relative;
+
+  &.active {
+    color: $primary;
+    font-weight: 600;
+  }
+}
+
+.mobile-tab-label {
+  font-size: 11px;
+  line-height: 1;
+}
+
+.mobile-tab-dot {
+  position: absolute;
+  top: 6px;
+  right: calc(50% - 16px);
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: $danger;
+}
+
+// === Responsive: Mobile (<640px) ===
+@media (max-width: $bp-mobile) {
+  .main-layout {
+    flex-direction: column;
+    gap: 0;
+    padding: 0;
+  }
+
+  .sidebar,
+  .right-panel {
+    display: none;
+  }
+
+  .mobile-tab-bar {
+    display: flex;
+  }
+
+  .content-area {
+    border-right: none;
+    padding-bottom: 72px;
+    min-height: calc(100vh - 72px);
+  }
+}
+
+// === Responsive: Tablet (640px - 1024px) ===
+@media (min-width: $bp-mobile) and (max-width: $bp-tablet) {
+  .main-layout {
+    padding: 0;
+  }
+
+  .sidebar {
+    width: 72px;
+
+    .logo-text,
+    .nav-label,
+    .user-info {
+      display: none;
+    }
+
+    .logo-link {
+      justify-content: center;
+      padding: 8px;
+    }
+
+    .nav-item {
+      justify-content: center;
+      padding: 14px;
+      gap: 0;
+    }
+
+    .sidebar-user {
+      justify-content: center;
+      padding: 12px 8px;
+    }
+  }
+
+  .right-panel {
+    display: none;
+  }
+
+  .content-area {
+    border-right: none;
   }
 }
 </style>

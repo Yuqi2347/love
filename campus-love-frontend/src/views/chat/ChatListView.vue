@@ -29,7 +29,7 @@
         <div
           v-for="conv in displayedConversations"
           :key="conv.userId"
-          class="conversation-item"
+          :class="['conversation-item', { 'has-unread': conv.unreadCount > 0 }]"
           @click="$router.push(`/chat/${conv.userId}`)"
         >
           <div class="conv-avatar-wrap">
@@ -54,11 +54,9 @@
         </div>
         </div>
       </div>
-      <div v-else class="empty-state">
-        <el-icon class="empty-icon" :size="48"><ChatDotRound /></el-icon>
-        <p>暂无消息</p>
-        <p class="empty-hint">关注感兴趣的人，开始聊天吧</p>
-      </div>
+      <AppEmptyState v-else text="暂无消息" hint="关注感兴趣的人，开始聊天吧">
+        <template #icon><el-icon class="empty-icon" :size="48"><ChatDotRound /></el-icon></template>
+      </AppEmptyState>
     </div>
 
     <!-- 赞 -->
@@ -86,10 +84,9 @@
           </button>
         </div>
       </div>
-      <div v-else class="empty-state">
-        <el-icon class="empty-icon" :size="48"><StarFilled /></el-icon>
-        <p>暂无赞</p>
-      </div>
+      <AppEmptyState v-else text="暂无赞">
+        <template #icon><el-icon class="empty-icon" :size="48"><StarFilled /></el-icon></template>
+      </AppEmptyState>
     </div>
 
     <!-- 新增关注 -->
@@ -122,10 +119,9 @@
           </button>
         </div>
       </div>
-      <div v-else class="empty-state">
-        <el-icon class="empty-icon" :size="48"><UserFilled /></el-icon>
-        <p>暂无新增关注</p>
-      </div>
+      <AppEmptyState v-else text="暂无新增关注">
+        <template #icon><el-icon class="empty-icon" :size="48"><UserFilled /></el-icon></template>
+      </AppEmptyState>
     </div>
 
     <!-- 邀约通知 -->
@@ -155,11 +151,9 @@
           </button>
         </div>
       </div>
-      <div v-else class="empty-state">
-        <el-icon class="empty-icon" :size="48"><Calendar /></el-icon>
-        <p>暂无邀约通知</p>
-        <p class="empty-hint">加入或发起邀约后，相关动态会在这里提醒你</p>
-      </div>
+      <AppEmptyState v-else text="暂无邀约通知" hint="加入或发起邀约后，相关动态会在这里提醒你">
+        <template #icon><el-icon class="empty-icon" :size="48"><Calendar /></el-icon></template>
+      </AppEmptyState>
     </div>
 
     <!-- 评论和@ -->
@@ -187,10 +181,9 @@
           </button>
         </div>
       </div>
-      <div v-else class="empty-state">
-        <el-icon class="empty-icon" :size="48"><ChatDotRound /></el-icon>
-        <p>暂无评论和@</p>
-      </div>
+      <AppEmptyState v-else text="暂无评论和@">
+        <template #icon><el-icon class="empty-icon" :size="48"><ChatDotRound /></el-icon></template>
+      </AppEmptyState>
     </div>
   </div>
 </template>
@@ -208,10 +201,12 @@ import { Delete, Calendar } from '@element-plus/icons-vue'
 import { storeToRefs } from 'pinia'
 import request from '@/api/request'
 import type { ApiResult } from '@/api/request'
+import { DEFAULT_AVATAR } from '@/utils/shared'
+import AppEmptyState from '@/components/AppEmptyState.vue'
 
 const router = useRouter()
 const route = useRoute()
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect fill="%23f0f2f5" width="48" height="48" rx="24"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="22">👤</text></svg>'
+const defaultAvatar = DEFAULT_AVATAR
 const chatStore = useChatStore()
 const followStore = useFollowStore()
 const badgeStore = useBadgeStore()
@@ -510,13 +505,27 @@ function formatConvTime(lastTime: string): string {
 
 function formatByDate(date: Date): string {
   const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMin = Math.floor(diffMs / 60000)
+  const diffHour = Math.floor(diffMs / 3600000)
+
+  // 1 分钟内
+  if (diffMin < 1) return '刚刚'
+  // 1 小时内
+  if (diffMin < 60) return `${diffMin}分钟前`
+  // 今天内
   const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
-  const yesterday = new Date(today)
-  yesterday.setDate(yesterday.getDate() - 1)
   const d = new Date(date.getFullYear(), date.getMonth(), date.getDate())
   const timeStr = date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', hour12: false })
-  if (d.getTime() === today.getTime()) return timeStr
+  if (d.getTime() === today.getTime()) {
+    if (diffHour < 6) return `${diffHour}小时前`
+    return timeStr
+  }
+  // 昨天
+  const yesterday = new Date(today)
+  yesterday.setDate(yesterday.getDate() - 1)
   if (d.getTime() === yesterday.getTime()) return `昨天 ${timeStr}`
+  // 更早
   return date.toLocaleDateString('zh-CN', { month: 'numeric', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
@@ -666,10 +675,35 @@ async function loadFollowers() {
   box-shadow: $shadow-sm;
   cursor: pointer;
   transition: transform 0.15s, box-shadow 0.15s;
+  animation: slide-in 0.3s ease both;
+  position: relative;
+  border-left: 4px solid transparent;
+
+  &.has-unread {
+    border-left-color: $primary;
+    background: linear-gradient(90deg, rgba($primary, 0.03), $bg-primary 20%);
+  }
 
   &:hover {
     box-shadow: $shadow-md;
     transform: translateY(-2px);
+  }
+}
+
+@keyframes slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@for $i from 1 through 15 {
+  .conversation-item:nth-child(#{$i}) {
+    animation-delay: #{$i * 0.03}s;
   }
 }
 
@@ -884,17 +918,6 @@ async function loadFollowers() {
   &:hover { border-color: $text-muted; }
 }
 
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 80px 20px;
-  gap: 8px;
-  .empty-icon { font-size: 64px; margin-bottom: 8px; }
-  p { color: $text-muted; font-size: 15px; }
-  .empty-hint { font-size: 13px; }
-}
-
 .invite-notify-icon {
   width: 40px;
   height: 40px;
@@ -920,5 +943,13 @@ async function loadFollowers() {
   color: $text-secondary;
   line-height: 1.5;
   margin-top: 2px;
+}
+
+@media (max-width: $bp-mobile) {
+  .message-page { padding: 0; }
+  .page-header { padding: 16px 12px; }
+  .notify-tabs { padding: 8px 12px; }
+  .notify-list { padding: 12px; }
+  .conversation-list { padding: 12px; }
 }
 </style>

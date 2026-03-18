@@ -28,6 +28,11 @@ ul, ol {
 input, textarea, button {
   font-family: inherit;
   outline: none;
+
+  &:focus-visible {
+    outline: 2px solid $primary;
+    outline-offset: 2px;
+  }
 }
 
 button {
@@ -123,10 +128,18 @@ img {
 
   &:hover {
     box-shadow: $shadow-md;
+    transform: translateY(-2px);
   }
 }
 
-// 页面通用头
+// 按钮点击反馈
+.btn-primary, .btn-outline, .el-button {
+  &:active:not(:disabled) {
+    transform: scale(0.97) !important;
+  }
+}
+
+// 页面通用头 — 滚动时加阴影
 .page-header {
   padding: 24px 0;
   position: sticky;
@@ -137,12 +150,75 @@ img {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  transition: box-shadow $transition-fast;
 
   .page-title {
     font-size: 22px;
     font-weight: 800;
     letter-spacing: -0.5px;
   }
+}
+
+.page-header--scrolled {
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06);
+}
+
+// 心跳动画（点赞用）
+@keyframes heartbeat {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.25); }
+  50% { transform: scale(0.95); }
+  75% { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+.anim-heartbeat {
+  animation: heartbeat 0.4s ease;
+}
+
+// 骨架屏
+.skeleton {
+  background: linear-gradient(90deg, $bg-tertiary 25%, $bg-secondary 50%, $bg-tertiary 75%);
+  background-size: 200% 100%;
+  animation: skeleton-shimmer 1.5s ease-in-out infinite;
+  border-radius: $radius-md;
+}
+
+.skeleton-text {
+  height: 14px;
+  margin-bottom: 8px;
+  @extend .skeleton;
+
+  &:last-child { width: 60%; }
+}
+
+.skeleton-avatar {
+  width: 48px;
+  height: 48px;
+  border-radius: $radius-full;
+  @extend .skeleton;
+}
+
+.skeleton-card {
+  height: 120px;
+  @extend .skeleton;
+  margin-bottom: 12px;
+}
+
+@keyframes skeleton-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+// 操作图标 hover 缩放
+.action-btn {
+  transition: all $transition-fast;
+
+  &:hover {
+    .el-icon { transform: scale(1.15); }
+  }
+
+  .el-icon { transition: transform $transition-fast; }
 }
 
 // 头像
@@ -185,4 +261,29 @@ img {
 .el-dialog {
   border-radius: $radius-xl !important;
   overflow: hidden;
+}
+
+// === 间距工具类 ===
+.mt-sm { margin-top: $space-sm; }
+.mt-md { margin-top: $space-md; }
+.mt-lg { margin-top: $space-lg; }
+.mb-sm { margin-bottom: $space-sm; }
+.mb-md { margin-bottom: $space-md; }
+.mb-lg { margin-bottom: $space-lg; }
+.gap-sm { gap: $space-sm; }
+.gap-md { gap: $space-md; }
+.gap-lg { gap: $space-lg; }
+
+// === Flex 工具类 ===
+.flex { display: flex; }
+.flex-col { flex-direction: column; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+
+// === 无障碍：减弱动画 ===
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
 }

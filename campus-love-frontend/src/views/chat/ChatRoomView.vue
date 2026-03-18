@@ -207,8 +207,9 @@ import { ElMessage } from 'element-plus'
 import { formatLocalDateTime } from '@/utils/dateTime'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import { Close } from '@element-plus/icons-vue'
+import { DEFAULT_AVATAR } from '@/utils/shared'
 
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect fill="%23f0f2f5" width="36" height="36" rx="18"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="16">👤</text></svg>'
+const defaultAvatar = DEFAULT_AVATAR
 
 const route = useRoute()
 const router = useRouter()

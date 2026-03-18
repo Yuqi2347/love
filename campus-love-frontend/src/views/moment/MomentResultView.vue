@@ -40,7 +40,7 @@
             <div class="matched-icon">💘</div>
             <p class="section-eyebrow">心动揭晓</p>
             <h2 class="reveal-title">{{ result.yuanfenTitle || '刚好对频' }}</h2>
-            <p class="reveal-desc">这一次，不用数字证明什么，先去看看你们为什么会彼此靠近。</p>
+            <p class="reveal-desc">不用数字证明什么。先看看是什么把你们推到了同一个地方。</p>
 
             <div class="user-card">
               <div class="card-header">
@@ -75,8 +75,8 @@
           </section>
 
           <section class="screen-panel insight-panel">
-            <p class="section-eyebrow">心动之处</p>
-            <h2 class="panel-title">你们为什么会靠近</h2>
+            <p class="section-eyebrow">为什么靠近</p>
+            <h2 class="panel-title">是什么把你们推到了一起</h2>
 
             <div class="insight-list">
               <article v-for="(text, index) in insightCards" :key="index" class="insight-card">
@@ -102,8 +102,8 @@
           </section>
 
           <section class="screen-panel about-panel">
-            <p class="section-eyebrow">TA是这样的人</p>
-            <h2 class="panel-title">如果有人替你先介绍TA</h2>
+            <p class="section-eyebrow">TA是谁</p>
+            <h2 class="panel-title">如果有人替你提前见过TA</h2>
 
             <div class="about-card">
               <p>{{ result.aboutMatchedUser || 'TA身上有一种很适合慢慢了解的气质。' }}</p>
@@ -141,7 +141,7 @@
           </section>
 
           <section class="screen-panel prep-panel">
-            <p class="section-eyebrow">约会准备</p>
+            <p class="section-eyebrow">去见TA</p>
             <h2 class="panel-title">把心动往现实里推一步</h2>
 
             <div v-if="!result.datePrepUnlocked" class="locked-card">
@@ -184,6 +184,17 @@
                 <p class="prep-label">心理准备</p>
                 <p>{{ datePrep.mindsetAdvice }}</p>
               </article>
+
+              <article v-if="datePrep.nearbyShops?.length" class="prep-card">
+                <p class="prep-label">📍 学校附近推荐</p>
+                <div class="shop-list">
+                  <div v-for="shop in datePrep.nearbyShops" :key="shop.name" class="shop-item">
+                    <span class="shop-name">{{ shop.name }}</span>
+                    <span v-if="shop.typeName" class="shop-type">{{ shop.typeName }}</span>
+                    <span v-if="shop.distance" class="shop-dist">{{ shop.distance }}m</span>
+                  </div>
+                </div>
+              </article>
             </div>
 
             <div class="screen-actions">
@@ -202,6 +213,7 @@ import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
 import { confirmMomentChoice, getMomentDatePrep, getMomentResult, type MomentDatePrepResponse, type MomentResultResponse } from '@/api/momentApi'
+import { DEFAULT_AVATAR } from '@/utils/shared'
 
 const router = useRouter()
 const loading = ref(true)
@@ -212,9 +224,9 @@ const datePrep = ref<MomentDatePrepResponse | null>(null)
 const activeScreen = ref(1)
 const pendingChoice = ref<'YUE' | 'GUANZHU' | null>(null)
 
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 80 80"><rect fill="%23f0f2f5" width="80" height="80" rx="40"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="36">👤</text></svg>'
-const screenLabels = ['心动揭晓', '心动之处', 'TA是这样的人', '约会准备']
-const insightTitles = ['为什么你们可能互相吸引', '你们在一起可能是什么感觉', '你们可能需要磨合的地方']
+const defaultAvatar = DEFAULT_AVATAR
+const screenLabels = ['心动揭晓', '为什么靠近', 'TA是谁', '去见TA']
+const insightTitles = ['是什么让你们靠近', '在一起大概是什么感觉', '有一件事你要提前知道']
 
 const insightCards = computed(() => {
   const cards = result.value?.insightCards || []
@@ -842,6 +854,30 @@ onMounted(loadResult)
   display: flex;
   flex-direction: column;
   gap: 12px;
+}
+
+.shop-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.shop-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.shop-name {
+  font-weight: 600;
+  color: $text-primary;
+  font-size: 14px;
+}
+
+.shop-type,
+.shop-dist {
+  font-size: 12px;
+  color: $text-muted;
 }
 
 .topic-item {

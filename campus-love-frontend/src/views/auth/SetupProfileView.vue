@@ -3,7 +3,12 @@
     <div class="setup-container">
       <div class="setup-header">
         <div class="step-indicator">
-          <div v-for="i in 3" :key="i" class="step-dot" :class="{ active: step >= i, done: step > i }" />
+          <template v-for="i in 3" :key="i">
+            <div class="step-node" :class="{ active: step >= i, done: step > i }">
+              <span class="step-num">{{ step > i ? '✓' : i }}</span>
+            </div>
+            <div v-if="i < 3" class="step-line" :class="{ active: step > i }" />
+          </template>
         </div>
         <h2 class="setup-title">{{ displayTitles[step - 1] }}</h2>
         <p class="setup-desc">{{ displayDescs[step - 1] }}</p>
@@ -22,7 +27,7 @@ v-for="g in genderOptions" :key="g.value"
                    class="gender-card" :class="{ active: form.gender === g.value }"
                    @click="form.gender = g.value">
                 <span class="gender-emoji">{{ g.value === 1 ? '👨' : '👩' }}</span>
-                <span>{{ g.label }}</span>
+                <span class="gender-label">{{ g.label }}</span>
               </div>
             </div>
           </el-form-item>
@@ -77,13 +82,23 @@ v-model="form.birthDate" type="date" placeholder="选择生日"
             免费人格测试 →
           </a>
         </div>
-        <div class="mbti-grid">
-          <div
-v-for="mbti in mbtiTypes" :key="mbti"
-               class="mbti-card" :class="{ active: form.mbti === mbti }"
-               @click="form.mbti = mbti">
-            <div class="mbti-type">{{ mbti }}</div>
-            <div class="mbti-label">{{ mbtiLabels[mbti] }}</div>
+        <div class="mbti-groups">
+          <div v-for="(group, key) in MBTI_GROUPS" :key="key" class="mbti-group">
+            <div class="mbti-group-header" :style="{ color: group.color }">
+              <span>{{ group.emoji }}</span>
+              <span class="mbti-group-label">{{ group.label }}</span>
+            </div>
+            <div class="mbti-group-grid">
+              <div
+                v-for="mbti in group.types" :key="mbti"
+                class="mbti-card"
+                :class="{ active: form.mbti === mbti }"
+                :style="form.mbti === mbti ? { borderColor: group.color, background: group.bg } : {}"
+                @click="form.mbti = mbti">
+                <div class="mbti-type" :style="form.mbti === mbti ? { color: group.color } : {}">{{ mbti }}</div>
+                <div class="mbti-label">{{ mbtiLabels[mbti] }}</div>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -135,6 +150,7 @@ import { useUserStore } from '@/store/userStore'
 import { MBTI_TYPES, MBTI_LABELS, INTEREST_TAG_MATRIX, LEGACY_INTEREST_TO_CODE } from '@/constants/matchConst'
 import { GENDER_OPTIONS } from '@/constants/genderConst'
 import { MAJOR_CASCADER_OPTIONS, getMajorCascaderPath } from '@/constants/majorConst'
+import { MBTI_GROUPS, getMbtiGroup } from '@/constants/emojiConst'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -290,7 +306,8 @@ async function handleSkipAll() {
     })
     await userStore.fetchProfile()
     ElMessage.success('已保存必填信息，可稍后在个人主页完善')
-    router.push('/')
+    const school = encodeURIComponent(form.school || sessionStorage.getItem('register_school') || '')
+    router.push(school ? `/welcome?school=${school}` : '/welcome')
   } catch {
     ElMessage.error('保存失败')
   } finally {
@@ -317,7 +334,12 @@ async function doSave(interestTags: Record<string, { code: string; sharing: numb
     await userStore.fetchProfile()
     const message = isEditMode.value ? '资料更新成功！' : '资料完善成功！'
     ElMessage.success(message)
-    router.push(isEditMode.value ? '/profile' : '/')
+    if (isEditMode.value) {
+      router.push('/profile')
+    } else {
+      const school = encodeURIComponent(form.school || sessionStorage.getItem('register_school') || '')
+      router.push(school ? `/welcome?school=${school}` : '/welcome')
+    }
   } finally {
     saving.value = false
   }
@@ -348,23 +370,60 @@ async function doSave(interestTags: Record<string, { code: string; sharing: numb
   margin-bottom: 36px;
 }
 
+// Connected dots step indicator
 .step-indicator {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 12px;
+  gap: 0;
   margin-bottom: 24px;
+}
 
-  .step-dot {
-    width: 40px;
-    height: 4px;
-    border-radius: 2px;
-    background: $border-color;
-    transition: all $transition-base;
+.step-node {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 2px solid $border-color;
+  background: $bg-primary;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all $transition-base;
+  position: relative;
 
-    &.active { background: $primary; width: 56px; }
-    &.done { background: $primary-light; }
+  .step-num {
+    font-size: 14px;
+    font-weight: 700;
+    color: $text-muted;
+    transition: color $transition-base;
   }
+
+  &.active {
+    border-color: $primary;
+    background: $primary;
+    transform: scale(1.15);
+    box-shadow: 0 0 0 4px rgba($primary, 0.15);
+
+    .step-num { color: white; }
+  }
+
+  &.done {
+    border-color: $primary;
+    background: rgba($primary, 0.1);
+    transform: scale(1);
+    box-shadow: none;
+
+    .step-num { color: $primary; font-size: 16px; }
+  }
+}
+
+.step-line {
+  width: 48px;
+  height: 2px;
+  background: $border-color;
+  transition: background $transition-base;
+
+  &.active { background: $primary; }
 }
 
 .setup-title {
@@ -381,6 +440,18 @@ async function doSave(interestTags: Record<string, { code: string; sharing: numb
 
 .step-content {
   min-height: 300px;
+  animation: step-slide-in 0.35s ease both;
+}
+
+@keyframes step-slide-in {
+  from {
+    opacity: 0;
+    transform: translateX(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
 }
 
 .mbti-test-tip {
@@ -395,12 +466,11 @@ async function doSave(interestTags: Record<string, { code: string; sharing: numb
     font-weight: 500;
     margin-left: 4px;
 
-    &:hover {
-      text-decoration: underline;
-    }
+    &:hover { text-decoration: underline; }
   }
 }
 
+// Gender cards with gradient
 .gender-select {
   display: flex;
   gap: 16px;
@@ -412,23 +482,30 @@ async function doSave(interestTags: Record<string, { code: string; sharing: numb
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 8px;
-  padding: 20px;
+  gap: 10px;
+  padding: 24px 20px;
   border: 2px solid $border-color;
   border-radius: $radius-lg;
   cursor: pointer;
   transition: all $transition-base;
-  font-weight: 600;
+  background: $bg-secondary;
 
-  .gender-emoji { font-size: 32px; }
+  .gender-emoji { font-size: 42px; transition: transform $transition-base; }
+  .gender-label { font-weight: 600; font-size: 15px; }
+
+  &:hover {
+    border-color: $primary-light;
+    .gender-emoji { transform: scale(1.1); }
+  }
 
   &.active {
     border-color: $primary;
-    background: rgba($primary, 0.05);
+    background: linear-gradient(135deg, rgba($primary, 0.06), rgba($primary, 0.02));
+    box-shadow: 0 0 0 3px rgba($primary, 0.1);
     color: $primary;
-  }
 
-  &:hover { border-color: $primary-light; }
+    .gender-emoji { transform: scale(1.15); }
+  }
 }
 
 .bazi-unknown-check {
@@ -436,10 +513,30 @@ async function doSave(interestTags: Record<string, { code: string; sharing: numb
   display: block;
 }
 
-.mbti-grid {
+// MBTI color-grouped
+.mbti-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.mbti-group-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+
+.mbti-group-label {
+  font-size: 12px;
+}
+
+.mbti-group-grid {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  gap: 8px;
 }
 
 .mbti-card {
@@ -452,18 +549,21 @@ async function doSave(interestTags: Record<string, { code: string; sharing: numb
   cursor: pointer;
   transition: all $transition-base;
 
-  .mbti-type { font-size: 16px; font-weight: 700; }
+  .mbti-type { font-size: 16px; font-weight: 700; transition: color $transition-fast; }
   .mbti-label { font-size: 11px; color: $text-secondary; margin-top: 4px; }
 
-  &.active {
-    border-color: $primary;
-    background: rgba($primary, 0.05);
-    .mbti-type { color: $primary; }
+  &:hover {
+    border-color: $primary-light;
+    transform: translateY(-2px);
   }
 
-  &:hover { border-color: $primary-light; }
+  &.active {
+    transform: translateY(-2px);
+    box-shadow: $shadow-sm;
+  }
 }
 
+// Interests
 .step-interests {
   max-height: 420px;
   overflow-y: auto;
@@ -509,12 +609,19 @@ async function doSave(interestTags: Record<string, { code: string; sharing: numb
     background: $primary;
     color: $text-inverse;
     border-color: $primary;
+    animation: tag-bounce 0.3s ease;
   }
 
   &:hover:not(.active) {
     border-color: $primary-light;
     color: $primary;
   }
+}
+
+@keyframes tag-bounce {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+  100% { transform: scale(1); }
 }
 
 .step-actions {
@@ -539,9 +646,13 @@ async function doSave(interestTags: Record<string, { code: string; sharing: numb
     border: none;
     cursor: pointer;
 
-    &:hover {
-      color: $primary;
-    }
+    &:hover { color: $primary; }
   }
+}
+
+@media (max-width: $bp-mobile) {
+  .setup-container { padding: 32px 20px; }
+  .mbti-group-grid { grid-template-columns: repeat(2, 1fr); }
+  .step-line { width: 32px; }
 }
 </style>

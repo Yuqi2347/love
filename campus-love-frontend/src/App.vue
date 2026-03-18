@@ -1,5 +1,9 @@
 <template>
-  <router-view />
+  <router-view v-slot="{ Component }">
+    <transition name="page" mode="out-in">
+      <component :is="Component" />
+    </transition>
+  </router-view>
 </template>
 
 <script setup lang="ts">
@@ -17,3 +21,19 @@ onMounted(async () => {
   }
 })
 </script>
+
+<style lang="scss">
+.page-enter-active {
+  transition: opacity 0.2s ease, transform 0.2s ease;
+}
+.page-enter-from {
+  opacity: 0;
+  transform: translateY(8px);
+}
+.page-leave-active {
+  transition: opacity 0.15s ease;
+}
+.page-leave-to {
+  opacity: 0;
+}
+</style>

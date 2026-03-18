@@ -61,6 +61,8 @@
       <!-- 竖直卡片列表 -->
       <div
         class="cards-wrapper"
+        role="group"
+        aria-label="推荐用户卡片"
         @wheel="handleWheel">
         <div
           v-for="(card, index) in visibleCards"
@@ -104,10 +106,10 @@
 
       <!-- 操作按钮 -->
       <div class="action-buttons">
-        <button class="action-btn skip" @click="handleSkip">
+        <button class="action-btn skip" aria-label="跳过" @click="handleSkip">
           <el-icon :size="36"><Close /></el-icon>
         </button>
-        <button class="action-btn like" @click="handleLike">
+        <button class="action-btn like" aria-label="喜欢" @click="handleLike">
           <el-icon :size="36"><Check /></el-icon>
         </button>
       </div>
@@ -134,13 +136,14 @@ import { useUserStore } from '@/store/userStore'
 import { ElMessage } from 'element-plus'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { useRouter } from 'vue-router'
+import { DEFAULT_AVATAR } from '@/utils/shared'
 
 const router = useRouter()
 const followStore = useFollowStore()
 const matchStore = useMatchStore()
 const userStore = useUserStore()
 
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 400 500"><rect fill="%23f0f2f5" width="400" height="500" rx="24"/><text x="50%" y="45%" text-anchor="middle" fill="%23adb5bd" font-size="80">👤</text></svg>'
+const defaultAvatar = DEFAULT_AVATAR
 const dimensionLabels = MATCH_DIMENSION_LABELS
 
 // 权重调整
@@ -745,7 +748,8 @@ function handleViewProfile(userId: number) {
   box-shadow: $shadow-md;
   user-select: none;
   border: none;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), opacity 0.3s ease, box-shadow 0.3s ease;
+  will-change: transform;
+  transition: transform 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275), opacity 0.3s ease, box-shadow 0.3s ease;
 
   &.is-current {
     z-index: 10;
@@ -943,5 +947,10 @@ function handleViewProfile(userId: number) {
   font-size: 14px;
   transition: background 0.2s;
   &:hover { background: color.adjust($primary, $lightness: -10%); }
+}
+
+@media (max-width: $bp-mobile) {
+  .match-page { padding: 0 12px; }
+  .match-card { width: calc(100vw - 32px); max-width: 100%; }
 }
 </style>

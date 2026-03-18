@@ -7,16 +7,7 @@
       </button>
     </div>
 
-    <div class="tabs-row">
-      <button
-        v-for="tab in tabs"
-        :key="tab.value"
-        :class="['tab-btn', { active: activeTab === tab.value }]"
-        @click="activeTab = tab.value"
-      >
-        {{ tab.label }}
-      </button>
-    </div>
+    <AppTabBar v-model="activeTab" :tabs="tabs" />
 
     <div v-if="activeTab === 'list'" class="filters-row">
       <el-select
@@ -78,12 +69,13 @@
           v-for="invite in filteredInvites"
           :key="invite.id"
           :class="['invite-card', { 'invite-card-1v1': invite.inviteMode === 'PRIVATE' }]"
+          :style="invite.inviteMode !== 'PRIVATE' ? { borderLeft: `4px solid ${getTypeColor(invite.inviteType)}` } : {}"
           @click="$router.push(`/invite/${invite.id}`)"
         >
           <div class="invite-header">
             <div class="invite-header-badges">
               <div class="invite-type-badge" :style="{ background: getTypeColor(invite.inviteType) }">
-                {{ INVITE_TYPE_LABELS[invite.inviteType as InviteType] }}
+                {{ INVITE_TYPE_EMOJI[invite.inviteType] || '' }} {{ INVITE_TYPE_LABELS[invite.inviteType as InviteType] }}
               </div>
               <span v-if="invite.inviteMode === 'PRIVATE'" class="invite-badge-1v1">专属</span>
             </div>
@@ -103,12 +95,12 @@
             <template v-if="invite.inviteMode === 'PRIVATE'">
               <div class="invite-1v1-users">
                 <div class="invite-1v1-user" @click.stop="$router.push(`/profile/${invite.creatorId}`)">
-                  <img :src="invite.creator?.avatarUrl || defaultAvatar" class="invite-1v1-avatar" width="28" height="28" alt="" />
+                  <AppAvatar :src="invite.creator?.avatarUrl" :size="28" @click.stop="$router.push(`/profile/${invite.creatorId}`)" />
                   <span class="invite-1v1-name">{{ invite.creator?.nickname || '未知' }}</span>
                 </div>
                 <span class="invite-1v1-vs">↔</span>
                 <div class="invite-1v1-user" @click.stop="$router.push(`/profile/${invite.targetUserId}`)">
-                  <img :src="invite.targetUser?.avatarUrl || defaultAvatar" class="invite-1v1-avatar" width="28" height="28" alt="" />
+                  <AppAvatar :src="invite.targetUser?.avatarUrl" :size="28" @click.stop="$router.push(`/profile/${invite.targetUserId}`)" />
                   <span class="invite-1v1-name">{{ invite.targetUser?.nickname || 'TA' }}</span>
                 </div>
               </div>
@@ -132,9 +124,12 @@
           <div class="invite-footer">
             <div class="participants-info">
               <el-icon><UserFilled /></el-icon>
-              {{ invite.participantCount }}/{{ invite.inviteMode === 'PRIVATE' ? 1 : (invite.maxParticipants || '不限') }}人
+              <span>{{ invite.participantCount }}/{{ invite.inviteMode === 'PRIVATE' ? 1 : (invite.maxParticipants || '不限') }}人</span>
+              <div v-if="invite.maxParticipants && invite.inviteMode !== 'PRIVATE'" class="participant-bar">
+                <div class="participant-bar-fill" :style="{ width: `${Math.min(100, (invite.participantCount / invite.maxParticipants) * 100)}%` }" />
+              </div>
             </div>
-            <div v-if="invite.isUrgent" class="urgent-tag">急需</div>
+            <div v-if="invite.isUrgent" class="urgent-tag pulse">急需</div>
             <div v-if="invite.ratingCount" class="rating-info">
               ⭐ {{ invite.socialRating?.toFixed(1) || '-' }} ({{ invite.ratingCount }})
             </div>
@@ -146,10 +141,7 @@
           </div>
         </div>
       </div>
-      <div v-else class="empty-hint">
-        <div class="empty-icon">📅</div>
-        <p>暂无邀约，快发起一个或去发现里加入吧</p>
-      </div>
+      <AppEmptyState v-else icon="📅" text="暂无邀约，快发起一个或去发现里加入吧" />
     </div>
 
     <div v-else-if="activeTab === 'wait'" class="wait-list">
@@ -193,11 +185,9 @@
           </div>
         </div>
       </div>
-      <div v-else class="empty-hint">
-        <div class="empty-icon">⏳</div>
-        <p>暂无等待邀约</p>
+      <AppEmptyState v-else icon="⏳" text="暂无等待邀约">
         <button class="btn-outline" @click="$router.push('/invite/wait')">创建等待邀约</button>
-      </div>
+      </AppEmptyState>
     </div>
 
     <div v-else-if="activeTab === 'history'" class="history-list">
@@ -259,7 +249,7 @@
         >
           <div class="history-header">
             <div class="invite-type-badge" :style="{ background: getTypeColor(invite.inviteType) }">
-              {{ INVITE_TYPE_LABELS[invite.inviteType as InviteType] }}
+              {{ INVITE_TYPE_EMOJI[invite.inviteType] || '' }} {{ INVITE_TYPE_LABELS[invite.inviteType as InviteType] }}
             </div>
             <div class="invite-status-badge" :style="{ color: INVITE_STATUS_COLORS[invite.status as InviteStatus] }">
               {{ INVITE_STATUS_LABELS[invite.status as InviteStatus] }}
@@ -282,10 +272,7 @@
           </div>
         </div>
       </div>
-      <div v-else class="empty-hint">
-        <div class="empty-icon">📊</div>
-        <p>当前时间范围内暂无记录</p>
-      </div>
+      <AppEmptyState v-else icon="📊" text="当前时间范围内暂无记录" />
     </div>
   </div>
 </template>
@@ -318,8 +305,12 @@ import {
   formatInviteTime,
   formatInviteTimeRange,
 } from '@/constants/inviteConst'
+import { getTypeColor } from '@/utils/shared'
+import AppTabBar from '@/components/AppTabBar.vue'
+import AppEmptyState from '@/components/AppEmptyState.vue'
+import AppAvatar from '@/components/AppAvatar.vue'
+import { INVITE_TYPE_EMOJI } from '@/constants/emojiConst'
 
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48"><rect fill="%23f0f2f5" width="48" height="48" rx="24"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="22">👤</text></svg>'
 const router = useRouter()
 const route = useRoute()
 const inviteStore = useInviteStore()
@@ -439,18 +430,6 @@ function changeRange(range: HistoryRange) {
   if (historyRange.value === range) return
   historyRange.value = range
   loadHistory()
-}
-
-// 获取邀约类型颜色
-function getTypeColor(type: string): string {
-  const colors: Record<string, string> = {
-    DINNER: '#ff6b9d',
-    SPORT: '#52c41a',
-    STUDY: '#1890ff',
-    DRAMA: '#722ed1',
-    OTHER: '#8c8c8c',
-  }
-  return colors[type] || '#8c8c8c'
 }
 
 // 格式化过期时间
@@ -592,37 +571,6 @@ watch(() => [route.query.type, route.query.source], () => {
   -webkit-text-fill-color: transparent;
 }
 
-.tabs-row {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 16px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
-}
-
-.tab-btn {
-  padding: 10px 20px;
-  border: none;
-  background: transparent;
-  color: $text-secondary;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-  border-radius: $radius-full;
-  transition: all $transition-fast;
-
-  &:hover {
-    background: rgba($primary, 0.08);
-    color: $primary;
-  }
-
-  &.active {
-    background: $primary;
-    color: white;
-    box-shadow: 0 4px 12px rgba($primary, 0.3);
-  }
-}
-
 .filters-row {
   display: flex;
   gap: 12px;
@@ -657,6 +605,8 @@ watch(() => [route.query.type, route.query.source], () => {
   cursor: pointer;
   box-shadow: $shadow-sm;
   transition: transform $transition-fast, box-shadow $transition-fast;
+  contain: content;
+  animation: card-enter 0.35s ease both;
 
   &:hover {
     box-shadow: $shadow-md;
@@ -796,6 +746,22 @@ watch(() => [route.query.type, route.query.source], () => {
   color: $text-secondary;
 }
 
+.participant-bar {
+  width: 60px;
+  height: 4px;
+  background: $bg-tertiary;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-left: 4px;
+}
+
+.participant-bar-fill {
+  height: 100%;
+  background: linear-gradient(90deg, $primary, #ff6b9d);
+  border-radius: 2px;
+  transition: width $transition-base;
+}
+
 .mode-info {
   font-size: 13px;
   color: $text-secondary;
@@ -808,6 +774,15 @@ watch(() => [route.query.type, route.query.source], () => {
   border-radius: $radius-full;
   font-size: 11px;
   font-weight: 700;
+
+  &.pulse {
+    animation: pulse-glow 2s ease-in-out infinite;
+  }
+}
+
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(#ff6b6b, 0.4); }
+  50% { box-shadow: 0 0 0 6px rgba(#ff6b6b, 0); }
 }
 
 .rating-info {
@@ -1033,22 +1008,6 @@ watch(() => [route.query.type, route.query.source], () => {
   }
 }
 
-.empty-hint {
-  text-align: center;
-  padding: 60px 20px;
-  color: $text-muted;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
-}
-
-.empty-hint p {
-  font-size: 14px;
-  margin-bottom: 16px;
-}
-
 .btn-text {
   padding: 4px 12px;
   border: none;
@@ -1065,5 +1024,30 @@ watch(() => [route.query.type, route.query.source], () => {
   &.danger:hover {
     color: $danger;
   }
+}
+
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@for $i from 1 through 10 {
+  .invite-card:nth-child(#{$i}) {
+    animation-delay: #{$i * 0.05}s;
+  }
+}
+
+@media (max-width: $bp-mobile) {
+  .invite-page { padding: 0 12px 12px; }
+  .filters-row { flex-wrap: wrap; }
+  .filters-row :deep(.el-select) { width: calc(50% - 6px); }
+  .stats-grid { grid-template-columns: repeat(2, 1fr); }
+  .history-filters { flex-direction: column; gap: 8px; }
 }
 </style>

@@ -112,6 +112,7 @@
               :key="idx"
               :src="getMediaUrl(img)"
               class="feed-image"
+              loading="lazy"
             />
           </div>
           <!-- 视频展示 -->
@@ -296,12 +297,13 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Delete, Search, Flag, WarningFilled } from '@element-plus/icons-vue'
 import type { Invite } from '@/api/inviteApi'
 import ShareDialog from '@/components/ShareDialog.vue'
+import { DEFAULT_AVATAR, getMediaUrl, formatRelativeTime } from '@/utils/shared'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
 const inviteStore = useInviteStore()
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
+const defaultAvatar = DEFAULT_AVATAR
 const posts = ref<FeedPost[]>([])
 const followingPosts = ref<FeedPost[]>([])
 const likedPosts = ref<FeedPost[]>([])
@@ -514,15 +516,7 @@ async function handleLike(postId: number, liked: boolean) {
 }
 
 function formatTime(timeStr: string): string {
-  const date = new Date(timeStr)
-  const now = new Date()
-  const diff = Math.floor((now.getTime() - date.getTime()) / 1000)
-
-  if (diff < 60) return '刚刚'
-  if (diff < 3600) return Math.floor(diff / 60) + '分钟前'
-  if (diff < 86400) return Math.floor(diff / 3600) + '小时前'
-  if (diff < 604800) return Math.floor(diff / 86400) + '天前'
-  return timeStr.split(' ')[0] || timeStr
+  return formatRelativeTime(timeStr)
 }
 
 async function handlePost() {
@@ -649,16 +643,6 @@ function getDomain(url: string) {
   } catch {
     return url
   }
-}
-
-function getMediaUrl(url: string | null): string {
-  if (!url) return ''
-  // 如果是完整 URL 或已包含 /api 前缀，直接返回
-  if (url.startsWith('http') || url.startsWith('/api')) {
-    return url
-  }
-  // 添加 /api 前缀
-  return '/api' + (url.startsWith('/') ? url : '/' + url)
 }
 
 // 检查帖子是否已展开
@@ -847,6 +831,25 @@ async function handleDeletePost(postId: number) {
 .timeline-item {
   display: flex;
   flex-direction: column;
+  animation: card-enter 0.35s ease both;
+}
+
+@keyframes card-enter {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+// Stagger entrance for timeline items
+@for $i from 1 through 10 {
+  .timeline-item:nth-child(#{$i}) {
+    animation-delay: #{$i * 0.05}s;
+  }
 }
 
 .invite-card {
@@ -961,6 +964,7 @@ async function handleDeletePost(postId: number) {
   border: none;
   box-shadow: $shadow-sm;
   transition: transform $transition-fast, box-shadow $transition-fast;
+  contain: content;
 
   &:hover {
     box-shadow: $shadow-md;
@@ -1070,9 +1074,29 @@ async function handleDeletePost(postId: number) {
 }
 
 .feed-images {
-  display: flex;
-  gap: 8px;
+  display: grid;
+  gap: 6px;
   margin-bottom: 12px;
+
+  // Single image: full width
+  &:has(.feed-image:only-child) {
+    grid-template-columns: 1fr;
+    .feed-image { width: 100%; height: auto; max-height: 320px; }
+  }
+
+  // Two images: side by side
+  &:has(.feed-image:nth-child(2):last-child) {
+    grid-template-columns: 1fr 1fr;
+    .feed-image { width: 100%; height: 180px; }
+  }
+
+  // Three+ images: first large, rest small
+  &:has(.feed-image:nth-child(3)) {
+    grid-template-columns: 2fr 1fr;
+    grid-template-rows: auto auto;
+    .feed-image:first-child { grid-row: 1 / 3; height: 200px; }
+    .feed-image { width: 100%; height: 96px; }
+  }
 }
 
 .feed-image {
@@ -1080,6 +1104,9 @@ async function handleDeletePost(postId: number) {
   height: 100px;
   object-fit: cover;
   border-radius: $radius-md;
+  transition: transform $transition-fast;
+
+  &:hover { transform: scale(1.02); }
 }
 
 .feed-actions {
@@ -1100,11 +1127,33 @@ async function handleDeletePost(postId: number) {
   font-size: 14px;
   cursor: pointer;
   transition: all $transition-fast;
+  border-radius: $radius-md;
 
-  &:hover { color: $primary; }
-  &.active { color: $primary; }
+  &:hover {
+    color: $primary;
+    background: rgba($primary, 0.05);
+
+    .el-icon { transform: scale(1.15); }
+  }
+
+  .el-icon { transition: transform $transition-fast; }
+
+  &.active {
+    color: $primary;
+
+    .el-icon { animation: heartbeat 0.4s ease; }
+  }
+
   &.delete-btn { color: $text-muted; }
   &.delete-btn:hover { color: $primary; }
+}
+
+@keyframes heartbeat {
+  0% { transform: scale(1); }
+  25% { transform: scale(1.3); }
+  50% { transform: scale(0.95); }
+  75% { transform: scale(1.15); }
+  100% { transform: scale(1); }
 }
 
 .empty-state {
@@ -1336,5 +1385,12 @@ async function handleDeletePost(postId: number) {
 .link-url {
   font-size: 11px;
   color: $text-muted;
+}
+
+@media (max-width: $bp-mobile) {
+  .discover-page { padding: 0 12px 12px; }
+  .discover-header { flex-direction: column; align-items: stretch; gap: 12px; }
+  .discover-search { width: 100%; }
+  .discover-tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; }
 }
 </style>

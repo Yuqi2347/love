@@ -11,7 +11,7 @@ export interface ApiResult<T = unknown> {
 
 const service: AxiosInstance = axios.create({
   baseURL: '/api',
-  timeout: 30000, // 外网/隧道访问延迟较高，适当放宽
+  timeout: 60000, // AI 接口耗时较长，放宽到 60s
 })
 
 service.interceptors.request.use(

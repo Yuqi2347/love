@@ -80,8 +80,9 @@ import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getFollowingList, getFollowerList, type FollowUser } from '@/api/followApi'
 import { sharePost } from '@/api/feedApi'
+import { DEFAULT_AVATAR } from '@/utils/shared'
 
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
+const defaultAvatar = DEFAULT_AVATAR
 
 const props = defineProps<{
   show: boolean

@@ -128,8 +128,9 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Delete } from '@element-plus/icons-vue'
 import ShareDialog from '@/components/ShareDialog.vue'
+import { DEFAULT_AVATAR, getMediaUrl, formatRelativeTime } from '@/utils/shared'
 
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect fill="%23f0f2f5" width="44" height="44" rx="22"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="20">👤</text></svg>'
+const defaultAvatar = DEFAULT_AVATAR
 
 const route = useRoute()
 const router = useRouter()
@@ -157,13 +158,6 @@ function handleShareSuccess() {
   console.log('分享成功')
 }
 
-function getMediaUrl(url: string | null): string {
-  if (!url) return ''
-  if (url.startsWith('http') || url.startsWith('/api')) return url
-  return '/api' + (url.startsWith('/') ? url : '/' + url)
-}
-
-// 检查帖子是否已展开
 function isExpanded(postId: number): boolean {
   return expandedPosts.value.get(postId) || false
 }
@@ -188,15 +182,7 @@ function shouldCollapse(content: string): boolean {
 }
 
 function formatTime(timeStr: string): string {
-  if (!timeStr) return ''
-  const d = new Date(timeStr)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
-  if (diff < 604800000) return `${Math.floor(diff / 86400000)}天前`
-  return d.toLocaleDateString()
+  return formatRelativeTime(timeStr)
 }
 
 function goPostDetail(postId: number) {

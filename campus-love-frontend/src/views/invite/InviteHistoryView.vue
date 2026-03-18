@@ -118,6 +118,7 @@ import {
   INVITE_STATUS_LABELS,
   INVITE_STATUS_COLORS,
 } from '@/constants/inviteConst'
+import { getTypeColor } from '@/utils/shared'
 
 const userStore = useUserStore()
 const inviteStore = useInviteStore()
@@ -144,18 +145,6 @@ const currentInvites = computed(() => {
     )
   }
 })
-
-// 获取类型颜色
-function getTypeColor(type: string): string {
-  const colors: Record<string, string> = {
-    DINNER: '#ff6b9d',
-    SPORT: '#52c41a',
-    STUDY: '#1890ff',
-    DRAMA: '#722ed1',
-    OTHER: '#8c8c8c',
-  }
-  return colors[type] || '#8c8c8c'
-}
 
 // 格式化日期时间
 function formatDateTime(timeStr: string): string {

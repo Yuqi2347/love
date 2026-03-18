@@ -127,6 +127,13 @@ export interface MomentDatePrepTopic {
   opener: string
 }
 
+export interface NearbyShopItem {
+  name: string
+  address?: string
+  typeName?: string
+  distance?: string
+}
+
 export interface MomentDatePrepResponse {
   dateSceneType?: string
   dateSuggestion: string
@@ -134,6 +141,7 @@ export interface MomentDatePrepResponse {
   surpriseIdea: string
   outfitAdvice: string
   mindsetAdvice: string
+  nearbyShops?: NearbyShopItem[]
 }
 
 // ==================== API 函数 ====================

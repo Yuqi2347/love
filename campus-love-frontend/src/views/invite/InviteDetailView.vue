@@ -400,6 +400,7 @@ import {
   ATMOSPHERE_TAGS,
   formatInviteTimeRange,
 } from '@/constants/inviteConst'
+import { DEFAULT_AVATAR, getTypeColor } from '@/utils/shared'
 
 const route = useRoute()
 const router = useRouter()
@@ -416,7 +417,7 @@ function handleBack() {
 }
 const { currentMessages: chatCurrentMessages } = storeToRefs(chatStore)
 
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 40"><rect fill="%23f0f2f5" width="40" height="40" rx="20"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="18">👤</text></svg>'
+const defaultAvatar = DEFAULT_AVATAR
 
 const invite = ref<Invite | null>(null)
 const loading = ref(true)
@@ -538,18 +539,6 @@ const pinnedMessages = computed(() => {
   const ids = new Set(pinnedMessageIds.value)
   return inviteChatMessages.value.filter(m => ids.has(m.id))
 })
-
-// 获取类型颜色
-function getTypeColor(type: string): string {
-  const colors: Record<string, string> = {
-    DINNER: '#ff6b9d',
-    SPORT: '#52c41a',
-    STUDY: '#1890ff',
-    DRAMA: '#722ed1',
-    OTHER: '#8c8c8c',
-  }
-  return colors[type] || '#8c8c8c'
-}
 
 // 获取标签名称
 function getTagLabel(value: string): string {

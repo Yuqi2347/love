@@ -76,6 +76,7 @@
             fit="cover"
             class="post-image"
             preview-teleported
+            loading="lazy"
           />
         </div>
 
@@ -306,8 +307,9 @@ import ShareDialog from '@/components/ShareDialog.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import FeedTagConfirmBar from './components/FeedTagConfirmBar.vue'
 import { uploadImage } from '@/api/feedApi'
+import { DEFAULT_AVATAR, formatRelativeTime } from '@/utils/shared'
 
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 44 44"><rect fill="%23f0f2f5" width="44" height="44" rx="22"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="20">👤</text></svg>'
+const defaultAvatar = DEFAULT_AVATAR
 
 const route = useRoute()
 const router = useRouter()
@@ -431,15 +433,7 @@ function videoUrl(url: string) {
 }
 
 function formatTime(createdAt: string) {
-  if (!createdAt) return ''
-  const d = new Date(createdAt)
-  const now = new Date()
-  const diff = now.getTime() - d.getTime()
-  if (diff < 60000) return '刚刚'
-  if (diff < 3600000) return `${Math.floor(diff / 60000)}分钟前`
-  if (diff < 86400000) return `${Math.floor(diff / 3600000)}小时前`
-  if (diff < 604800000) return `${Math.floor(diff / 86400000)}天前`
-  return d.toLocaleDateString()
+  return formatRelativeTime(createdAt)
 }
 
 function goBack() {

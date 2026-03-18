@@ -185,7 +185,7 @@
         <span v-if="profile.grade" class="meta-item">📅 {{ profile.grade }}</span>
         <span v-if="profile.zodiac" class="meta-item">⭐ {{ profile.zodiac }}</span>
         <span v-if="profile.mbti" class="meta-item mbti">🧠 {{ profile.mbti }}</span>
-        <span v-if="isMe && profile.bazi" class="meta-item">🔮 {{ profile.bazi }}</span>
+
       </div>
 
       <div v-if="displayInterestNames.length" class="profile-interests">
@@ -217,6 +217,7 @@
           :key="idx"
           :src="getMediaUrl(url)"
           class="posts-entry-thumb"
+          loading="lazy"
         />
         <div v-if="postSummary.recentImageUrls.length < 3" class="posts-entry-placeholder" />
       </div>
@@ -473,8 +474,9 @@ import { uploadAvatar, uploadCover, clearCover as clearCoverApi, sendPasswordCod
 import { getYuanFenCooldown } from '@/api/aiApi'
 import YuanFenAnalysisSheet from './components/YuanFenAnalysisSheet.vue'
 import IceBreakPrivacySheet from './components/IceBreakPrivacySheet.vue'
+import { DEFAULT_AVATAR, getMediaUrl } from '@/utils/shared'
 
-const defaultAvatar = 'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect fill="%23f0f2f5" width="100" height="100" rx="50"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="44">👤</text></svg>'
+const defaultAvatar = DEFAULT_AVATAR
 const dimensionLabels = MATCH_DIMENSION_LABELS
 
 /** 从 interestTags 或 interests 解析出展示用的标签名列表 */
@@ -929,13 +931,6 @@ async function loadPostSummary() {
     postSummary.value = res.data.data || { total: 0, recentImageUrls: [] }
   } catch { /* handled */ }
 }
-
-function getMediaUrl(url: string | null): string {
-  if (!url) return ''
-  if (url.startsWith('http') || url.startsWith('/api')) return url
-  return '/api' + (url.startsWith('/') ? url : '/' + url)
-}
-
 
 // 跳转到用户主页并关闭弹窗
 function goToUserProfile(userId: number) {
@@ -2154,5 +2149,11 @@ async function handleAvatarChange(event: Event) {
       background: rgba($primary, 0.1);
     }
   }
+}
+
+@media (max-width: $bp-mobile) {
+  .profile-page { padding: 0 12px 12px; }
+  .profile-header { flex-direction: column; align-items: center; text-align: center; }
+  .profile-stats { justify-content: center; }
 }
 </style>

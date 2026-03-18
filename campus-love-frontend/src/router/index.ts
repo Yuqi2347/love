@@ -4,6 +4,12 @@ const router = createRouter({
   history: createWebHistory(),
   routes: [
     {
+      path: '/landing',
+      name: 'Landing',
+      component: () => import('@/views/landing/LandingView.vue'),
+      meta: { public: true },
+    },
+    {
       path: '/login',
       name: 'Login',
       component: () => import('@/views/auth/LoginView.vue'),
@@ -14,6 +20,11 @@ const router = createRouter({
       name: 'Register',
       component: () => import('@/views/auth/RegisterView.vue'),
       meta: { public: true },
+    },
+    {
+      path: '/welcome',
+      name: 'Welcome',
+      component: () => import('@/views/auth/SchoolWelcomeView.vue'),
     },
     {
       path: '/setup-profile',
@@ -128,7 +139,7 @@ const router = createRouter({
 router.beforeEach((to, _from, next) => {
   const token = localStorage.getItem('access_token')
   if (!to.meta.public && !token) {
-    next('/login')
+    next('/landing')
   } else {
     next()
   }
