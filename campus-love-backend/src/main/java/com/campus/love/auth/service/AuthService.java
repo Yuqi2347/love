@@ -44,9 +44,8 @@ public class AuthService {
         }
         String normalizedEmail = email.trim().toLowerCase();
 
-        rateLimitService.checkAndIncrement(RateLimitService.LimitType.REGISTER_EMAIL, normalizedEmail);
-
         if (!emailVerifyService.verifyCode(email, request.getVerifyCode())) {
+            rateLimitService.checkAndIncrement(RateLimitService.LimitType.REGISTER_EMAIL, normalizedEmail);
             throw new BusinessException(ResultCode.VERIFY_CODE_INVALID);
         }
 
