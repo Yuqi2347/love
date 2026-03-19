@@ -3,7 +3,7 @@
 -- 新环境首次初始化时只需执行本脚本一次：
 --   mysql -uroot -p campus_love < schema.sql
 -- 或在客户端：SOURCE /绝对路径/schema.sql;
--- 已有数据库升级请使用增量脚本 V2～V36。
+-- 已有数据库升级请使用增量脚本 V2～V38。
 -- =============================================
 
 CREATE DATABASE IF NOT EXISTS campus_love
@@ -718,6 +718,57 @@ CREATE TABLE IF NOT EXISTS t_interest_tag_meta (
     INDEX idx_dimension (dimension)
 ) COMMENT '兴趣标签元数据';
 
+-- 兴趣标签元数据种子（V31：6 维度 × 48 标签，与 matchConst.ts INTEREST_TAG_MATRIX 保持一致）
+INSERT IGNORE INTO t_interest_tag_meta (tag_code, tag_name, dimension) VALUES
+('tag_fitness', '健身塑形', 'body_space'),
+('tag_ball_sports', '球类运动', 'body_space'),
+('tag_running_cycling', '跑步骑行', 'body_space'),
+('tag_outdoor', '户外探索', 'body_space'),
+('tag_yoga_meditation', '瑜伽冥想', 'body_space'),
+('tag_dance', '舞蹈', 'body_space'),
+('tag_extreme_sports', '极限运动', 'body_space'),
+('tag_martial_arts', '武术格斗', 'body_space'),
+('tag_photography', '摄影影像', 'aesthetics_creation'),
+('tag_drawing', '绘画插画', 'aesthetics_creation'),
+('tag_writing', '写作诗歌', 'aesthetics_creation'),
+('tag_music_creation', '音乐创作', 'aesthetics_creation'),
+('tag_handicraft', '手工制作', 'aesthetics_creation'),
+('tag_fashion', '时尚穿搭', 'aesthetics_creation'),
+('tag_interior_design', '室内设计', 'aesthetics_creation'),
+('tag_cooking', '烹饪料理', 'aesthetics_creation'),
+('tag_literature', '文学小说', 'narrative_fiction'),
+('tag_indie_film', '独立电影', 'narrative_fiction'),
+('tag_blockbuster', '商业大片', 'narrative_fiction'),
+('tag_drama', '剧集追番', 'narrative_fiction'),
+('tag_anime', '动漫二次元', 'narrative_fiction'),
+('tag_gaming', '游戏玩家', 'narrative_fiction'),
+('tag_board_game', '桌游策略', 'narrative_fiction'),
+('tag_mystery', '推理悬疑', 'narrative_fiction'),
+('tag_philosophy', '哲学思辨', 'thought_exploration'),
+('tag_psychology', '心理学', 'thought_exploration'),
+('tag_history', '历史人文', 'thought_exploration'),
+('tag_science', '科学科普', 'thought_exploration'),
+('tag_social_issues', '社会议题', 'thought_exploration'),
+('tag_business', '商业经济', 'thought_exploration'),
+('tag_tech', '技术极客', 'thought_exploration'),
+('tag_spirituality', '灵性信仰', 'thought_exploration'),
+('tag_food_dining', '探店美食', 'food_sensory'),
+('tag_cooking_home', '自己下厨', 'food_sensory'),
+('tag_coffee_tea', '咖啡茶道', 'food_sensory'),
+('tag_street_food', '夜市小吃', 'food_sensory'),
+('tag_healthy_eating', '健康饮食', 'food_sensory'),
+('tag_novelty_food', '猎奇尝鲜', 'food_sensory'),
+('tag_dessert', '甜品烘焙', 'food_sensory'),
+('tag_beverage', '微醺酒饮', 'food_sensory'),
+('tag_live_music', '现场音乐演出', 'scene_community'),
+('tag_study_buddy', '学习搭子', 'scene_community'),
+('tag_movie_companion', '观影同伴', 'scene_community'),
+('tag_script_killing', '剧本杀推理', 'scene_community'),
+('tag_volunteer', '志愿公益', 'scene_community'),
+('tag_pet', '宠物同好', 'scene_community'),
+('tag_exhibition', '逛展览馆', 'scene_community'),
+('tag_night_chat', '深夜聊天', 'scene_community');
+
 -- 问卷元数据表（V30）
 CREATE TABLE IF NOT EXISTS t_questionnaire_meta (
     id          BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -725,6 +776,14 @@ CREATE TABLE IF NOT EXISTS t_questionnaire_meta (
     questions   JSON NOT NULL COMMENT '值域定义 [{"field":"social_style","options":{"A":"...","B":"..."}}]',
     created_at  DATETIME DEFAULT CURRENT_TIMESTAMP
 ) COMMENT '问卷元数据（值域权威定义）';
+
+-- 问卷元数据种子（V30：版本 1 值域定义）
+INSERT INTO t_questionnaire_meta (version, questions) VALUES (1, '[
+  {"field":"social_style","title":"社交风格","options":{"A":"主动发起，喜欢认识新朋友","B":"等待对方，熟了再打开","C":"看情况，场合决定","D":"偏向一对一深聊"}},
+  {"field":"life_rhythm","title":"生活节奏","options":{"A":"早睡早起","B":"夜猫子","C":"不固定"}},
+  {"field":"conflict_style","title":"矛盾解决","options":{"A":"冷静沟通","B":"需要冷静期","C":"希望对方先让步","D":"回避冲突"}}
+]')
+ON DUPLICATE KEY UPDATE version = version;
 
 -- 用户 embedding 表（V30）
 CREATE TABLE IF NOT EXISTS t_user_embedding (

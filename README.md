@@ -26,7 +26,7 @@
      然后在项目根目录执行（或进入 `db` 目录后执行）：
      - 在 CMD 中：`mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/schema.sql`
      - 或在 MySQL 客户端中：`SOURCE campus-love-backend/src/main/resources/db/schema.sql;`
-     完成后会一次性创建所有基础表（用户、关注、聊天、朋友圈等）。
+     完成后会一次性创建所有表（含 V1～V38 结构）及兴趣标签、问卷元数据等种子数据，与测试环境一致。
 
    - **已有数据库升级到最新版本（例如从 V1.0.0 升级到 V1.1.0）**：
      在 `campus-love-backend/src/main/resources/db/` 目录下，按顺序执行尚未执行过的增量脚本，例如：
