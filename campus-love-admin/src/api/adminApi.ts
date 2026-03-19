@@ -146,6 +146,7 @@ export interface MomentStatusInfo {
   status: string
   participantCount: number
   enrollmentOpen: boolean
+  matchedTitle?: string | null
 }
 
 export interface MomentEnrollmentItem {
@@ -163,6 +164,39 @@ export interface MomentMatchConfig {
   prioritizeOffset: number
   priorityOffset: number
   priorityMaxStack: number
+  autoMatchEnabled: boolean
+  autoMatchDayOfWeek: number
+  autoMatchTime: string
+}
+
+export interface MomentAdminOverviewPoolStat {
+  pool: string
+  participants: number
+  matchedPairs: number
+  unmatchedUsers: number
+}
+
+export interface MomentAdminOverview {
+  weekTag: string
+  phase: 'ENROLLING' | 'WAITING_MATCH' | 'RESULT_READY'
+  participantCount: number
+  waitingUsers: number
+  matchedUsers: number
+  unmatchedUsers: number
+  matchedPairs: number
+  successRate: number
+  enrollmentOpen: boolean
+  currentThreshold: number
+  autoMatchEnabled: boolean
+  autoMatchDayOfWeek: number
+  autoMatchTime: string
+  nextAutoMatchAt?: string | null
+  lastMatchAt?: string | null
+  poolStats: MomentAdminOverviewPoolStat[]
+  canTriggerMatching: boolean
+  canCloseEnrollment: boolean
+  canReopenEnrollment: boolean
+  canResetWeek: boolean
 }
 
 export interface MomentHistogramBucket {
@@ -227,12 +261,115 @@ export interface MomentSimulationResponse {
   deltaPairs: number
 }
 
+export interface MomentEnrollmentAdminItem {
+  weekTag: string
+  userId: number
+  nickname: string
+  school?: string | null
+  major?: string | null
+  grade?: string | null
+  pools: string[]
+  status: string
+  prioritizeMatching: boolean
+  priorityCount: number
+  createdAt: string
+}
+
+export interface MomentMatchResultItem {
+  id: number
+  weekTag: string
+  pool: string
+  userIdA: number
+  nicknameA: string
+  userIdB: number
+  nicknameB: string
+  totalScore: number
+  yuanfenTitle?: string | null
+  choiceA?: string | null
+  choiceB?: string | null
+  confirmStatus: string
+  createdAt: string
+}
+
+export interface MatchedUserCard {
+  userId?: number | null
+  nickname?: string | null
+  gender?: number | null
+  school?: string | null
+  major?: string | null
+  grade?: string | null
+  mbti?: string | null
+  zodiac?: string | null
+  age?: number | null
+}
+
+export interface MomentDatePrepTopic {
+  title: string
+  opener: string
+}
+
+export interface MomentDatePrepInfo {
+  dateSceneType?: string | null
+  dateSuggestion?: string | null
+  iceBreakTopics?: MomentDatePrepTopic[] | null
+  surpriseIdea?: string | null
+  outfitAdvice?: string | null
+  mindsetAdvice?: string | null
+}
+
+export interface MomentMatchResultDetail {
+  id: number
+  weekTag: string
+  pool: string
+  totalScore: number
+  scoreDetail?: string | null
+  yuanfenTitle?: string | null
+  complementaryModes?: string | null
+  softPenaltyReasons?: string | null
+  dateSceneType?: string | null
+  insightCards: string[]
+  goldenSentence?: string | null
+  dimensionLabels?: string | null
+  aboutUserA?: string | null
+  aboutUserB?: string | null
+  datePrepA?: MomentDatePrepInfo | null
+  datePrepB?: MomentDatePrepInfo | null
+  datePrepJson?: string | null
+  userA: MatchedUserCard
+  userB: MatchedUserCard
+  choiceA?: string | null
+  choiceB?: string | null
+  choiceAAt?: string | null
+  choiceBAt?: string | null
+  confirmStatus: string
+  createdAt: string
+}
+
+export interface MomentOperationLogItem {
+  id: number
+  weekTag?: string | null
+  operatorId?: number | null
+  operatorName: string
+  actionType: string
+  targetType: string
+  targetId?: number | null
+  summary?: string | null
+  detailJson?: string | null
+  createdAt: string
+}
+
 export function getMomentStatus() {
   return request.get<ApiResult<MomentStatusInfo>>('/moment/status')
 }
 
 export function triggerMomentMatching(weekTag?: string) {
   return request.post<ApiResult<Record<string, unknown>>>('/moment/admin/trigger', null, {
+    params: weekTag ? { weekTag } : {},
+  })
+}
+
+export function getMomentAdminOverview(weekTag?: string) {
+  return request.get<ApiResult<MomentAdminOverview>>('/moment/admin/overview', {
     params: weekTag ? { weekTag } : {},
   })
 }
@@ -277,4 +414,46 @@ export function getMomentMatchConfig() {
 
 export function updateMomentMatchConfig(data: Omit<MomentMatchConfig, 'id'>) {
   return request.put<ApiResult<MomentMatchConfig>>('/moment/admin/config', data)
+}
+
+export function getMomentAdminEnrollments(params: {
+  page?: number
+  size?: number
+  weekTag?: string
+  pool?: string
+  status?: string
+  keyword?: string
+}) {
+  return request.get<ApiResult<PageResult<MomentEnrollmentAdminItem>>>('/moment/admin/enrollments', { params })
+}
+
+export function removeMomentAdminEnrollment(userId: number, weekTag?: string) {
+  return request.delete<ApiResult<void>>(`/moment/admin/enrollments/user/${userId}`, {
+    params: weekTag ? { weekTag } : {},
+  })
+}
+
+export function getMomentAdminResults(params: {
+  page?: number
+  size?: number
+  weekTag?: string
+  pool?: string
+  keyword?: string
+}) {
+  return request.get<ApiResult<PageResult<MomentMatchResultItem>>>('/moment/admin/results', { params })
+}
+
+export function getMomentAdminResultDetail(id: number) {
+  return request.get<ApiResult<MomentMatchResultDetail>>(`/moment/admin/results/${id}`, {
+    timeout: 60000,
+  })
+}
+
+export function getMomentAdminLogs(params: {
+  page?: number
+  size?: number
+  weekTag?: string
+  actionType?: string
+}) {
+  return request.get<ApiResult<PageResult<MomentOperationLogItem>>>('/moment/admin/logs', { params })
 }

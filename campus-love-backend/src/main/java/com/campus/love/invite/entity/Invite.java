@@ -37,6 +37,8 @@ public class Invite {
     private LocalDateTime inviteEndTime;
 
     private String location;
+    /** 校区：ALL 表示不限 */
+    private String campus;
 
     private Integer maxParticipants;
 

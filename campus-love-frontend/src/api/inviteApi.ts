@@ -30,6 +30,7 @@ export interface Invite {
   inviteTime: string
   inviteEndTime?: string | null
   location: string | null
+  campus?: string | null
   maxParticipants: number | null
   participantCount: number
   status: string
@@ -68,6 +69,7 @@ export interface InviteCreateRequest {
   inviteTime: string
   inviteEndTime?: string
   location?: string
+  campus?: string
   maxParticipants?: number
   deadlineHours?: number
   atmosphereTags?: string

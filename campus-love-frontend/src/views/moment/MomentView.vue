@@ -163,8 +163,8 @@ onMounted(fetchStatus)
     height: 48px;
     margin: 0 auto 16px;
     border-radius: 50%;
-    border: 3px solid $primary-light;
-    border-top-color: $primary;
+    border: 3px solid #ffd6ea;
+    border-top-color: #ff88bd;
     animation: spin 1s linear infinite;
   }
 }
@@ -221,7 +221,7 @@ onMounted(fetchStatus)
 .hero-title {
   font-size: 32px;
   font-weight: 800;
-  background: $primary-gradient;
+  background: linear-gradient(135deg, #ff8fc3 0%, #ffb6d9 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 8px;
@@ -239,7 +239,7 @@ onMounted(fetchStatus)
   line-height: 1.8;
   margin-bottom: 24px;
 
-  strong { color: $primary; font-weight: 600; }
+  strong { color: #ff78b4; font-weight: 600; }
 }
 
 .hero-stats {
@@ -247,14 +247,14 @@ onMounted(fetchStatus)
   align-items: baseline;
   gap: 6px;
   padding: 8px 20px;
-  background: rgba($primary, 0.08);
+  background: rgba(255, 122, 180, 0.1);
   border-radius: $radius-full;
   margin-bottom: 24px;
 
   .stat-number {
     font-size: 24px;
     font-weight: 800;
-    color: $primary;
+    color: #ff78b4;
   }
   .stat-label {
     font-size: 14px;
@@ -266,7 +266,7 @@ onMounted(fetchStatus)
   width: 100%;
   max-width: 280px;
   height: 52px;
-  background: $primary-gradient;
+  background: linear-gradient(135deg, #ff7ab4 0%, #ff9dc9 100%);
   color: white;
   border: none;
   border-radius: $radius-full;
@@ -274,11 +274,11 @@ onMounted(fetchStatus)
   font-weight: 700;
   cursor: pointer;
   transition: all $transition-base;
-  box-shadow: 0 4px 16px rgba($primary, 0.3);
+  box-shadow: 0 4px 16px rgba(255, 122, 180, 0.35);
 
   &:hover {
     transform: translateY(-2px);
-    box-shadow: 0 6px 24px rgba($primary, 0.4);
+    box-shadow: 0 6px 24px rgba(255, 122, 180, 0.45);
   }
 
   &:active {
@@ -362,13 +362,13 @@ onMounted(fetchStatus)
   align-items: center;
   gap: 8px;
   padding: 10px 20px;
-  background: rgba($primary, 0.08);
+  background: rgba(255, 122, 180, 0.1);
   border-radius: $radius-full;
   font-size: 14px;
   color: $text-secondary;
 
   .badge-icon { font-size: 18px; }
-  strong { color: $primary; font-weight: 700; }
+  strong { color: #ff78b4; font-weight: 700; }
 }
 
 .waiting-hint {
@@ -420,7 +420,7 @@ onMounted(fetchStatus)
 .matched-title {
   font-size: 24px;
   font-weight: 700;
-  background: $primary-gradient;
+  background: linear-gradient(135deg, #ff8fc3 0%, #ffb6d9 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
   margin-bottom: 8px;
@@ -474,7 +474,7 @@ onMounted(fetchStatus)
   align-items: center;
   gap: 8px;
   padding: 12px 24px;
-  background: rgba($accent, 0.1);
+  background: rgba(255, 160, 206, 0.16);
   border-radius: $radius-full;
   font-size: 14px;
   color: $text-secondary;

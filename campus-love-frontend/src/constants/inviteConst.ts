@@ -11,15 +11,15 @@ export const INVITE_TYPE_LABELS: Record<InviteType, string> = {
   [InviteType.DINNER]: '约饭',
   [InviteType.SPORT]: '运动',
   [InviteType.STUDY]: '自习',
-  [InviteType.DRAMA]: '追剧',
+  [InviteType.DRAMA]: '娱乐',
   [InviteType.OTHER]: '其他',
 }
 
 export const INVITE_TYPE_OPTIONS = [
   { label: INVITE_TYPE_LABELS[InviteType.DINNER], value: InviteType.DINNER, icon: '🍽️' },
-  { label: INVITE_TYPE_LABELS[InviteType.SPORT], value: InviteType.SPORT, icon: '🏀' },
+  { label: INVITE_TYPE_LABELS[InviteType.SPORT], value: InviteType.SPORT, icon: '🏸' },
   { label: INVITE_TYPE_LABELS[InviteType.STUDY], value: InviteType.STUDY, icon: '📚' },
-  { label: INVITE_TYPE_LABELS[InviteType.DRAMA], value: InviteType.DRAMA, icon: '🎬' },
+  { label: INVITE_TYPE_LABELS[InviteType.DRAMA], value: InviteType.DRAMA, icon: '🎉' },
   { label: INVITE_TYPE_LABELS[InviteType.OTHER], value: InviteType.OTHER, icon: '🎯' },
 ]
 
@@ -34,25 +34,39 @@ export interface InviteTemplate {
 
 export const INVITE_TEMPLATES: InviteTemplate[] = [
   {
-    label: '食堂拼饭',
+    label: '羽毛球',
+    type: InviteType.SPORT,
+    title: '今晚来一场轻松羽毛球',
+    content: '想找 1-2 位同学打羽毛球，友好局不卷强度，活动后可一起喝水休息。',
+    atmosphereTags: ['ACTIVE', 'RELAXED'],
+  },
+  {
+    label: '辣可可吃饭',
     type: InviteType.DINNER,
-    title: '一起去食堂拼个晚饭',
-    content: '今晚想去食堂试试新窗口，一个人吃有点无聊，一起拼个桌聊聊天～',
+    title: '去辣可可吃饭，拼个饭搭子',
+    content: '计划去辣可可吃晚饭，想找同校同学一起拼桌，边吃边聊，节奏轻松。',
     atmosphereTags: ['SOCIAL', 'RELAXED'],
   },
   {
-    label: '图书馆自习',
-    type: InviteType.STUDY,
-    title: '图书馆安静自习',
-    content: '备考周，一起去图书馆自习，互相监督不玩手机，有需要可以顺便问问题。',
-    atmosphereTags: ['QUIET', 'SERIOUS'],
+    label: '狼人杀',
+    type: InviteType.DRAMA,
+    title: '狼人杀局，缺几位高质量玩家',
+    content: '周末晚上组一场狼人杀，欢迎新手和老玩家，主打有梗不贴脸，快乐第一。',
+    atmosphereTags: ['ACTIVE', 'SOCIAL'],
   },
   {
-    label: '操场夜跑',
+    label: '夜跑',
     type: InviteType.SPORT,
-    title: '操场慢跑/散步',
-    content: '晚上去操场慢跑散步，节奏轻松，想聊就聊，不想聊就听歌放空。',
-    atmosphereTags: ['RELAXED', 'ACTIVE'],
+    title: '操场夜跑 5 公里，结伴更有动力',
+    content: '晚上约夜跑，配速轻松可交流，互相监督打卡，跑完拉伸后解散。',
+    atmosphereTags: ['ACTIVE', 'SERIOUS'],
+  },
+  {
+    label: '电影',
+    type: InviteType.DRAMA,
+    title: '周末一起看电影',
+    content: '想约同学看电影，片单可商量，看完可以顺路散步聊聊剧情。',
+    atmosphereTags: ['RELAXED', 'SOCIAL'],
   },
 ]
 
@@ -87,12 +101,12 @@ export const INVITE_STATUS_LABELS: Record<InviteStatus, string> = {
 }
 
 export const INVITE_STATUS_COLORS: Record<InviteStatus, string> = {
-  [InviteStatus.RECRUITING]: '#52c41a', // 绿色
-  [InviteStatus.FULL]: '#faad14', // 橙色
-  [InviteStatus.CONFIRMED]: '#1890ff', // 蓝色
-  [InviteStatus.IN_PROGRESS]: '#722ed1', // 紫色
-  [InviteStatus.ENDED]: '#8c8c8c', // 灰色
-  [InviteStatus.CANCELLED]: '#ff4d4f', // 红色
+  [InviteStatus.RECRUITING]: '#52c41a',
+  [InviteStatus.FULL]: '#faad14',
+  [InviteStatus.CONFIRMED]: '#1890ff',
+  [InviteStatus.IN_PROGRESS]: '#722ed1',
+  [InviteStatus.ENDED]: '#8c8c8c',
+  [InviteStatus.CANCELLED]: '#ff4d4f',
 }
 
 // 邀约周期
@@ -125,7 +139,7 @@ export const ATMOSPHERE_TAGS: AtmosphereTag[] = [
   { label: '社牛友好', value: 'SOCIAL', color: '#ff6b9d' },
   { label: '适合i人', value: 'INTROVERT', color: '#a855f7' },
   { label: '轻松愉快', value: 'RELAXED', color: '#22c55e' },
-  { label: '严肃认真', value: 'SERIOUS', color: '#3b82f6' },
+  { label: '严谨认真', value: 'SERIOUS', color: '#3b82f6' },
   { label: '安静专注', value: 'QUIET', color: '#6366f1' },
   { label: '活跃互动', value: 'ACTIVE', color: '#f97316' },
 ]
@@ -157,7 +171,7 @@ export function formatInviteTime(timeStr: string): string {
   return date.toLocaleDateString('zh-CN')
 }
 
-// 格式化邀约时间区间：有结束时间显示「开始-结束」，无则显示「开始-」
+// 格式化邀约时间区间：有结束时间显示“开始 - 结束”，无则显示“开始”
 export function formatInviteTimeRange(inviteTime: string, inviteEndTime?: string | null): string {
   const start = new Date(inviteTime)
   const startStr = start.toLocaleString('zh-CN', {

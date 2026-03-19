@@ -87,29 +87,13 @@
         <button v-if="followStatus === 'MUTUAL'" class="btn-action btn-primary" @click="handleInviteUser">
           <el-icon><Calendar /></el-icon> 约TA
         </button>
-        <button v-if="followStatus === 'MUTUAL'" class="btn-action btn-yuanfen" @click="openYuanFen">
+        <button v-if="SHOW_YUANFEN_ANALYSIS && followStatus === 'MUTUAL'" class="btn-action btn-yuanfen" @click="openYuanFen">
           缘分 ✨
         </button>
       </div>
     </div>
 
     <div v-if="profile" class="profile-info">
-      <div class="profile-stats">
-        <div class="stat-item" @click="handleOpenFollowing">
-          <span class="stat-num">{{ followingCount }}</span>
-          <span class="stat-label">我关注的</span>
-        </div>
-        <div class="stat-item" @click="handleOpenFollowers">
-          <span class="stat-num">{{ followerCount }}</span>
-          <span v-if="isMe && newFollowerCount > 0" class="stat-new">+{{ newFollowerCount }}</span>
-          <span class="stat-label">关注我的</span>
-        </div>
-        <div class="stat-item" @click="handleOpenMutual">
-          <span class="stat-num">{{ mutualCount }}</span>
-          <span class="stat-label">朋友</span>
-        </div>
-      </div>
-
       <!-- 等级进度条 -->
       <div v-if="isMe" class="level-progress-card">
         <div class="level-progress-header">
@@ -135,6 +119,32 @@
           <span class="insight-entry-desc">查看 OCEAN 五维人格与性格标签</span>
         </div>
         <el-icon class="insight-entry-arrow"><ArrowLeft /></el-icon>
+      </div>
+
+      <div class="profile-relations-card">
+        <div class="relations-card-header">
+          <div>
+            <div class="relations-card-title">{{ isMe ? '我的关系' : `${profile?.nickname || 'TA'}的关系` }}</div>
+            <div class="relations-card-desc">查看关注、粉丝和朋友列表</div>
+          </div>
+        </div>
+        <div class="relations-grid">
+          <button type="button" class="relation-tile" @click="handleOpenFollowing">
+            <span class="relation-count">{{ followingCount }}</span>
+            <span class="relation-label">我关注的</span>
+          </button>
+          <button type="button" class="relation-tile" @click="handleOpenFollowers">
+            <div class="relation-count-group">
+              <span class="relation-count">{{ followerCount }}</span>
+              <span v-if="isMe && newFollowerCount > 0" class="relation-new">+{{ newFollowerCount }}</span>
+            </div>
+            <span class="relation-label">关注我的</span>
+          </button>
+          <button type="button" class="relation-tile" @click="handleOpenMutual">
+            <span class="relation-count">{{ mutualCount }}</span>
+            <span class="relation-label">朋友</span>
+          </button>
+        </div>
       </div>
 
       <!-- 邀约成就 & 平均评分 -->
@@ -193,7 +203,7 @@
       </div>
 
       <!-- Match detail if not me -->
-      <div v-if="!isMe && matchResult" class="match-section card">
+      <div v-if="SHOW_YUANFEN_ANALYSIS && !isMe && matchResult" class="match-section card">
         <h3 class="section-title">匹配分析</h3>
         <div class="match-total">
           <span class="match-score">{{ matchResult.matchScore }}%</span>
@@ -228,49 +238,53 @@
     </div>
   </div>
 
-  <!-- 关注列表弹窗 -->
-  <el-dialog :title="isMe ? '我关注的' : `${profile?.nickname || 'TA'}关注的`" width="500px" :model-value="showFollowing" destroy-on-close @update:model-value="showFollowing = false">
-    <div v-if="followingList.length" class="user-list">
+  <BaseModalShell v-model="showRelationDialog" :title="relationDialogTitle" width="560px" max-body-height="68vh">
+    <div class="relation-modal-tabs">
+      <button
+        type="button"
+        :class="['relation-modal-tab', { active: activeRelationTab === 'following' }]"
+        @click="handleOpenFollowing"
+      >
+        我关注的
+      </button>
+      <button
+        type="button"
+        :class="['relation-modal-tab', { active: activeRelationTab === 'followers' }]"
+        @click="handleOpenFollowers"
+      >
+        关注我的
+      </button>
+      <button
+        type="button"
+        :class="['relation-modal-tab', { active: activeRelationTab === 'mutual' }]"
+        @click="handleOpenMutual"
+      >
+        朋友
+      </button>
+    </div>
+    <div v-if="relationLoading" class="empty-hint">加载中...</div>
+    <div v-else-if="activeRelationUsers.length" class="user-list">
       <div
-        v-for="user in followingList"
+        v-for="user in activeRelationUsers"
         :key="user.userId"
-        class="user-list-item-with-action"
+        :class="[activeRelationTab === 'mutual' ? 'user-list-item' : 'user-list-item-with-action']"
         @click="goToUserProfile(user.userId)"
       >
         <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
         <div class="user-list-info">
-          <div class="user-list-name">{{ user.remark || user.nickname }}</div>
-          <div v-if="user.remark" class="user-list-original-name">昵称: {{ user.nickname }}</div>
+          <div class="user-list-name">{{ getRelationDisplayName(user) }}</div>
+          <div v-if="showRelationOriginalName(user)" class="user-list-original-name">昵称: {{ user.nickname }}</div>
+          <div v-if="activeRelationTab === 'followers' && user.isMutual" class="user-list-relation">互相关注</div>
         </div>
         <button
-          v-if="isMe"
+          v-if="activeRelationTab === 'following' && isMe"
           class="user-list-action-btn unfollow-btn"
           @click.stop="handleListFollowToggle(user.userId, false)"
         >
           取消关注
         </button>
-      </div>
-    </div>
-    <div v-else class="empty-hint">{{ isMe ? '暂无关注' : 'TA暂无关注' }}</div>
-  </el-dialog>
-
-  <!-- 粉丝列表弹窗 -->
-  <el-dialog :title="isMe ? '关注我的' : `关注${profile?.nickname || 'TA'}的`" width="500px" :model-value="showFollowers" destroy-on-close @update:model-value="showFollowers = false">
-    <div v-if="followerList.length" class="user-list">
-      <div
-        v-for="user in followerList"
-        :key="user.userId"
-        class="user-list-item-with-action"
-        @click="goToUserProfile(user.userId)"
-      >
-        <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
-        <div class="user-list-info">
-          <div class="user-list-name">{{ isMe ? followStore.getDisplayName(user.userId, user.remark || user.nickname) : (user.remark || user.nickname) }}</div>
-          <div v-if="(isMe ? followStore.getRemarkByUserId(user.userId) : user.remark)" class="user-list-original-name">昵称: {{ user.nickname }}</div>
-          <div v-if="user.isMutual" class="user-list-relation">互相关注</div>
-        </div>
         <button
-          v-if="isMe"
+          v-if="activeRelationTab === 'followers' && isMe"
           :class="['user-list-action-btn', user.isMutual ? 'unfollow-btn' : 'follow-btn']"
           @click.stop="handleListFollowToggle(user.userId, !user.isMutual)"
         >
@@ -278,25 +292,10 @@
         </button>
       </div>
     </div>
-    <div v-else class="empty-hint">{{ isMe ? '暂无粉丝' : 'TA暂无粉丝' }}</div>
-  </el-dialog>
+    <div v-else class="empty-hint">{{ relationEmptyText }}</div>
+  </BaseModalShell>
 
-  <!-- 朋友列表弹窗 -->
-  <el-dialog :title="isMe ? '我的朋友' : `${profile?.nickname || 'TA'}的朋友`" width="500px" :model-value="showMutual" destroy-on-close @update:model-value="showMutual = false">
-    <div v-if="mutualList.length" class="user-list">
-      <div v-for="user in mutualList" :key="user.userId" class="user-list-item" @click="goToUserProfile(user.userId)">
-        <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
-        <div class="user-list-info">
-          <div class="user-list-name">{{ user.remark || user.nickname }}</div>
-          <div v-if="user.remark" class="user-list-original-name">昵称: {{ user.nickname }}</div>
-        </div>
-      </div>
-    </div>
-    <div v-else class="empty-hint">{{ isMe ? '暂无朋友' : 'TA暂无朋友' }}</div>
-  </el-dialog>
-
-  <!-- 备注编辑弹窗 -->
-  <el-dialog title="设置备注" width="360px" :model-value="showRemarkEditor" destroy-on-close @update:model-value="showRemarkEditor = false">
+  <BaseModalShell v-model="showRemarkEditor" title="设置备注" width="360px" max-body-height="260px">
     <el-input
       v-model="remarkInput"
       placeholder="输入备注名（留空清除备注）"
@@ -306,13 +305,13 @@
     />
     <template #footer>
       <button class="btn-outline" @click="showRemarkEditor = false">取消</button>
-      <button class="btn-primary" style="margin-left: 8px" @click="saveRemark">保存</button>
+      <button class="btn-primary" @click="saveRemark">保存</button>
     </template>
-  </el-dialog>
+  </BaseModalShell>
 
   <!-- 缘分解析弹层 -->
   <YuanFenAnalysisSheet
-    v-if="showYuanFen"
+    v-if="SHOW_YUANFEN_ANALYSIS && showYuanFen"
     :model-value="showYuanFen"
     :target-user-id="profileId ?? 0"
     :current-nickname="userStore.user?.nickname || '我'"
@@ -321,8 +320,7 @@
     @analyzed="onYuanFenAnalyzed"
   />
 
-  <!-- 背景设置弹窗 -->
-  <el-dialog title="背景设置" width="420px" :model-value="showCoverSettings" destroy-on-close @update:model-value="onCoverDialogClose">
+  <BaseModalShell v-model="showCoverSettings" title="背景设置" width="420px" max-body-height="360px">
     <div class="cover-settings-form">
       <div class="cover-preview" :style="coverPreviewStyle">
         <span v-if="!coverPreviewUrl" class="cover-placeholder">选择图片作为个人主页背景</span>
@@ -338,10 +336,10 @@
         </button>
       </div>
     </div>
-  </el-dialog>
+  </BaseModalShell>
 
   <!-- 隐私设置弹窗 -->
-  <el-dialog title="隐私设置" width="420px" :model-value="showPrivacySettings" destroy-on-close @update:model-value="showPrivacySettings = false">
+  <BaseModalShell v-model="showPrivacySettings" title="隐私设置" width="420px" max-body-height="70vh">
     <div class="privacy-settings-form">
       <div class="setting-item">
         <div class="setting-label">谁可以看我的动态</div>
@@ -376,10 +374,10 @@
         <span>朋友表示与你互相关注的用户</span>
       </div>
     </div>
-  </el-dialog>
+  </BaseModalShell>
 
   <!-- 账号安全弹窗 -->
-  <el-dialog title="账号安全" width="420px" :model-value="showAccountSecurity" destroy-on-close @update:model-value="showAccountSecurity = false">
+  <BaseModalShell v-model="showAccountSecurity" title="账号安全" width="420px" max-body-height="70vh">
     <div class="security-settings-form">
       <div class="security-email-section">
         <div class="setting-label">绑定邮箱</div>
@@ -444,7 +442,7 @@
         </div>
       </div>
     </div>
-  </el-dialog>
+  </BaseModalShell>
 
   <!-- AI 信息公开授权面板 -->
   <IceBreakPrivacySheet
@@ -475,8 +473,10 @@ import { getYuanFenCooldown } from '@/api/aiApi'
 import YuanFenAnalysisSheet from './components/YuanFenAnalysisSheet.vue'
 import IceBreakPrivacySheet from './components/IceBreakPrivacySheet.vue'
 import { DEFAULT_AVATAR, getMediaUrl } from '@/utils/shared'
+import BaseModalShell from '@/components/BaseModalShell.vue'
 
 const defaultAvatar = DEFAULT_AVATAR
+const SHOW_YUANFEN_ANALYSIS = true
 const dimensionLabels = MATCH_DIMENSION_LABELS
 
 /** 从 interestTags 或 interests 解析出展示用的标签名列表 */
@@ -532,16 +532,19 @@ const postSummary = ref<{ total: number; recentImageUrls: string[] }>({ total: 0
 const followingCount = ref(0)
 const followerCount = ref(0)
 const mutualCount = ref(0)
-const showFollowing = ref(false)
-const showFollowers = ref(false)
-const showMutual = ref(false)
+type RelationTab = 'following' | 'followers' | 'mutual'
+const activeRelationTab = ref<RelationTab | null>(null)
+const showRelationDialog = ref(false)
+const relationLoading = ref(false)
 
 // 缘分解析
 const showYuanFen = ref(false)
-const yuanfenCooldown = ref(0)
 let cooldownTimer: ReturnType<typeof setInterval> | null = null
 
 function openYuanFen() {
+  if (!SHOW_YUANFEN_ANALYSIS) {
+    return
+  }
   if (!userStore.user?.profileComplete) {
     ElMessage.warning('请先完善个人信息后进行分析')
     return
@@ -555,12 +558,11 @@ function onYuanFenAnalyzed(seconds: number) {
 }
 
 function startCooldownTimer(seconds: number) {
-  yuanfenCooldown.value = seconds
   if (cooldownTimer) clearInterval(cooldownTimer)
   if (seconds <= 0) return
   cooldownTimer = setInterval(() => {
-    yuanfenCooldown.value--
-    if (yuanfenCooldown.value <= 0 && cooldownTimer) {
+    seconds--
+    if (seconds <= 0 && cooldownTimer) {
       clearInterval(cooldownTimer)
       cooldownTimer = null
     }
@@ -637,11 +639,6 @@ function resetCoverPreview() {
   if (coverPreviewUrl.value) URL.revokeObjectURL(coverPreviewUrl.value)
   coverPreviewUrl.value = ''
   coverFileToUpload.value = null
-}
-
-function onCoverDialogClose() {
-  showCoverSettings.value = false
-  resetCoverPreview()
 }
 
 // 隐私设置
@@ -802,6 +799,30 @@ onBeforeUnmount(() => {
 
 const followLabel = computed(() => FOLLOW_STATUS_LABELS[followStatus.value as FollowStatus] || '关注')
 const newFollowerCount = computed(() => badgeStore.badges.newFollowerCount)
+const activeRelationUsers = computed(() => {
+  if (activeRelationTab.value === 'following') return followingList.value
+  if (activeRelationTab.value === 'followers') return followerList.value
+  if (activeRelationTab.value === 'mutual') return mutualList.value
+  return []
+})
+const relationEmptyText = computed(() => {
+  if (activeRelationTab.value === 'following') return isMe.value ? '暂无关注' : 'TA暂无关注'
+  if (activeRelationTab.value === 'followers') return isMe.value ? '暂无粉丝' : 'TA暂无粉丝'
+  if (activeRelationTab.value === 'mutual') return isMe.value ? '暂无朋友' : 'TA暂无朋友'
+  return ''
+})
+const relationDialogTitle = computed(() => {
+  if (activeRelationTab.value === 'following') return isMe.value ? '我关注的' : `${profile.value?.nickname || 'TA'}关注的`
+  if (activeRelationTab.value === 'followers') return isMe.value ? '关注我的' : `关注${profile.value?.nickname || 'TA'}的`
+  if (activeRelationTab.value === 'mutual') return isMe.value ? '我的朋友' : `${profile.value?.nickname || 'TA'}的朋友`
+  return '关系列表'
+})
+
+watch(showCoverSettings, (visible) => {
+  if (!visible) {
+    resetCoverPreview()
+  }
+})
 
 // 年龄展示：他人用 profile.age，本人用 birthDate 计算
 const displayAge = computed(() => {
@@ -822,33 +843,17 @@ const displayAge = computed(() => {
 
 // 打开关注列表
 function handleOpenFollowing() {
-  const isAdmin = userStore.user?.isAdmin || false
-  if (!isMe.value && !isAdmin) {
-    ElMessage.warning('只有管理员可以查看他人的关注列表')
-    return
-  }
-  showFollowing.value = true
+  void openRelationDialog('following')
 }
 
 // 打开粉丝列表（本人查看时标记已读，消除新粉丝红点）
 function handleOpenFollowers() {
-  const isAdmin = userStore.user?.isAdmin || false
-  if (!isMe.value && !isAdmin) {
-    ElMessage.warning('只有管理员可以查看他人的粉丝列表')
-    return
-  }
-  if (isMe.value) badgeStore.markFollowersViewed()
-  showFollowers.value = true
+  void openRelationDialog('followers')
 }
 
 // 打开朋友列表
 function handleOpenMutual() {
-  const isAdmin = userStore.user?.isAdmin || false
-  if (!isMe.value && !isAdmin) {
-    ElMessage.warning('只有管理员可以查看他人的朋友列表')
-    return
-  }
-  showMutual.value = true
+  void openRelationDialog('mutual')
 }
 
 async function loadProfile() {
@@ -881,17 +886,19 @@ async function loadProfile() {
     if (!isMe.value) {
       const statusRes = await getFollowStatus(profileId.value)
       followStatus.value = statusRes.data.data || FollowStatus.NONE
-      const matchRes = await getMatchDetail(profileId.value)
-      matchResult.value = matchRes.data.data
-
-      // 互相关注时加载缘分解析冷却状态
-      if (followStatus.value === FollowStatus.MUTUAL) {
+      if (SHOW_YUANFEN_ANALYSIS) {
+        const matchRes = await getMatchDetail(profileId.value)
+        matchResult.value = matchRes.data.data
+      }
+      if (SHOW_YUANFEN_ANALYSIS && followStatus.value === FollowStatus.MUTUAL) {
         try {
           const cdRes = await getYuanFenCooldown(profileId.value)
           const remaining = cdRes.data.data?.remainingSeconds || 0
           if (remaining > 0) startCooldownTimer(remaining)
         } catch { /* ignore */ }
       }
+    } else {
+      matchResult.value = null
     }
 
     // 最后加载关注/粉丝数量（独立处理，不影响其他数据）
@@ -934,55 +941,9 @@ async function loadPostSummary() {
 
 // 跳转到用户主页并关闭弹窗
 function goToUserProfile(userId: number) {
-  showFollowing.value = false
-  showFollowers.value = false
-  showMutual.value = false
+  showRelationDialog.value = false
   router.push(`/profile/${userId}`)
 }
-
-// 监听弹窗打开，加载用户列表
-watch(showFollowing, async (val) => {
-  if (val) {
-    try {
-      const res = isMe.value ? await getFollowingList() : await getUserFollowing(profileId.value!)
-      followingList.value = res.data.data || []
-    } catch (err) {
-      console.error('load following error:', err)
-      ElMessage.error('加载关注列表失败')
-    }
-  }
-})
-
-watch(showFollowers, async (val) => {
-  if (val) {
-    try {
-      if (isMe.value) await followStore.loadFollowedIds()
-      const res = isMe.value ? await getFollowerList() : await getUserFollowers(profileId.value!)
-      followerList.value = res.data.data || []
-    } catch (err) {
-      console.error('load followers error:', err)
-      ElMessage.error('加载粉丝列表失败')
-    }
-  }
-})
-
-watch(showMutual, async (val) => {
-  if (val) {
-    try {
-      const [fing, fers] = await Promise.all([
-        isMe.value ? getFollowingList() : getUserFollowing(profileId.value!),
-        isMe.value ? getFollowerList() : getUserFollowers(profileId.value!)
-      ])
-      const fingList = fing.data.data || []
-      const fersList = fers.data.data || []
-      const fingIds = new Set(fingList.map(u => u.userId))
-      mutualList.value = fersList.filter(u => fingIds.has(u.userId))
-    } catch (err) {
-      console.error('load mutual error:', err)
-      ElMessage.error('加载朋友列表失败')
-    }
-  }
-})
 
 onMounted(loadProfile)
 watch(() => route.params.userId, loadProfile)
@@ -1020,14 +981,10 @@ async function handleListFollowToggle(targetUserId: number, isFollow: boolean) {
       await unfollowUser(targetUserId)
       ElMessage.success('已取消关注')
     }
-    // 刷新当前打开的列表
-    if (showFollowing.value) {
-      const res = await getFollowingList()
-      followingList.value = res.data.data || []
-    }
-    if (showFollowers.value) {
-      const res = await getFollowerList()
-      followerList.value = res.data.data || []
+    await followStore.loadFollowedIds()
+    await loadFollowCounts()
+    if (showRelationDialog.value && activeRelationTab.value) {
+      await loadRelationTab(activeRelationTab.value)
     }
   } catch {
     ElMessage.error('操作失败')
@@ -1049,16 +1006,65 @@ async function saveRemark() {
     ElMessage.success(remark ? '备注已设置' : '备注已清除')
     showRemarkEditor.value = false
     await followStore.loadFollowedIds()
-    if (showMutual.value) {
-      const [fing, fers] = await Promise.all([getFollowingList(), getFollowerList()])
-      const fingList = fing.data.data || []
-      const fersList = fers.data.data || []
-      const fingIds = new Set(fingList.map(u => u.userId))
-      mutualList.value = fersList.filter(u => fingIds.has(u.userId))
+    if (showRelationDialog.value && activeRelationTab.value) {
+      await loadRelationTab(activeRelationTab.value)
     }
   } catch {
     ElMessage.error('设置备注失败')
   }
+}
+
+async function openRelationDialog(tab: RelationTab) {
+  activeRelationTab.value = tab
+  showRelationDialog.value = true
+  if (tab === 'followers' && isMe.value) {
+    badgeStore.markFollowersViewed()
+  }
+  await loadRelationTab(tab)
+}
+
+async function loadRelationTab(tab: RelationTab) {
+  relationLoading.value = true
+  try {
+    if (tab === 'following') {
+      const res = isMe.value ? await getFollowingList() : await getUserFollowing(profileId.value!)
+      followingList.value = res.data.data || []
+      return
+    }
+    if (tab === 'followers') {
+      if (isMe.value) await followStore.loadFollowedIds()
+      const res = isMe.value ? await getFollowerList() : await getUserFollowers(profileId.value!)
+      followerList.value = res.data.data || []
+      return
+    }
+    const [fing, fers] = await Promise.all([
+      isMe.value ? getFollowingList() : getUserFollowing(profileId.value!),
+      isMe.value ? getFollowerList() : getUserFollowers(profileId.value!)
+    ])
+    const fingList = fing.data.data || []
+    const fersList = fers.data.data || []
+    const fingIds = new Set(fingList.map(u => u.userId))
+    mutualList.value = fersList.filter(u => fingIds.has(u.userId))
+  } catch (err) {
+    console.error(`load ${tab} error:`, err)
+    ElMessage.error(tab === 'mutual' ? '加载朋友列表失败' : `加载${tab === 'following' ? '关注' : '粉丝'}列表失败`)
+  } finally {
+    relationLoading.value = false
+  }
+}
+
+function getRelationDisplayName(user: FollowUser) {
+  if (activeRelationTab.value === 'followers' && isMe.value) {
+    return followStore.getDisplayName(user.userId, user.remark || user.nickname)
+  }
+  return user.remark || user.nickname
+}
+
+function showRelationOriginalName(user: FollowUser) {
+  if (activeRelationTab.value === 'followers' && isMe.value) {
+    return Boolean(followStore.getRemarkByUserId(user.userId))
+  }
+  return Boolean(user.remark)
 }
 
 function handleInviteUser() {
@@ -1199,6 +1205,8 @@ async function handleAvatarChange(event: Event) {
   align-items: flex-start;
   padding: 0 24px;
   margin-top: -50px;
+  position: relative;
+  z-index: 1;
 }
 
 .profile-info-header {
@@ -1280,7 +1288,10 @@ async function handleAvatarChange(event: Event) {
 }
 
 .profile-info {
-  padding: 0 24px 0;
+  padding: 16px 24px 0;
+  position: relative;
+  z-index: 3;
+  isolation: isolate;
 }
 
 .profile-name-row {
@@ -1616,20 +1627,108 @@ async function handleAvatarChange(event: Event) {
   font-size: 13px;
 }
 
-.profile-stats {
-  display: flex;
-  gap: 32px;
-  margin-top: 8px;
-  padding-bottom: 16px;
-  border-bottom: 1px solid $border-light;
+.profile-relations-card {
+  margin-top: 12px;
+  padding: 18px;
+  background: rgba($bg-secondary, 0.95);
+  border-radius: $radius-xl;
+  box-shadow: 0 8px 24px rgba(15, 23, 42, 0.06);
 }
 
-.stat-item {
-  cursor: pointer;
-  .stat-num { font-size: 18px; font-weight: 800; margin-right: 4px; }
-  .stat-new { font-size: 14px; font-weight: 700; color: var(--el-color-danger); margin-right: 2px; }
-  .stat-label { font-size: 14px; color: $text-secondary; }
-  &:hover .stat-num { color: $primary; }
+.relations-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.relations-card-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: $text-primary;
+}
+
+.relations-card-desc {
+  margin-top: 4px;
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.relations-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.relation-tile {
+  appearance: none;
+  border: none;
+  border-radius: $radius-lg;
+  padding: 16px 12px;
+  background: rgba(#ffffff, 0.72);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 88px;
+  text-align: center;
+  transition: transform 0.18s ease, background 0.18s ease, box-shadow 0.18s ease;
+
+  &:hover {
+    background: rgba(#ffffff, 0.92);
+    box-shadow: 0 6px 18px rgba(15, 23, 42, 0.08);
+    transform: translateY(-1px);
+  }
+}
+
+.relation-count-group {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  gap: 4px;
+}
+
+.relation-count {
+  font-size: 22px;
+  font-weight: 800;
+  color: $text-primary;
+  line-height: 1;
+}
+
+.relation-new {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--el-color-danger);
+}
+
+.relation-label {
+  font-size: 13px;
+  color: $text-secondary;
+}
+
+.relation-modal-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.relation-modal-tab {
+  padding: 8px 14px;
+  border-radius: $radius-full;
+  border: 1px solid $border-color;
+  color: $text-secondary;
+  background: rgba($bg-secondary, 0.8);
+  transition: all 0.18s ease;
+
+  &.active {
+    border-color: rgba($primary, 0.35);
+    background: rgba($primary, 0.08);
+    color: $primary;
+    font-weight: 600;
+  }
 }
 
 .match-section {
@@ -2154,6 +2253,9 @@ async function handleAvatarChange(event: Event) {
 @media (max-width: $bp-mobile) {
   .profile-page { padding: 0 12px 12px; }
   .profile-header { flex-direction: column; align-items: center; text-align: center; }
-  .profile-stats { justify-content: center; }
+  .profile-info { padding: 18px 12px 0; }
+  .relations-grid { gap: 8px; }
+  .relation-tile { min-height: 82px; padding: 14px 10px; }
+  .relation-count { font-size: 20px; }
 }
 </style>

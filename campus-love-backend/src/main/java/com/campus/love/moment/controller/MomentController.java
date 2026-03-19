@@ -1,5 +1,6 @@
 package com.campus.love.moment.controller;
 
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.Result;
@@ -108,7 +109,7 @@ public class MomentController {
     public Result<Map<String, Object>> triggerMatching(
             @RequestParam(value = "weekTag", required = false) String weekTag) {
         requireAdmin();
-        return Result.success(momentAdminService.triggerMatching(weekTag, momentService.getCurrentWeekTag()));
+        return Result.success(momentAdminService.triggerMatching(weekTag, momentService.getCurrentWeekTag(), CurrentUser.getId()));
     }
 
     @Operation(summary = "管理员手动截止报名")
@@ -116,7 +117,7 @@ public class MomentController {
     public Result<Map<String, Object>> closeEnrollment(
             @RequestParam(value = "weekTag", required = false) String weekTag) {
         requireAdmin();
-        return Result.success(momentAdminService.closeEnrollment(weekTag, momentService.getCurrentWeekTag()));
+        return Result.success(momentAdminService.closeEnrollment(weekTag, momentService.getCurrentWeekTag(), CurrentUser.getId()));
     }
 
     @Operation(summary = "管理员重新开放报名（调试用）")
@@ -124,7 +125,7 @@ public class MomentController {
     public Result<Map<String, Object>> reopenEnrollment(
             @RequestParam(value = "weekTag", required = false) String weekTag) {
         requireAdmin();
-        return Result.success(momentAdminService.reopenEnrollment(weekTag, momentService.getCurrentWeekTag()));
+        return Result.success(momentAdminService.reopenEnrollment(weekTag, momentService.getCurrentWeekTag(), CurrentUser.getId()));
     }
 
     @Operation(summary = "管理员重置本周活动（调试用：删除匹配结果+重置报名+重新开放）")
@@ -132,7 +133,15 @@ public class MomentController {
     public Result<Map<String, Object>> resetWeek(
             @RequestParam(value = "weekTag", required = false) String weekTag) {
         requireAdmin();
-        return Result.success(momentAdminService.resetWeek(weekTag, momentService.getCurrentWeekTag()));
+        return Result.success(momentAdminService.resetWeek(weekTag, momentService.getCurrentWeekTag(), CurrentUser.getId()));
+    }
+
+    @Operation(summary = "获取心动时刻活动总览")
+    @GetMapping("/admin/overview")
+    public Result<MomentAdminService.MomentAdminOverviewResponse> getAdminOverview(
+            @RequestParam(value = "weekTag", required = false) String weekTag) {
+        requireAdmin();
+        return Result.success(momentAdminService.getOverview(weekTag, momentService.getCurrentWeekTag()));
     }
 
     @Operation(summary = "获取心动时刻匹配配置")
@@ -181,5 +190,58 @@ public class MomentController {
             @Valid @RequestBody MomentDashboardSimulateRequest request) {
         requireAdmin();
         return Result.success(momentDashboardService.simulate(request.getWeekTag(), request.getThreshold()));
+    }
+
+    @Operation(summary = "获取心动时刻报名名单")
+    @GetMapping("/admin/enrollments")
+    public Result<IPage<MomentAdminService.MomentEnrollmentAdminItem>> getAdminEnrollments(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(value = "weekTag", required = false) String weekTag,
+            @RequestParam(value = "pool", required = false) String pool,
+            @RequestParam(value = "status", required = false) String status,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        requireAdmin();
+        return Result.success(momentAdminService.listEnrollments(page, size, weekTag, pool, status, keyword));
+    }
+
+    @Operation(summary = "移除指定用户本周报名")
+    @DeleteMapping("/admin/enrollments/user/{userId}")
+    public Result<Void> removeAdminEnrollment(
+            @PathVariable Long userId,
+            @RequestParam(value = "weekTag", required = false) String weekTag) {
+        requireAdmin();
+        momentAdminService.removeEnrollment(userId, weekTag, momentService.getCurrentWeekTag(), CurrentUser.getId());
+        return Result.success();
+    }
+
+    @Operation(summary = "获取心动时刻匹配结果列表")
+    @GetMapping("/admin/results")
+    public Result<IPage<MomentAdminService.MomentMatchResultItem>> getAdminResults(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(value = "weekTag", required = false) String weekTag,
+            @RequestParam(value = "pool", required = false) String pool,
+            @RequestParam(value = "keyword", required = false) String keyword) {
+        requireAdmin();
+        return Result.success(momentAdminService.listResults(page, size, weekTag, pool, keyword));
+    }
+
+    @Operation(summary = "获取心动时刻匹配结果详情")
+    @GetMapping("/admin/results/{id}")
+    public Result<MomentAdminService.MomentMatchResultDetailResponse> getAdminResultDetail(@PathVariable Long id) {
+        requireAdmin();
+        return Result.success(momentAdminService.getResultDetail(id));
+    }
+
+    @Operation(summary = "获取心动时刻后台操作日志")
+    @GetMapping("/admin/logs")
+    public Result<IPage<MomentAdminService.MomentOperationLogItem>> getAdminLogs(
+            @RequestParam(defaultValue = "1") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(value = "weekTag", required = false) String weekTag,
+            @RequestParam(value = "actionType", required = false) String actionType) {
+        requireAdmin();
+        return Result.success(momentAdminService.listLogs(page, size, weekTag, actionType));
     }
 }

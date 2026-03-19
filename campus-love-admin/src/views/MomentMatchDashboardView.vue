@@ -167,7 +167,6 @@ import {
   getMomentMatchUnmatched,
   getMomentStatus,
   simulateMomentMatchDashboard,
-  triggerMomentMatching,
 } from '@/api/adminApi'
 import type {
   MomentDashboardData,
@@ -178,9 +177,6 @@ import type {
 
 const loading = ref(false)
 const simulateLoading = ref(false)
-const triggerLoading = ref(false)
-const triggerResult = ref('')
-const triggerResultType = ref<'success' | 'error' | 'warning'>('success')
 const weekTag = ref('')
 const simulateThreshold = ref(60)
 const dashboard = ref<MomentDashboardData | null>(null)
@@ -218,33 +214,6 @@ async function loadDashboard() {
     ElMessage.error('加载匹配看板失败')
   } finally {
     loading.value = false
-  }
-}
-
-async function handleTrigger() {
-  triggerLoading.value = true
-  triggerResult.value = ''
-  try {
-    const res = await triggerMomentMatching(currentWeekParam.value)
-    const data = res.data?.data as Record<string, unknown> | undefined
-    if (data?.message && typeof data.message === 'string' && data.matchedPairs == null) {
-      triggerResult.value = data.message as string
-    } else {
-      const pairs = typeof data?.matchedPairs === 'number' ? data.matchedPairs : 0
-      const unmatched = typeof data?.unmatchedUsers === 'number' ? data.unmatchedUsers : 0
-      const threshold = data?.baseThreshold
-      triggerResult.value =
-        threshold != null
-          ? `匹配完成！配对 ${pairs} 对，未匹配 ${unmatched} 人，当前基础阈值 ${threshold}`
-          : `匹配完成！配对 ${pairs} 对，未匹配 ${unmatched} 人`
-    }
-    triggerResultType.value = 'success'
-    await loadDashboard()
-  } catch {
-    triggerResult.value = '触发匹配失败'
-    triggerResultType.value = 'error'
-  } finally {
-    triggerLoading.value = false
   }
 }
 

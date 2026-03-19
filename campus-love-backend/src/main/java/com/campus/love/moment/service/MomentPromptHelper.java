@@ -104,11 +104,11 @@ public final class MomentPromptHelper {
 
     public static String dateSceneTypeLabel(String sceneType) {
         return switch (sceneType) {
-            case "OUTDOOR" -> "户外探索型";
-            case "INDOOR" -> "室内舒适型";
-            case "CAMPUS_DAILY" -> "校园日常型";
-            case "MIXED" -> "多元尝试型";
-            default -> "校园日常型";
+            case "OUTDOOR" -> "轻互动熟悉型";
+            case "INDOOR" -> "轻松聊天型";
+            case "CAMPUS_DAILY" -> "校园安全感型";
+            case "MIXED" -> "低压力陪伴型";
+            default -> "校园安全感型";
         };
     }
 

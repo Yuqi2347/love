@@ -438,6 +438,7 @@ public class InviteQueryService {
                 .inviteTime(invite.getInviteTime())
                 .inviteEndTime(invite.getInviteEndTime())
                 .location(invite.getLocation())
+                .campus(invite.getCampus())
                 .maxParticipants(invite.getMaxParticipants())
                 .participantCount(participantCount)
                 .status(invite.getStatus())

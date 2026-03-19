@@ -14,6 +14,7 @@ declare module 'vue' {
     AppAvatar: typeof import('./src/components/AppAvatar.vue')['default']
     AppEmptyState: typeof import('./src/components/AppEmptyState.vue')['default']
     AppTabBar: typeof import('./src/components/AppTabBar.vue')['default']
+    BaseModalShell: typeof import('./src/components/BaseModalShell.vue')['default']
     ElButton: typeof import('element-plus/es')['ElButton']
     ElCascader: typeof import('element-plus/es')['ElCascader']
     ElCheckbox: typeof import('element-plus/es')['ElCheckbox']

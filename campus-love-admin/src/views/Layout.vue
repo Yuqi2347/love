@@ -33,6 +33,9 @@
             <span>心动时刻</span>
           </template>
           <el-menu-item index="/moment">活动管理</el-menu-item>
+          <el-menu-item index="/moment/enrollments">报名名单</el-menu-item>
+          <el-menu-item index="/moment/results">匹配结果</el-menu-item>
+          <el-menu-item index="/moment/logs">操作日志</el-menu-item>
           <el-menu-item index="/moment/dashboard">匹配看板</el-menu-item>
           <el-menu-item index="/moment/config">匹配配置</el-menu-item>
         </el-sub-menu>
@@ -78,6 +81,9 @@ const currentTitle = computed(() => {
     '/invites': '邀约管理',
     '/feeds': '帖子管理',
     '/moment': '心动时刻',
+    '/moment/enrollments': '心动时刻报名名单',
+    '/moment/results': '心动时刻匹配结果中心',
+    '/moment/logs': '心动时刻操作日志',
     '/moment/dashboard': '心动时刻匹配看板',
     '/moment/config': '心动时刻匹配配置',
     '/ai-token-stats': 'AI Token 统计',

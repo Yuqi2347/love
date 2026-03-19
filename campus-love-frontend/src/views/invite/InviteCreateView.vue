@@ -1,47 +1,48 @@
 <template>
   <div class="invite-create-page">
-    <div class="page-header">
+    <header class="page-header card-shell">
       <button class="btn-text" @click="$router.back()">
         <el-icon><ArrowLeft /></el-icon>
       </button>
-      <h1 class="page-title">发起邀约</h1>
-      <div></div>
-    </div>
+      <div class="header-center">
+        <h1>发起邀约</h1>
+        <p>把时间、地点和氛围一次说清楚，匹配更快。</p>
+      </div>
+      <span class="header-badge">{{ form.inviteMode === InviteMode.PUBLIC ? '公开邀约' : '一对一邀约' }}</span>
+    </header>
 
-    <div class="form-container">
-      <div class="form-section">
+    <div class="form-grid">
+      <section class="card-shell">
         <h3 class="section-title">邀约模式</h3>
         <div class="mode-select">
           <button
             :class="['mode-btn', { active: form.inviteMode === InviteMode.PUBLIC }]"
             @click="form.inviteMode = InviteMode.PUBLIC"
           >
-            <span class="mode-icon">🌐</span>
-            <span class="mode-label">公开邀约</span>
-            <span class="mode-desc">所有人可见，自由报名</span>
+            <span class="mode-title">公开邀约</span>
+            <span class="mode-desc">所有同学可见，自由报名</span>
           </button>
           <button
             :class="['mode-btn', { active: form.inviteMode === InviteMode.PRIVATE }]"
             @click="form.inviteMode = InviteMode.PRIVATE"
           >
-            <span class="mode-icon">👥</span>
-            <span class="mode-label">一对一邀约</span>
-            <span class="mode-desc">邀约互关好友</span>
+            <span class="mode-title">一对一邀约</span>
+            <span class="mode-desc">只邀请指定同学参与</span>
           </button>
         </div>
-      </div>
+      </section>
 
-      <div v-if="form.inviteMode === InviteMode.PRIVATE" class="form-section">
+      <section v-if="form.inviteMode === InviteMode.PRIVATE" class="card-shell">
         <h3 class="section-title">选择对象</h3>
         <el-input
           v-model="targetUserNickname"
-          placeholder="输入好友昵称搜索"
+          placeholder="输入昵称搜索"
           :prefix-icon="Search"
           @focus="showTargetDropdown = true"
-          @input="handleTargetInput"
+          @input="showTargetDropdown = true"
         />
         <div v-if="showTargetDropdown" class="target-dropdown">
-          <div v-if="loadingTargets" class="target-empty">加载中...</div>
+          <div v-if="loadingTargets" class="target-empty">正在加载...</div>
           <div v-else-if="filteredTargets.length" class="target-list">
             <div
               v-for="user in filteredTargets"
@@ -56,21 +57,15 @@
               </div>
             </div>
           </div>
-          <div v-else class="target-empty">没有找到匹配的好友</div>
+          <div v-else class="target-empty">暂无匹配同学</div>
         </div>
-        <p class="form-hint">只能邀约互相关注的用户</p>
-      </div>
+      </section>
 
-      <div class="form-section">
+      <section class="card-shell">
         <h3 class="section-title">邀约类型</h3>
         <div class="template-row">
-          <span class="template-label">快速模板：</span>
-          <button
-            v-for="tpl in INVITE_TEMPLATES"
-            :key="tpl.label"
-            class="template-btn"
-            @click="applyTemplate(tpl)"
-          >
+          <span>快捷模板</span>
+          <button v-for="tpl in INVITE_TEMPLATES" :key="tpl.label" class="template-btn" @click="applyTemplate(tpl)">
             {{ tpl.label }}
           </button>
         </div>
@@ -82,30 +77,52 @@
             @click="form.inviteType = type.value"
           >
             <span class="type-icon">{{ type.icon }}</span>
-            <span class="type-label">{{ type.label }}</span>
+            <span>{{ type.label }}</span>
           </button>
         </div>
-      </div>
+      </section>
 
-      <div class="form-section">
-        <label class="form-label">邀约标题 *</label>
-        <el-input v-model="form.title" placeholder="给邀约起个吸引人的标题" maxlength="64" show-word-limit />
-      </div>
+      <section class="card-shell">
+        <h3 class="section-title">基本信息</h3>
+        <div class="field-grid">
+          <div class="field-col field-col-full">
+            <label>标题 *</label>
+            <el-input v-model="form.title" maxlength="64" show-word-limit placeholder="例如：周五晚饭后一起散步聊天" />
+          </div>
 
-      <div class="form-section">
-        <label class="form-label">邀约内容</label>
-        <el-input
-          v-model="form.content"
-          type="textarea"
-          :rows="4"
-          placeholder="描述一下邀约的具体内容..."
-          maxlength="512"
-          show-word-limit
-        />
-      </div>
+          <div class="field-col field-col-full">
+            <label>内容描述</label>
+            <el-input
+              v-model="form.content"
+              type="textarea"
+              :rows="4"
+              maxlength="512"
+              show-word-limit
+              placeholder="简单写下计划安排、希望氛围和注意事项"
+            />
+          </div>
 
-      <div class="form-section">
-        <h3 class="section-title">邀约时间</h3>
+          <div class="field-col">
+            <label>地点</label>
+            <el-input v-model="form.location" placeholder="例如：图书馆、食堂、操场">
+              <template #prefix>
+                <el-icon><Location /></el-icon>
+              </template>
+            </el-input>
+          </div>
+
+          <div class="field-col">
+            <label>校区</label>
+            <el-select v-model="form.campus" class="full-width">
+              <el-option label="不限" value="ALL" />
+              <el-option v-for="campus in campusOptions" :key="campus" :label="campus" :value="campus" />
+            </el-select>
+          </div>
+        </div>
+      </section>
+
+      <section class="card-shell">
+        <h3 class="section-title">时间与人数</h3>
         <div class="period-select">
           <button
             v-for="period in INVITE_PERIOD_OPTIONS"
@@ -116,120 +133,113 @@
             {{ period.label }}
           </button>
         </div>
-        <el-date-picker
-          v-model="form.inviteTime"
-          type="datetime"
-          placeholder="选择邀约开始时间"
-          :disabled-date="disabledDate"
-          :disabled-hours="disabledHours"
-          :disabled-minutes="disabledMinutes"
-          format="YYYY-MM-DD HH:mm"
-          class="full-width"
-        />
-        <p class="form-hint">可选：设置结束时间</p>
-        <el-date-picker
-          v-model="form.inviteEndTime"
-          type="datetime"
-          placeholder="选择邀约结束时间（不选则无结束时间）"
-          :disabled-date="disabledEndDate"
-          :disabled-hours="disabledEndHours"
-          :disabled-minutes="disabledEndMinutes"
-          format="YYYY-MM-DD HH:mm"
-          class="full-width"
-          clearable
-          style="margin-top: 8px"
-        />
-      </div>
 
-      <div class="form-section">
-        <label class="form-label">地点</label>
-        <el-input v-model="form.location" placeholder="例如：图书馆三楼 / 操场">
-          <template #prefix>
-            <el-icon><Location /></el-icon>
-          </template>
-        </el-input>
-      </div>
+        <div class="field-grid">
+          <div class="field-col">
+            <label>开始时间 *</label>
+            <el-date-picker
+              v-model="form.inviteTime"
+              type="datetime"
+              format="YYYY-MM-DD HH:mm"
+              placeholder="选择开始时间"
+              :disabled-date="disabledDate"
+              :disabled-hours="disabledHours"
+              :disabled-minutes="disabledMinutes"
+              class="full-width"
+            />
+          </div>
 
-      <div v-if="form.inviteMode === InviteMode.PUBLIC" class="form-section">
-        <label class="form-label">最大人数</label>
-        <el-input-number v-model="form.maxParticipants" :min="2" :max="50" controls-position="right" class="full-width" />
-        <p class="form-hint">设置0表示不限制人数</p>
-      </div>
+          <div class="field-col">
+            <label>结束时间（可选）</label>
+            <el-date-picker
+              v-model="form.inviteEndTime"
+              type="datetime"
+              format="YYYY-MM-DD HH:mm"
+              placeholder="选择结束时间"
+              :disabled-date="disabledEndDate"
+              :disabled-hours="disabledEndHours"
+              :disabled-minutes="disabledEndMinutes"
+              class="full-width"
+              clearable
+            />
+          </div>
 
-      <div class="form-section">
-        <label class="form-label">报名截止</label>
-        <el-select v-model="form.deadlineHours" class="full-width">
-          <el-option label="活动开始前" :value="0" />
-          <el-option label="活动结束前" :value="-1" />
-          <el-option :label="`活动前1小时`" :value="1" />
-          <el-option :label="`活动前2小时`" :value="2" />
-          <el-option :label="`活动前4小时`" :value="4" />
-          <el-option :label="`活动前6小时`" :value="6" />
-          <el-option :label="`活动前12小时`" :value="12" />
-          <el-option :label="`活动前24小时`" :value="24" />
-        </el-select>
-      </div>
+          <div v-if="form.inviteMode === InviteMode.PUBLIC" class="field-col">
+            <label>最大人数</label>
+            <el-input-number v-model="form.maxParticipants" :min="2" :max="50" controls-position="right" class="full-width" />
+          </div>
 
-      <div class="form-section">
+          <div class="field-col">
+            <label>报名截止</label>
+            <el-select v-model="form.deadlineHours" class="full-width">
+              <el-option label="活动开始前" :value="0" />
+              <el-option label="活动结束前" :value="-1" />
+              <el-option label="活动前 1 小时" :value="1" />
+              <el-option label="活动前 2 小时" :value="2" />
+              <el-option label="活动前 4 小时" :value="4" />
+              <el-option label="活动前 6 小时" :value="6" />
+              <el-option label="活动前 12 小时" :value="12" />
+              <el-option label="活动前 24 小时" :value="24" />
+            </el-select>
+          </div>
+        </div>
+      </section>
+
+      <section class="card-shell">
         <h3 class="section-title">氛围标签</h3>
         <div class="tags-select">
           <button
             v-for="tag in ATMOSPHERE_TAGS"
             :key="tag.value"
             :class="['tag-btn', { active: selectedTags.includes(tag.value) }]"
-            :style="{ borderColor: selectedTags.includes(tag.value) ? tag.color : undefined }"
             @click="toggleTag(tag.value)"
           >
             {{ tag.label }}
           </button>
         </div>
-      </div>
-
-      <div class="form-section">
-        <label class="flex-label">
-          <span>急需邀约</span>
+        <div class="urgent-row">
+          <span>急需邀约（会被优先展示）</span>
           <el-switch v-model="form.isUrgent" />
-        </label>
-        <p class="form-hint">急需的邀约会优先展示</p>
-      </div>
-
-      <div class="form-actions">
-        <button class="btn-primary" :disabled="!canSubmit" @click="handleSubmit">
-          发布邀约
-        </button>
-      </div>
+        </div>
+      </section>
     </div>
+
+    <footer class="action-bar card-shell">
+      <button class="btn-primary" :disabled="!canSubmit" @click="handleSubmit">发布邀约</button>
+    </footer>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { computed, onMounted, ref } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ArrowLeft, Location, Search } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import { createInvite, getInviteDetail, type InviteCreateRequest } from '@/api/inviteApi'
 import { getFollowingList, type FollowUser } from '@/api/followApi'
 import { getUserProfile } from '@/api/userApi'
-import { ElMessage } from 'element-plus'
-import { ArrowLeft, Search, Location } from '@element-plus/icons-vue'
+import { searchSchools } from '@/api/authApi'
+import { useUserStore } from '@/store/userStore'
 import {
-  InviteMode,
-  InviteType,
-  INVITE_TYPE_OPTIONS,
-  INVITE_PERIOD_OPTIONS,
   ATMOSPHERE_TAGS,
   DEFAULT_DEADLINE_HOURS,
+  InviteMode,
+  InviteType,
+  INVITE_PERIOD_OPTIONS,
   INVITE_TEMPLATES,
+  INVITE_TYPE_OPTIONS,
   type InviteTemplate,
 } from '@/constants/inviteConst'
 
 const router = useRouter()
 const route = useRoute()
+const userStore = useUserStore()
 
 const defaultAvatar =
-  'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect fill="%23f0f2f5" width="36" height="36" rx="18"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="16">👤</text></svg>'
+  'data:image/svg+xml,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 36 36"><rect fill="%23f0f2f5" width="36" height="36" rx="18"/><text x="50%" y="55%" text-anchor="middle" fill="%23adb5bd" font-size="16">U</text></svg>'
 
 const form = ref<InviteCreateRequest>({
   inviteMode: InviteMode.PUBLIC,
-  targetUserId: undefined,
   inviteType: InviteType.DINNER,
   title: '',
   content: '',
@@ -237,6 +247,7 @@ const form = ref<InviteCreateRequest>({
   inviteTime: '',
   inviteEndTime: undefined,
   location: '',
+  campus: 'ALL',
   maxParticipants: undefined,
   deadlineHours: DEFAULT_DEADLINE_HOURS,
   atmosphereTags: '',
@@ -245,60 +256,47 @@ const form = ref<InviteCreateRequest>({
 
 const targetUserNickname = ref('')
 const selectedTags = ref<string[]>([])
-
-// 一对一邀约：可选对象列表（互相关注好友）
+const campusOptions = ref<string[]>([])
 const allTargets = ref<FollowUser[]>([])
 const loadingTargets = ref(false)
 const showTargetDropdown = ref(false)
 
 const filteredTargets = computed(() => {
   const keyword = targetUserNickname.value.trim().toLowerCase()
-  return allTargets.value.filter(u =>
-    !keyword || u.nickname.toLowerCase().includes(keyword)
-  )
+  return allTargets.value.filter((u) => !keyword || u.nickname.toLowerCase().includes(keyword))
 })
 
-// 检查是否可以提交
 const canSubmit = computed(() => {
-  return form.value.title.trim() &&
-         form.value.inviteTime &&
-         (form.value.inviteMode !== InviteMode.PRIVATE || form.value.targetUserId)
+  const hasRequired = form.value.title.trim().length > 0 && !!form.value.inviteTime
+  if (!hasRequired) return false
+  if (form.value.inviteMode === InviteMode.PRIVATE) return !!form.value.targetUserId
+  return true
 })
 
-// 禁用过去的日期
 function disabledDate(date: Date): boolean {
   return date.getTime() < Date.now() - 24 * 60 * 60 * 1000
 }
 
-// 禁用过去的小时
 function disabledHours(): number[] {
   const hours: number[] = []
   const now = new Date()
   const selectedDate = form.value.inviteTime ? new Date(form.value.inviteTime) : null
-
   if (selectedDate && selectedDate.toDateString() === now.toDateString()) {
-    for (let i = 0; i < now.getHours(); i++) {
-      hours.push(i)
-    }
+    for (let i = 0; i < now.getHours(); i++) hours.push(i)
   }
   return hours
 }
 
-// 禁用过去的分钟
 function disabledMinutes(): number[] {
   const minutes: number[] = []
   const now = new Date()
   const selectedDate = form.value.inviteTime ? new Date(form.value.inviteTime) : null
-
   if (selectedDate && selectedDate.toDateString() === now.toDateString() && selectedDate.getHours() === now.getHours()) {
-    for (let i = 0; i < now.getMinutes(); i++) {
-      minutes.push(i)
-    }
+    for (let i = 0; i < now.getMinutes(); i++) minutes.push(i)
   }
   return minutes
 }
 
-// 结束时间：不能早于开始时间
 function disabledEndDate(date: Date): boolean {
   const start = form.value.inviteTime ? new Date(form.value.inviteTime) : null
   if (!start) return date.getTime() < Date.now() - 24 * 60 * 60 * 1000
@@ -310,43 +308,37 @@ function disabledEndDate(date: Date): boolean {
 function disabledEndHours(): number[] {
   const hours: number[] = []
   const start = form.value.inviteTime ? new Date(form.value.inviteTime) : null
-  const selectedEnd = form.value.inviteEndTime ? new Date(form.value.inviteEndTime) : null
-  if (!start || !selectedEnd) return hours
-  if (selectedEnd.toDateString() !== start.toDateString()) return hours
-  for (let i = 0; i <= start.getHours(); i++) {
-    hours.push(i)
-  }
+  const end = form.value.inviteEndTime ? new Date(form.value.inviteEndTime) : null
+  if (!start || !end) return hours
+  if (end.toDateString() !== start.toDateString()) return hours
+  for (let i = 0; i <= start.getHours(); i++) hours.push(i)
   return hours
 }
 
 function disabledEndMinutes(): number[] {
   const minutes: number[] = []
   const start = form.value.inviteTime ? new Date(form.value.inviteTime) : null
-  const selectedEnd = form.value.inviteEndTime ? new Date(form.value.inviteEndTime) : null
-  if (!start || !selectedEnd) return minutes
-  if (selectedEnd.toDateString() !== start.toDateString()) return minutes
-  if (selectedEnd.getHours() !== start.getHours()) return minutes
-  for (let i = 0; i <= start.getMinutes(); i++) {
-    minutes.push(i)
-  }
+  const end = form.value.inviteEndTime ? new Date(form.value.inviteEndTime) : null
+  if (!start || !end) return minutes
+  if (end.toDateString() !== start.toDateString()) return minutes
+  if (end.getHours() !== start.getHours()) return minutes
+  for (let i = 0; i <= start.getMinutes(); i++) minutes.push(i)
   return minutes
 }
 
-// 切换标签
 function toggleTag(tag: string) {
   const index = selectedTags.value.indexOf(tag)
   if (index > -1) {
     selectedTags.value.splice(index, 1)
-  } else {
-    if (selectedTags.value.length < 3) {
-      selectedTags.value.push(tag)
-    } else {
-      ElMessage.warning('最多选择3个标签')
-    }
+    return
   }
+  if (selectedTags.value.length >= 3) {
+    ElMessage.warning('最多选择 3 个标签')
+    return
+  }
+  selectedTags.value.push(tag)
 }
 
-// 应用模板
 function applyTemplate(tpl: InviteTemplate) {
   form.value.inviteType = tpl.type
   form.value.title = tpl.title
@@ -358,17 +350,26 @@ async function loadInviteTargets() {
   try {
     loadingTargets.value = true
     const res = await getFollowingList()
-    // 只保留互相关注用户，符合“一对一邀约必须互关”规则
-    allTargets.value = (res.data.data || []).filter(u => u.isMutual)
-  } catch {
-    // ignore，出错时仅影响搜索下拉
+    allTargets.value = (res.data.data || []).filter((u) => u.isMutual)
   } finally {
     loadingTargets.value = false
   }
 }
 
-function handleTargetInput() {
-  showTargetDropdown.value = true
+async function loadCampusOptions() {
+  try {
+    const schoolName = userStore.user?.school?.trim()
+    if (!schoolName) {
+      campusOptions.value = []
+      return
+    }
+    const res = await searchSchools(schoolName)
+    const schools = res.data.data || []
+    const matched = schools.find((s) => s.name === schoolName)
+    campusOptions.value = matched?.campuses || []
+  } catch {
+    campusOptions.value = []
+  }
 }
 
 function selectTarget(user: FollowUser) {
@@ -377,9 +378,7 @@ function selectTarget(user: FollowUser) {
   showTargetDropdown.value = false
 }
 
-// 提交表单
 async function handleSubmit() {
-  // 验证一对一邀约的目标用户
   if (form.value.inviteMode === InviteMode.PRIVATE && !form.value.targetUserId) {
     ElMessage.error('请选择邀约对象')
     return
@@ -387,6 +386,7 @@ async function handleSubmit() {
 
   const submitData: InviteCreateRequest = {
     ...form.value,
+    campus: form.value.campus || 'ALL',
     atmosphereTags: selectedTags.value.join(','),
     inviteTime: new Date(form.value.inviteTime!).toISOString(),
     inviteEndTime: form.value.inviteEndTime ? new Date(form.value.inviteEndTime).toISOString() : undefined,
@@ -397,12 +397,11 @@ async function handleSubmit() {
     await createInvite(submitData)
     ElMessage.success('邀约发布成功')
     router.push('/invite')
-  } catch (error) {
-    // Error handled by interceptor
+  } catch {
+    // handled by interceptor
   }
 }
 
-// 初始化：读取从个人主页跳转过来的目标用户，或从取消邀约再次发起预填
 onMounted(async () => {
   const target = route.query.target
   const fromId = route.query.from
@@ -430,36 +429,28 @@ onMounted(async () => {
           form.value.inviteTime = inv.inviteTime ? new Date(inv.inviteTime).toISOString().slice(0, 16) : ''
           form.value.inviteEndTime = inv.inviteEndTime ? new Date(inv.inviteEndTime).toISOString().slice(0, 16) : undefined
           form.value.location = inv.location || ''
+          form.value.campus = inv.campus || 'ALL'
           form.value.maxParticipants = inv.maxParticipants ?? undefined
           form.value.deadlineHours = inv.deadlineHours ?? DEFAULT_DEADLINE_HOURS
           form.value.isUrgent = inv.isUrgent ?? false
-          if (inv.atmosphereTags) {
-            selectedTags.value = inv.atmosphereTags.split(',').filter(Boolean)
-          }
-          if (inv.targetUserId) {
-            form.value.targetUserId = inv.targetUserId
-          }
+          selectedTags.value = inv.atmosphereTags ? inv.atmosphereTags.split(',').filter(Boolean) : []
         }
       } catch {
-        // 加载失败则使用空表单
+        // ignore preload errors
       }
     }
   }
 
-  await loadInviteTargets()
+  await Promise.all([loadInviteTargets(), loadCampusOptions()])
 
-  // 如果有预设的目标用户，自动填充昵称，免去再次搜索
   if (form.value.targetUserId) {
-    const matched = allTargets.value.find(u => u.userId === form.value.targetUserId)
+    const matched = allTargets.value.find((u) => u.userId === form.value.targetUserId)
     if (matched) {
       targetUserNickname.value = matched.nickname
     } else {
-      // 如果不是互相关注，也尝试加载一次用户信息，仅用于展示
       try {
         const res = await getUserProfile(form.value.targetUserId)
-        if (res.data.data) {
-          targetUserNickname.value = res.data.data.nickname
-        }
+        if (res.data.data) targetUserNickname.value = res.data.data.nickname
       } catch {
         // ignore
       }
@@ -469,108 +460,132 @@ onMounted(async () => {
 </script>
 
 <style lang="scss" scoped>
-.invite-create-page { padding: 20px; max-width: 600px; margin: 0 auto; }
+.invite-create-page {
+  --shell-bg: linear-gradient(155deg, #ffffff 0%, #f9fafc 100%);
+  --shell-border: rgba(19, 57, 93, 0.08);
+  --shell-shadow: 0 14px 36px rgba(25, 47, 82, 0.08);
+  padding: 20px;
+  max-width: 980px;
+  margin: 0 auto;
+  background:
+    radial-gradient(1200px 360px at -20% -10%, rgba(33, 99, 255, 0.09), transparent 65%),
+    radial-gradient(900px 260px at 110% -20%, rgba(47, 176, 142, 0.1), transparent 65%);
+}
+
+.card-shell {
+  background: var(--shell-bg);
+  border: 1px solid var(--shell-border);
+  border-radius: 18px;
+  box-shadow: var(--shell-shadow);
+}
 
 .page-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 24px;
-}
-
-.page-title {
-  font-size: 22px;
-  font-weight: 800;
-  background: $primary-gradient;
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-}
-
-.form-container {
-  display: flex;
-  flex-direction: column;
-  gap: 24px;
-}
-
-.form-section {
-  display: flex;
-  flex-direction: column;
+  display: grid;
+  grid-template-columns: 44px 1fr auto;
   gap: 12px;
+  align-items: center;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+.header-center h1 {
+  margin: 0;
+  font-size: 24px;
+  line-height: 1.2;
+}
+
+.header-center p {
+  margin: 4px 0 0;
+  color: $text-secondary;
+  font-size: 13px;
+}
+
+.header-badge {
+  background: linear-gradient(120deg, #1f7cff 0%, #1db89f 100%);
+  color: #fff;
+  padding: 8px 12px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.form-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.form-grid > section {
+  padding: 18px;
 }
 
 .section-title {
+  margin: 0 0 12px;
   font-size: 16px;
   font-weight: 700;
-  color: $text-primary;
 }
 
-.form-label {
-  font-size: 14px;
-  font-weight: 600;
-  color: $text-primary;
-}
-
-.flex-label {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.form-hint {
-  font-size: 12px;
-  color: $text-muted;
-  margin: -4px 0 0 0;
-}
-
-.full-width { width: 100%; }
-
-// 模式选择
 .mode-select {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .mode-btn {
-  padding: 20px 16px;
-  border: 2px solid $border-light;
-  border-radius: $radius-lg;
-  background: $bg-primary;
-  cursor: pointer;
-  transition: all $transition-fast;
+  border: 1px solid #dbe4f4;
+  background: #fff;
+  border-radius: 14px;
+  padding: 14px;
   text-align: left;
-
-  &:hover {
-    border-color: rgba($primary, 0.3);
-    background: rgba($primary, 0.03);
-  }
-
-  &.active {
-    border-color: $primary;
-    background: rgba($primary, 0.05);
-  }
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.mode-icon {
-  display: block;
-  font-size: 28px;
-  margin-bottom: 8px;
+.mode-btn:hover {
+  border-color: #8cb8ff;
+  transform: translateY(-1px);
 }
 
-.mode-label {
+.mode-btn.active {
+  border-color: #2b7dff;
+  background: linear-gradient(135deg, rgba(43, 125, 255, 0.08), rgba(29, 184, 159, 0.09));
+}
+
+.mode-title {
   display: block;
-  font-size: 15px;
-  font-weight: 600;
-  color: $text-primary;
+  font-weight: 700;
   margin-bottom: 4px;
 }
 
 .mode-desc {
+  display: block;
   font-size: 12px;
-  color: $text-muted;
+  color: $text-secondary;
 }
 
-// 类型选择
+.template-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 10px;
+  color: $text-secondary;
+  font-size: 13px;
+}
+
+.template-btn {
+  border: 1px solid #dbe4f4;
+  border-radius: 999px;
+  padding: 4px 10px;
+  background: #fff;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.template-btn:hover {
+  border-color: #7caefe;
+  color: #2f64cc;
+}
+
 .type-select {
   display: flex;
   gap: 8px;
@@ -578,147 +593,130 @@ onMounted(async () => {
 }
 
 .type-btn {
-  padding: 12px 16px;
-  border: 2px solid $border-light;
-  border-radius: $radius-md;
-  background: $bg-primary;
-  cursor: pointer;
-  transition: all $transition-fast;
+  border: 1px solid #dbe4f4;
+  border-radius: 12px;
+  padding: 8px 12px;
+  background: #fff;
   display: flex;
   align-items: center;
-  gap: 8px;
-
-  &:hover {
-    border-color: rgba($primary, 0.3);
-  }
-
-  &.active {
-    border-color: $primary;
-    background: rgba($primary, 0.08);
-  }
+  gap: 6px;
+  cursor: pointer;
 }
 
-.type-icon { font-size: 20px; }
-.type-label { font-size: 14px; font-weight: 600; }
+.type-btn.active {
+  border-color: #2b7dff;
+  background: rgba(43, 125, 255, 0.1);
+}
 
-// 周期选择
+.type-icon {
+  font-size: 18px;
+}
+
+.field-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.field-col {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.field-col label {
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-secondary;
+}
+
+.field-col-full {
+  grid-column: 1 / -1;
+}
+
 .period-select {
   display: flex;
   gap: 8px;
+  flex-wrap: wrap;
   margin-bottom: 12px;
 }
 
 .period-btn {
-  padding: 8px 20px;
-  border: 2px solid $border-light;
-  border-radius: $radius-full;
-  background: $bg-primary;
+  border: 1px solid #dbe4f4;
+  border-radius: 999px;
+  padding: 6px 14px;
+  background: #fff;
   cursor: pointer;
-  transition: all $transition-fast;
-  font-size: 14px;
-  font-weight: 500;
-
-  &:hover {
-    border-color: rgba($primary, 0.3);
-  }
-
-  &.active {
-    border-color: $primary;
-    background: $primary;
-    color: white;
-  }
 }
 
-// 标签选择
+.period-btn.active {
+  color: #fff;
+  border-color: #2b7dff;
+  background: linear-gradient(120deg, #2b7dff 0%, #1db89f 100%);
+}
+
 .tags-select {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 8px;
 }
 
 .tag-btn {
-  padding: 6px 16px;
-  border: 2px solid $border-light;
-  border-radius: $radius-full;
-  background: $bg-primary;
+  border: 1px solid #dbe4f4;
+  border-radius: 999px;
+  background: #fff;
+  padding: 6px 12px;
+  font-size: 12px;
   cursor: pointer;
-  transition: all $transition-fast;
-  font-size: 13px;
-  font-weight: 500;
-
-  &:hover {
-    border-color: rgba($primary, 0.3);
-  }
-
-  &.active {
-    border-color: var(--tag-color, $primary);
-    background: var(--tag-color, rgba($primary, 0.1));
-    color: var(--tag-color, $primary);
-  }
 }
 
-// 表单操作
-.form-actions {
+.tag-btn.active {
+  border-color: #2b7dff;
+  color: #1f5fd1;
+  background: rgba(43, 125, 255, 0.1);
+}
+
+.urgent-row {
+  margin-top: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-size: 13px;
+}
+
+.action-bar {
   margin-top: 16px;
+  padding: 14px;
 }
 
 .btn-primary {
   width: 100%;
-  height: 48px;
-  font-size: 16px;
-  font-weight: 600;
+  height: 46px;
+  border-radius: 12px;
 }
 
 .btn-text {
-  padding: 8px 12px;
-  border: none;
-  background: transparent;
-  color: $text-secondary;
-  cursor: pointer;
-  transition: color $transition-fast;
-
-  &:hover { color: $primary; }
-}
-
-// 模板按钮
-.template-row {
+  height: 38px;
+  width: 38px;
+  border: 1px solid #e0e7f3;
+  border-radius: 10px;
+  background: #fff;
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  flex-wrap: wrap;
-}
-
-.template-label {
-  font-size: 13px;
-  color: $text-secondary;
-}
-
-.template-btn {
-  padding: 4px 10px;
-  border-radius: $radius-full;
-  border: 1px solid $border-light;
-  background: $bg-primary;
-  font-size: 12px;
-  color: $text-secondary;
+  justify-content: center;
   cursor: pointer;
-  transition: all $transition-fast;
-
-  &:hover {
-    border-color: rgba($primary, 0.4);
-    color: $primary;
-    background: rgba($primary, 0.04);
-  }
 }
 
-// 一对一邀约：对象搜索下拉
+.full-width {
+  width: 100%;
+}
+
 .target-dropdown {
-  margin-top: 6px;
-  border-radius: $radius-md;
-  border: 1px solid $border-light;
-  background: $bg-primary;
-  box-shadow: $shadow-sm;
-  max-height: 260px;
+  border-radius: 12px;
+  border: 1px solid #dbe4f4;
+  background: #fff;
+  box-shadow: 0 10px 24px rgba(30, 60, 106, 0.1);
+  max-height: 240px;
   overflow-y: auto;
 }
 
@@ -731,41 +729,57 @@ onMounted(async () => {
   display: flex;
   align-items: center;
   gap: 10px;
-  padding: 8px 10px;
+  padding: 10px 12px;
   cursor: pointer;
+}
 
-  &:hover {
-    background: $bg-tertiary;
-  }
+.target-item:hover {
+  background: #f6f8fc;
 }
 
 .target-avatar {
-  width: 32px;
-  height: 32px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
-  flex-shrink: 0;
 }
 
 .target-info {
-  flex: 1;
   min-width: 0;
 }
 
 .target-name {
   font-size: 14px;
-  font-weight: 500;
-  color: $text-primary;
+  font-weight: 600;
 }
 
 .target-tag {
-  margin-top: 2px;
   font-size: 12px;
-  color: $success;
+  color: #1f8b6e;
 }
 
 .target-empty {
-  padding: 8px 10px;
+  padding: 10px 12px;
+  color: $text-secondary;
   font-size: 13px;
-  color: $text-muted;
+}
+
+@media (max-width: 768px) {
+  .invite-create-page {
+    padding: 12px;
+  }
+
+  .page-header {
+    grid-template-columns: 40px 1fr;
+  }
+
+  .header-badge {
+    grid-column: 1 / -1;
+    justify-self: start;
+  }
+
+  .mode-select,
+  .field-grid {
+    grid-template-columns: 1fr;
+  }
 }
 </style>

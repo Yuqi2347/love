@@ -174,6 +174,7 @@ CREATE TABLE IF NOT EXISTS t_invite (
     invite_time     DATETIME        NOT NULL COMMENT '邀约时间',
     invite_end_time DATETIME        DEFAULT NULL COMMENT '邀约结束时间（可选）（V18）',
     location        VARCHAR(256)    DEFAULT NULL COMMENT '地点',
+    campus          VARCHAR(64)     DEFAULT 'ALL' COMMENT '校区（ALL=不限）（V37）',
     max_participants INT            DEFAULT NULL COMMENT '最大人数',
     participant_count INT           DEFAULT 0 COMMENT '当前参与人数',
     status          VARCHAR(16)     DEFAULT 'RECRUITING' COMMENT '状态',
@@ -487,6 +488,33 @@ CREATE TABLE IF NOT EXISTS t_moment_pair_score (
     INDEX idx_week_user_a (week_tag, user_id_a),
     INDEX idx_week_user_b (week_tag, user_id_b)
 ) COMMENT '心动时刻候选对分数缓存';
+
+CREATE TABLE IF NOT EXISTS t_moment_activity_week (
+    id               BIGINT PRIMARY KEY AUTO_INCREMENT,
+    week_tag         VARCHAR(10) NOT NULL COMMENT '活动周标识，如 2026-W10',
+    status           VARCHAR(20) NOT NULL DEFAULT 'ENROLLING' COMMENT 'ENROLLING/WAITING_MATCH/RESULT_READY',
+    enrollment_open  TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否允许继续报名',
+    auto_match_at    DATETIME DEFAULT NULL COMMENT '本周自动匹配调度实际执行时间',
+    closed_at        DATETIME DEFAULT NULL COMMENT '报名截止时间',
+    matched_at       DATETIME DEFAULT NULL COMMENT '结果生成时间',
+    created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
+    updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_week_tag (week_tag)
+) COMMENT '心动时刻每周活动状态';
+
+CREATE TABLE IF NOT EXISTS t_moment_admin_log (
+    id           BIGINT PRIMARY KEY AUTO_INCREMENT,
+    week_tag     VARCHAR(10) DEFAULT NULL COMMENT '活动周标识',
+    operator_id  BIGINT DEFAULT NULL COMMENT '操作人，NULL 表示系统任务',
+    action_type  VARCHAR(40) NOT NULL COMMENT '操作类型',
+    target_type  VARCHAR(40) NOT NULL COMMENT '目标类型',
+    target_id    BIGINT DEFAULT NULL COMMENT '目标ID',
+    summary      VARCHAR(255) DEFAULT NULL COMMENT '结果摘要',
+    detail_json  JSON DEFAULT NULL COMMENT '详细结果快照',
+    created_at   DATETIME DEFAULT CURRENT_TIMESTAMP,
+    INDEX idx_week_created (week_tag, created_at),
+    INDEX idx_action_created (action_type, created_at)
+) COMMENT '心动时刻后台操作日志';
 
 -- 举报记录表（V17、V22）
 CREATE TABLE IF NOT EXISTS t_report (

@@ -13,7 +13,7 @@ public enum InviteTypeEnum {
     DINNER("约饭"),
     SPORT("运动"),
     STUDY("自习"),
-    DRAMA("追剧"),
+    DRAMA("娱乐"),
     OTHER("其他");
 
     private final String description;

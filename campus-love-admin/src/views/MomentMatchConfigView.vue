@@ -29,6 +29,37 @@
           <span class="field-hint">连续未匹配最多累计多少次。</span>
         </el-form-item>
 
+        <el-divider content-position="left">自动匹配</el-divider>
+
+        <el-form-item label="自动匹配">
+          <el-switch v-model="form.autoMatchEnabled" />
+          <span class="field-hint">到达设定时间后自动截止报名并触发匹配。</span>
+        </el-form-item>
+
+        <el-form-item label="自动匹配日期">
+          <el-select v-model="form.autoMatchDayOfWeek" style="width: 180px">
+            <el-option
+              v-for="item in dayOptions"
+              :key="item.value"
+              :label="item.label"
+              :value="item.value"
+            />
+          </el-select>
+          <span class="field-hint">建议固定在每周同一时间，便于用户形成预期。</span>
+        </el-form-item>
+
+        <el-form-item label="自动匹配时间">
+          <el-time-select
+            v-model="form.autoMatchTime"
+            start="00:00"
+            step="00:30"
+            end="23:30"
+            format="HH:mm"
+            placeholder="选择时间"
+          />
+          <span class="field-hint">使用 24 小时制，系统到点自动截止报名并执行匹配。</span>
+        </el-form-item>
+
         <el-form-item>
           <el-button type="primary" :loading="saving" @click="saveConfig">保存配置</el-button>
         </el-form-item>
@@ -44,11 +75,23 @@ import { getMomentMatchConfig, updateMomentMatchConfig } from '@/api/adminApi'
 
 const loading = ref(false)
 const saving = ref(false)
+const dayOptions = [
+  { label: '周一', value: 1 },
+  { label: '周二', value: 2 },
+  { label: '周三', value: 3 },
+  { label: '周四', value: 4 },
+  { label: '周五', value: 5 },
+  { label: '周六', value: 6 },
+  { label: '周日', value: 7 },
+]
 const form = reactive({
   baseThreshold: 60,
   prioritizeOffset: 10,
   priorityOffset: 5,
   priorityMaxStack: 2,
+  autoMatchEnabled: false,
+  autoMatchDayOfWeek: 5,
+  autoMatchTime: '20:00',
 })
 
 async function loadConfig() {
@@ -61,6 +104,9 @@ async function loadConfig() {
       form.prioritizeOffset = data.prioritizeOffset
       form.priorityOffset = data.priorityOffset
       form.priorityMaxStack = data.priorityMaxStack
+      form.autoMatchEnabled = data.autoMatchEnabled
+      form.autoMatchDayOfWeek = data.autoMatchDayOfWeek
+      form.autoMatchTime = data.autoMatchTime
     }
   } catch {
     ElMessage.error('加载匹配配置失败')

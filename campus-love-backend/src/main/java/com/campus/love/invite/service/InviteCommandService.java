@@ -43,6 +43,7 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class InviteCommandService {
+    private static final String CAMPUS_ALL = "ALL";
 
     private final InviteMapper inviteMapper;
     private final InviteParticipantMapper participantMapper;
@@ -71,6 +72,8 @@ public class InviteCommandService {
         invite.setInviteEndTime(request.getInviteEndTime() != null && !request.getInviteEndTime().isBlank()
                 ? TimeParseUtil.parseUtcToLocalDateTime(request.getInviteEndTime()) : null);
         invite.setLocation(request.getLocation());
+        invite.setCampus((request.getCampus() == null || request.getCampus().isBlank())
+                ? CAMPUS_ALL : request.getCampus().trim());
         if (InviteModeEnum.PRIVATE.name().equals(request.getInviteMode())) {
             invite.setMaxParticipants(1);
         } else {

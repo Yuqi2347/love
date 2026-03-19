@@ -145,21 +145,43 @@ router.beforeEach((to, _from, next) => {
   }
 })
 
-// 路由切换后清理可能残留的 Element Plus overlay，避免遮罩导致无法点击
-router.afterEach(() => {
-  setTimeout(() => {
-    // 仅处理 body 直接子元素中的 overlay 容器
+// 仅清理真正空的顶层遮罩容器，避免误删 Element Plus 正在使用的弹层节点
+function cleanupStaleOverlayContainers() {
+  requestAnimationFrame(() => {
+    const hasActiveBlockingPopup = Boolean(
+      document.body.querySelector(
+        '.el-overlay .el-dialog, .el-overlay .el-drawer, .el-overlay .el-message-box, .base-modal-root'
+      )
+    )
+
     Array.from(document.body.children).forEach((child) => {
       if (!(child instanceof HTMLElement)) return
-      const isOverlay = child.classList.contains('el-overlay') || child.classList.contains('el-overlay-dialog')
-      if (!isOverlay) return
-      const hasDialog = child.querySelector('.el-dialog')
-      const hasDrawer = child.querySelector('.el-drawer')
-      if (!hasDialog && !hasDrawer) {
+      const isOverlayContainer =
+        child.classList.contains('el-overlay') ||
+        child.classList.contains('el-overlay-dialog') ||
+        child.classList.contains('el-overlay-container')
+      if (!isOverlayContainer) return
+      if (child.childElementCount === 0) {
         child.remove()
       }
     })
-  }, 150)
+
+    if (!hasActiveBlockingPopup) {
+      document.body.classList.remove('el-popup-parent--hidden')
+    }
+  })
+}
+
+router.afterEach(() => {
+  cleanupStaleOverlayContainers()
+  setTimeout(cleanupStaleOverlayContainers, 150)
+  setTimeout(cleanupStaleOverlayContainers, 400)
+})
+
+router.isReady().then(() => {
+  cleanupStaleOverlayContainers()
+  setTimeout(cleanupStaleOverlayContainers, 150)
+  setTimeout(cleanupStaleOverlayContainers, 400)
 })
 
 export default router

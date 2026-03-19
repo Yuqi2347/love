@@ -54,7 +54,7 @@ public class MomentService {
     private final UserMapper userMapper;
     private final ObjectMapper objectMapper;
     private final FileUploadService fileUploadService;
-    private final MomentEnrollmentState enrollmentState;
+    private final MomentActivityWeekService activityWeekService;
     private final UserPortraitService userPortraitService;
     private final QuestionnaireOceanMapper questionnaireOceanMapper;
     private final OceanConfidenceService oceanConfidenceService;
@@ -67,16 +67,8 @@ public class MomentService {
      * 2. 匹配尚未触发（不存在 MATCHED/UNMATCHED 状态的报名记录）
      */
     public boolean isEnrollmentOpen(String weekTag) {
-        if (Boolean.TRUE.equals(enrollmentState.isClosed(weekTag))) {
-            return false;
-        }
         try {
-            Long matchedCount = enrollmentMapper.selectCount(
-                    new LambdaQueryWrapper<MomentEnrollment>()
-                            .eq(MomentEnrollment::getWeekTag, weekTag)
-                            .ne(MomentEnrollment::getStatus, MomentEnrollment.STATUS_WAITING)
-            );
-            return matchedCount == null || matchedCount == 0;
+            return activityWeekService.isEnrollmentOpen(weekTag);
         } catch (Exception e) {
             log.warn("查询报名开放状态失败，默认开放", e);
             return true;
@@ -382,7 +374,7 @@ public class MomentService {
         UserPortrait requesterPortrait = userPortraitService.getPortrait(currentUserId);
         UserPortrait targetPortrait = userPortraitService.getPortrait(targetUserId);
         MomentDatePrepResponse response = momentResultContentService.getOrGenerateDatePrep(
-                matchResult, requester, target, requesterProfile, targetProfile, requesterPortrait, targetPortrait
+                matchResult, currentUserId, requester, target, requesterProfile, targetProfile, requesterPortrait, targetPortrait
         );
         if (matchResult.getId() != null) {
             matchResultMapper.updateById(matchResult);

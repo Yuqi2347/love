@@ -72,7 +72,7 @@
 
     <!-- How It Works -->
     <section class="how-it-works" ref="howRef">
-      <h2 class="section-title">三步开启缘分</h2>
+      <h2 class="section-title">三步开始探索</h2>
       <div class="steps">
         <div v-for="(s, i) in steps" :key="i" class="step-item" :class="{ visible: howVisible }">
           <div class="step-number">{{ i + 1 }}</div>
@@ -101,10 +101,10 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue'
 
-const landmarks = ['MBTI匹配', '星座缘分', '心动时刻', '校园邀约']
+const landmarks = ['校园发现', '心动时刻', '校园邀约', '真实互动']
 
 const features = [
-  { icon: '🎯', title: 'AI 智能匹配', desc: 'MBTI、星座、八字多维度分析，精准推荐契合的TA' },
+  { icon: '🎯', title: 'AI 智能推荐', desc: '结合画像与互动偏好，帮你更快发现值得认识的人' },
   { icon: '💕', title: '心动时刻', desc: '每周限定匹配窗口，AI 生成专属约会方案' },
   { icon: '📅', title: '校园邀约', desc: '聚餐、运动、学习、剧本杀，一键发起校园活动' },
   { icon: '🔒', title: '安全可信', desc: '校园邮箱认证，渐进式信任社交，保护你的隐私' },
@@ -112,8 +112,8 @@ const features = [
 
 const steps = [
   { title: '注册验证', desc: '使用邮箱快速注册，完成身份认证' },
-  { title: '完善画像', desc: '填写 MBTI、兴趣标签，让 AI 更懂你' },
-  { title: '开始匹配', desc: '与志同道合的TA，开启校园社交' },
+  { title: '完善画像', desc: '填写兴趣与资料，让系统更懂你的社交偏好' },
+  { title: '开始互动', desc: '浏览校园动态、参与心动时刻或发起邀约' },
 ]
 
 const featuresRef = ref<HTMLElement>()

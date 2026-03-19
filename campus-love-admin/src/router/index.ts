@@ -46,6 +46,21 @@ const router = createRouter({
           component: () => import('@/views/MomentMatchDashboardView.vue'),
         },
         {
+          path: 'moment/enrollments',
+          name: 'MomentEnrollments',
+          component: () => import('@/views/MomentEnrollmentManageView.vue'),
+        },
+        {
+          path: 'moment/results',
+          name: 'MomentResults',
+          component: () => import('@/views/MomentResultCenterView.vue'),
+        },
+        {
+          path: 'moment/logs',
+          name: 'MomentLogs',
+          component: () => import('@/views/MomentOperationLogView.vue'),
+        },
+        {
           path: 'moment/config',
           name: 'MomentConfig',
           component: () => import('@/views/MomentMatchConfigView.vue'),

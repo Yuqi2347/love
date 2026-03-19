@@ -1,28 +1,27 @@
 package com.campus.love.moment.service;
 
+import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-
 /**
- * 心动时刻报名截止状态（内存）：weekTag -> 是否已截止。
- * 管理员可手动截止，triggerMatching 时也会自动截止。
+ * 兼容旧调用的状态门面。
+ * 实际状态已落库到 t_moment_activity_week，不再依赖进程内存。
  */
 @Component
+@RequiredArgsConstructor
 public class MomentEnrollmentState {
 
-    private final Map<String, Boolean> closedWeeks = new ConcurrentHashMap<>();
+    private final MomentActivityWeekService activityWeekService;
 
     public Boolean isClosed(String weekTag) {
-        return closedWeeks.get(weekTag);
+        return !activityWeekService.isEnrollmentOpen(weekTag);
     }
 
     public void close(String weekTag) {
-        closedWeeks.put(weekTag, true);
+        activityWeekService.closeEnrollment(weekTag);
     }
 
     public void reopen(String weekTag) {
-        closedWeeks.remove(weekTag);
+        activityWeekService.reopenEnrollment(weekTag);
     }
 }

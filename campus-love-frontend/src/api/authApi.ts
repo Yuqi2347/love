@@ -6,6 +6,8 @@ export interface SchoolItem {
   domain: string
   /** 邮箱后缀，用于注册校验（如 szu.edu.cn） */
   emailSuffix?: string
+  /** 学校可选校区列表 */
+  campuses?: string[]
 }
 
 export interface RegisterParams {
