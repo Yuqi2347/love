@@ -89,7 +89,11 @@
       </div>
 
       <!-- 操作按钮独立一行 -->
-      <div v-if="!isMe && profile" class="profile-actions-row">
+      <div
+        v-if="!isMe && profile"
+        class="profile-actions-row"
+        :style="{ '--profile-action-cols': String(profileActionButtonCount) }"
+      >
         <button :class="['btn-action', { 'btn-primary': followStatus === 'NONE', 'btn-outline': followStatus !== 'NONE' }]" @click="handleFollowToggle">
           {{ followLabel }}
         </button>
@@ -99,8 +103,15 @@
         <button v-if="followStatus === 'MUTUAL'" class="btn-action btn-primary" @click="handleInviteUser">
           <el-icon><Calendar /></el-icon> 约TA
         </button>
-        <button v-if="SHOW_YUANFEN_ANALYSIS && followStatus === 'MUTUAL'" class="btn-action btn-yuanfen" @click="openYuanFen">
-          缘分 ✨
+        <button
+          v-if="SHOW_YUANFEN_ANALYSIS && followStatus === 'MUTUAL'"
+          class="btn-action btn-yuanfen"
+          type="button"
+          :disabled="yuanFenCooldownRemaining > 0"
+          :title="yuanFenCooldownRemaining > 0 ? yuanFenCooldownTitle : ''"
+          @click="openYuanFen"
+        >
+          {{ yuanFenCooldownRemaining > 0 ? `缘分 ${yuanFenCooldownLabel}` : '缘分 ✨' }}
         </button>
       </div>
     </div>
@@ -325,10 +336,11 @@
     </template>
   </BaseModalShell>
 
-  <!-- 缘分解析弹层 -->
+  <!-- 缘分解析弹层：互关且看他人时挂载（关闭弹窗不卸载），便于保留结果二次打开不调接口 -->
   <YuanFenAnalysisSheet
-    v-if="SHOW_YUANFEN_ANALYSIS && showYuanFen"
+    v-if="SHOW_YUANFEN_ANALYSIS && !isMe && profile && followStatus === 'MUTUAL' && profileId"
     :model-value="showYuanFen"
+    :viewer-user-id="userStore.user?.id ?? 0"
     :target-user-id="profileId ?? 0"
     :current-nickname="userStore.user?.nickname || '我'"
     :target-nickname="profile?.nickname || 'TA'"
@@ -560,19 +572,40 @@ const activeRelationTab = ref<RelationTab | null>(null)
 const showRelationDialog = ref(false)
 const relationLoading = ref(false)
 
-// 缘分解析
+// 缘分解析（yuanFenCooldownRemaining：全局「一小时内已解析过他人」时，其他互关资料页按钮禁用）
 const showYuanFen = ref(false)
+const yuanFenCooldownRemaining = ref(0)
 let cooldownTimer: ReturnType<typeof setInterval> | null = null
+
+const yuanFenCooldownLabel = computed(() => {
+  const s = yuanFenCooldownRemaining.value
+  if (s <= 0) return ''
+  if (s >= 3600) {
+    const h = Math.floor(s / 3600)
+    const m = Math.ceil((s % 3600) / 60)
+    return m > 0 ? `${h}小时${m}分` : `${h}小时`
+  }
+  return `${Math.ceil(s / 60)}分钟`
+})
+
+const yuanFenCooldownTitle = computed(() => {
+  if (yuanFenCooldownRemaining.value <= 0) return ''
+  const label = yuanFenCooldownLabel.value
+  return `一小时内已与其他好友做过缘分解析，${label}后可与其他互关发起新解析；已与某人生成过的结果可随时点开查看`
+})
 
 function openYuanFen() {
   if (!SHOW_YUANFEN_ANALYSIS) {
+    return
+  }
+  if (yuanFenCooldownRemaining.value > 0) {
+    ElMessage.info(yuanFenCooldownTitle.value)
     return
   }
   if (!userStore.user?.profileComplete) {
     ElMessage.warning('请先完善个人信息后进行分析')
     return
   }
-  // 冷却期间仍允许打开弹窗查看上次解析结果；是否重新调用 AI 由后端+冷却策略控制
   showYuanFen.value = true
 }
 
@@ -581,13 +614,21 @@ function onYuanFenAnalyzed(seconds: number) {
 }
 
 function startCooldownTimer(seconds: number) {
-  if (cooldownTimer) clearInterval(cooldownTimer)
-  if (seconds <= 0) return
+  if (cooldownTimer) {
+    clearInterval(cooldownTimer)
+    cooldownTimer = null
+  }
+  yuanFenCooldownRemaining.value = Math.max(0, Math.floor(seconds))
+  if (yuanFenCooldownRemaining.value <= 0) return
   cooldownTimer = setInterval(() => {
-    seconds--
-    if (seconds <= 0 && cooldownTimer) {
-      clearInterval(cooldownTimer)
-      cooldownTimer = null
+    if (yuanFenCooldownRemaining.value <= 1) {
+      yuanFenCooldownRemaining.value = 0
+      if (cooldownTimer) {
+        clearInterval(cooldownTimer)
+        cooldownTimer = null
+      }
+    } else {
+      yuanFenCooldownRemaining.value--
     }
   }, 1000)
 }
@@ -823,11 +864,26 @@ watch(() => route.query.openAiDisclosure, (v) => {
 
 onBeforeUnmount(() => {
   showAiDisclosureSheet.value = false
+  if (cooldownTimer) {
+    clearInterval(cooldownTimer)
+    cooldownTimer = null
+  }
 })
 
 // 昵称编辑
 
 const followLabel = computed(() => FOLLOW_STATUS_LABELS[followStatus.value as FollowStatus] || '关注')
+
+/** 窄屏下按列数等分，避免「互相关注 / 聊天 / 约TA / 缘分」折成两行 */
+const profileActionButtonCount = computed(() => {
+  let n = 2
+  if (followStatus.value === 'MUTUAL') {
+    n += 1
+    if (SHOW_YUANFEN_ANALYSIS) n += 1
+  }
+  return n
+})
+
 const newFollowerCount = computed(() => badgeStore.badges.newFollowerCount)
 const activeRelationUsers = computed(() => {
   if (activeRelationTab.value === 'following') return followingList.value
@@ -924,11 +980,16 @@ async function loadProfile() {
         try {
           const cdRes = await getYuanFenCooldown(profileId.value)
           const remaining = cdRes.data.data?.remainingSeconds || 0
-          if (remaining > 0) startCooldownTimer(remaining)
-        } catch { /* ignore */ }
+          startCooldownTimer(remaining)
+        } catch {
+          yuanFenCooldownRemaining.value = 0
+        }
+      } else {
+        startCooldownTimer(0)
       }
     } else {
       matchResult.value = null
+      startCooldownTimer(0)
     }
 
     // 最后加载关注/粉丝数量（独立处理，不影响其他数据）
@@ -977,12 +1038,29 @@ function goToUserProfile(userId: number) {
 
 onMounted(loadProfile)
 watch(() => route.params.userId, loadProfile)
-// 当用户登录状态变化时，重新加载profile
-watch(() => userStore.user, (user) => {
-  if (user && !profile.value) {
-    loadProfile()
-  }
-}, { immediate: true })
+/**
+ * 登录/登出/换号时必须重拉资料与缘分冷却，不能依赖「profile 为空才加载」：
+ * 否则重新登录后可能仍保留上一份 profile 引用，loadProfile 被跳过，
+ * 缘分按钮冷却仍为 0、弹层内 result 仍为空，表现为「又能点、缓存没了」。
+ */
+watch(
+  () => userStore.user?.id,
+  (uid, prevUid) => {
+    if (uid == null) {
+      profile.value = null
+      followStatus.value = FollowStatus.NONE
+      matchResult.value = null
+      startCooldownTimer(0)
+      showYuanFen.value = false
+      return
+    }
+    if (prevUid != null && uid !== prevUid) {
+      profile.value = null
+    }
+    void loadProfile()
+  },
+  { immediate: true },
+)
 
 async function handleFollowToggle() {
   if (!profileId.value) return
@@ -2103,6 +2181,8 @@ async function handleAvatarChange(event: Event) {
     color: $text-muted;
     cursor: not-allowed;
     box-shadow: none;
+    opacity: 0.65;
+    transform: none;
   }
 }
 .cover-settings-form {
@@ -2326,5 +2406,37 @@ async function handleAvatarChange(event: Event) {
   .relations-grid { gap: 8px; }
   .relation-tile { min-height: 82px; padding: 14px 10px; }
   .relation-count { font-size: 20px; }
+
+  .profile-actions-row {
+    display: grid;
+    grid-template-columns: repeat(var(--profile-action-cols, 2), minmax(0, 1fr));
+    gap: 6px;
+    padding-left: 12px;
+    padding-right: 12px;
+    align-items: stretch;
+  }
+
+  .profile-actions-row .btn-action,
+  .profile-actions-row .btn-yuanfen {
+    font-size: 12px;
+    font-weight: 600;
+    padding: 8px 4px;
+    justify-content: center;
+    text-align: center;
+    line-height: 1.2;
+    min-height: 40px;
+    white-space: normal;
+    word-break: keep-all;
+  }
+
+  .profile-actions-row .btn-action .el-icon {
+    font-size: 14px;
+    flex-shrink: 0;
+  }
+
+  .profile-actions-row .btn-yuanfen {
+    font-size: 12px;
+    padding: 8px 4px;
+  }
 }
 </style>

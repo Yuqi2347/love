@@ -1,5 +1,6 @@
 package com.campus.love.ai.skill;
 
+import com.campus.love.ai.config.AiConfig;
 import com.campus.love.ai.dto.AiChatResult;
 import com.campus.love.ai.dto.YuanFenAnalysisResponse;
 import com.campus.love.ai.dto.YuanFenAnalysisResult;
@@ -26,6 +27,7 @@ import java.time.format.DateTimeFormatter;
 public class YuanFenAnalysisSkill {
 
     private final AiService aiService;
+    private final AiConfig aiConfig;
     private final ObjectMapper objectMapper;
     private final RagContextBuilder ragContextBuilder;
     private final UserPortraitService userPortraitService;
@@ -56,13 +58,13 @@ public class YuanFenAnalysisSkill {
             请基于上述所有硬数据，深度推演两人的关系网络，并严格按照以下 JSON 字段和篇幅要求输出：
 
             {
-              "_dataReasoning": "（必填草稿，不对用户展示）请先在此处用200字进行硬核逻辑推演。列出支持他们相吸的具体数据点（如：{nicknameA}的什么专业特质完美嵌合了{nicknameB}的什么MBTI功能？85分的兴趣分具体体现在哪两个爱好的化学反应上？低分维度会引发什么具体现实矛盾？）",
+              "_dataReasoning": "（必填草稿，不对用户展示）请用120字内硬核推演：相吸的数据点、兴趣分体现、低分维度的现实矛盾。",
 
               "yuanFenIndex": "（15字以内）基于数据推演出的核心精神羁绊词，需具有物理或建筑学美感。",
 
               "dataBackedOverview": "（约120字）将冷冰冰的【系统匹配硬指标】翻译成兼具理性和宿命感的综合判词。必须隐晦但不突兀地融入综合分、最高分维度和最低分维度背后的现实意义。例如解释为什么某一项得分不高，但在总体上却构成了绝妙的制衡。",
 
-              "cognitiveArchitecture": "（约400字）MBTI底层逻辑与专业属性的深度融合分析。
+              "cognitiveArchitecture": "（约300字）MBTI底层逻辑与专业属性的深度融合分析。
                   要求：
                   1. 必须使用具体的认知功能术语（如Ni, Ne, Ti, Fe等）剖析两人信息处理和决策模型的差异。
                   2. 必须将两人的【专业属性】（如人工智能的底层逻辑 vs 建筑学的空间感知）作为认知功能的放大器进行分析。
@@ -70,7 +72,7 @@ public class YuanFenAnalysisSkill {
 
               "interestResonance": "（约150字）基于具体的【偏好标签】和【兴趣得分】，进行跨界化学反应分析。不要仅停留在"都有摄影爱好"的重合点，更要深挖"咖啡+瑜伽"或"独立音乐+电影"这种不同爱好之间如何相互渗透，形成更高阶的生活方式闭环。",
 
-              "cinematicScene": "（约250字）高颗粒度、强张力的校园宿命感微电影预演。
+              "cinematicScene": "（约200字）高颗粒度、强张力的校园宿命感微电影预演。
                   要素要求：
                   1. 场景必须是一个能同时触发两人【专业属性】或【爱好】的具体地点（如实验室、模型室、暗房等）。
                   2. 必须包含一个具有心理推拉感（Push & Pull）的微小冲突或动作交锋。
@@ -112,13 +114,13 @@ public class YuanFenAnalysisSkill {
             请基于上述数据，深度推演两人的关系网络，并严格按照以下 JSON 字段要求输出：
 
             {
-              "_dataReasoning": "（必填草稿，不对用户展示）在此处用200字进行硬核逻辑推演。列出支持他们产生深层羁绊的具体数据点（例如：{nicknameA}的专业逻辑如何补足{nicknameB}的思维盲区？同性之间的高MBTI得分意味着怎样的精神镜像？低分维度会带来怎样的良性博弈或现实阵痛？）",
+              "_dataReasoning": "（必填草稿，不对用户展示）请用120字内硬核推演：深层羁绊的数据点、专业/MBTI互补、低分维度的博弈或阵痛。",
 
               "yuanFenIndex": "（15字以内）基于数据推演出的核心精神羁绊词，如'双子星式的智性交锋'或'同频共振的深海锚点'。",
 
               "dataBackedOverview": "（约120字）将冷冰冰的【系统匹配硬指标】翻译成兼具理性和宿命感的综合判词。需指明这段高分同性羁绊的底色——是能在顶峰相见的战友，还是能抚平彼此精神褶皱的灵魂伴侣。隐晦地说明最高分与最低分维度的现实意义。",
 
-              "cognitiveArchitecture": "（约400字）MBTI底层逻辑与专业属性的深度融合分析。
+              "cognitiveArchitecture": "（约300字）MBTI底层逻辑与专业属性的深度融合分析。
                   要求：
                   1. 使用具体的认知功能术语（如Ti, Te, Ni, Ne等）剖析两人的思维链路。
                   2. 结合两人的【专业属性】，分析他们在面对现实挑战或精神探索时，如何形成"镜像互补"或"协同放电"。例如：一个在构建底层算法，一个在统筹全局框架。
@@ -126,7 +128,7 @@ public class YuanFenAnalysisSkill {
 
               "interestResonance": "（约150字）基于具体的【偏好标签】和【兴趣得分】，深挖同性之间特有的互动模式。分析那些看似不相关的兴趣（如一方的遥感影像与另一方的徒步探险）如何通过内在的逻辑或审美统一起来，形成精神上的闭环。",
 
-              "cinematicScene": "（约250字）高颗粒度、强张力的校园/职场微电影预演。
+              "cinematicScene": "（约200字）高颗粒度、强张力的校园/职场微电影预演。
                   要素要求：
                   1. 场景需触发两人的【专业属性】（如实验室的白板前、深夜的会议室或天台）。
                   2. 展现同性之间特有的推拉感：可以是理念的激烈碰撞后相视一笑，也可以是极度疲惫时无需多言的默契递递咖啡。
@@ -148,8 +150,10 @@ public class YuanFenAnalysisSkill {
         String userPrompt = buildPrompt(userA, userB, matchResult, sameGender, ragContext);
 
         AiChatResult aiResult;
+        Integer yfMax = aiConfig.getYuanfenMaxTokens() > 0 ? aiConfig.getYuanfenMaxTokens() : null;
+        int yfTimeout = aiConfig.getYuanfenTimeoutSeconds() > 0 ? aiConfig.getYuanfenTimeoutSeconds() : 60;
         try {
-            aiResult = aiService.chatCompletion(systemPrompt, userPrompt);
+            aiResult = aiService.chatCompletion(systemPrompt, userPrompt, yfMax, yfTimeout);
         } catch (Exception e) {
             log.warn("YuanFen AI call FAILED: {} - {}", e.getClass().getSimpleName(), e.getMessage());
             return new YuanFenAnalysisResult(buildFallbackResult(matchResult, sameGender), 0);

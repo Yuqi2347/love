@@ -56,8 +56,14 @@ public enum ResultCode {
 
     // AI 模块 7xxx
     YUANFEN_NOT_MUTUAL(7001, "需要互相关注才能使用缘分解析"),
-    YUANFEN_COOLDOWN(7002, "缘分解析冷却中，请稍后再试"),
+    YUANFEN_COOLDOWN(7002, "缘分解析冷却中：一小时内仅能深度解析一位好友；已与该好友生成过的结果可随时查看"),
     AI_SERVICE_UNAVAILABLE(7003, "AI 服务暂时不可用，请稍后重试"),
+    /** 同对用户已有一次 AI 请求在执行（未结束），防止连点并发 */
+    YUANFEN_IN_PROGRESS(7004, "与该好友的缘分分析仍在进行或刚中断，请约1～2分钟后再试；与其他互关可继续尝试（仍受每小时一条新解析限制）"),
+    /** 滑动窗口内「发起 AI」次数过多（未完成写入库的中断会计入本限制，防刷接口） */
+    YUANFEN_START_BURST(7005, "短时间内发起缘分分析次数过多，请稍后再试"),
+    /** 全站当前小时缘分「真实调 AI」次数达配置上限（上海时区整点小时，Redis 计数） */
+    YUANFEN_AI_GLOBAL_BUSY(7006, "缘分分析使用火热，请稍后再试"),
 
     // 心动时刻模块 8xxx
     MOMENT_ALREADY_ENROLLED(8001, "本周已报名，无需重复报名"),

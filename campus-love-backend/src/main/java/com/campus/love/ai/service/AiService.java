@@ -13,6 +13,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -35,24 +36,48 @@ public class AiService {
      * 调用 chat/completions（OpenAI 兼容格式），返回内容与 Token 消耗
      */
     public AiChatResult chatCompletion(String systemPrompt, String userMessage) {
+        return chatCompletion(systemPrompt, userMessage, null);
+    }
+
+    /**
+     * @param maxTokensOverride 非空且 &gt;0 时覆盖全局 max-tokens（如缘分解析单独上限）
+     */
+    public AiChatResult chatCompletion(String systemPrompt, String userMessage, Integer maxTokensOverride) {
+        return chatCompletion(systemPrompt, userMessage, maxTokensOverride, null);
+    }
+
+    /**
+     * @param timeoutSecondsOverride 非空且 &gt;0 时覆盖全局 AI 超时（缘分解析等）
+     */
+    public AiChatResult chatCompletion(
+            String systemPrompt,
+            String userMessage,
+            Integer maxTokensOverride,
+            Integer timeoutSecondsOverride) {
         String url = aiConfig.requiredBaseUrl() + "/chat/completions";
 
-        Map<String, Object> body = Map.of(
-                "model", aiConfig.requiredModel(),
-                "max_tokens", aiConfig.getMaxTokens(),
-                "stream", false,
-                "messages", List.of(
-                        Map.of("role", "system", "content", systemPrompt),
-                        Map.of("role", "user", "content", userMessage)
-                )
-        );
+        int cap = aiConfig.getMaxTokens() > 0 ? aiConfig.getMaxTokens() : 4096;
+        int maxTok = maxTokensOverride != null && maxTokensOverride > 0
+                ? Math.min(maxTokensOverride, cap)
+                : (aiConfig.getMaxTokens() > 0 ? aiConfig.getMaxTokens() : 4096);
+
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("model", aiConfig.requiredModel());
+        body.put("max_tokens", maxTok);
+        body.put("stream", false);
+        body.put("messages", List.of(
+                Map.of("role", "system", "content", systemPrompt),
+                Map.of("role", "user", "content", userMessage)
+        ));
 
         log.info("AI request start -> model={}, url={}", aiConfig.requiredModel(), url);
         long start = System.currentTimeMillis();
 
         try {
             String bodyJson = objectMapper.writeValueAsString(body);
-            int timeoutSec = aiConfig.getTimeoutSeconds() > 0 ? aiConfig.getTimeoutSeconds() : 90;
+            int timeoutSec = timeoutSecondsOverride != null && timeoutSecondsOverride > 0
+                    ? timeoutSecondsOverride
+                    : (aiConfig.getTimeoutSeconds() > 0 ? aiConfig.getTimeoutSeconds() : 90);
             HttpRequest request = HttpRequest.newBuilder()
                     .uri(URI.create(url))
                     .header("Content-Type", "application/json; charset=UTF-8")

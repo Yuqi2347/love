@@ -75,7 +75,19 @@ ai:
   model: ${AI_MODEL:qwen3-max}
   max-tokens: ${AI_MAX_TOKENS:4096}
   timeout-seconds: ${AI_TIMEOUT:90}
-  yuanfen-cooldown-hours: ${YUANFEN_COOLDOWN:0}
+  # 默认 1 小时：与 AiConfig 一致；0=每次调 AI 不用缓存；设为 0 需显式 YUANFEN_COOLDOWN=0
+  yuanfen-cooldown-hours: ${YUANFEN_COOLDOWN:1}
+  # 缘分解析单独 max_tokens（≤ max-tokens，适当降低可加快出文；过小可能导致 JSON 截断）
+  yuanfen-max-tokens: ${YUANFEN_MAX_TOKENS:3072}
+  # 缘分解析 HTTP 超时（秒），需与前端 YUANFEN_REQUEST_TIMEOUT_SEC 一致思路
+  yuanfen-timeout-seconds: ${YUANFEN_TIMEOUT:60}
+  # 同对用户进行中锁 TTL（秒），防并发连点
+  yuanfen-inflight-ttl-seconds: ${YUANFEN_INFLIGHT_TTL:120}
+  # 每用户滑动窗口内最多「发起 AI」次数（缓存命中不计）；防取消再点刷接口
+  yuanfen-start-burst-max: ${YUANFEN_START_BURST_MAX:8}
+  yuanfen-start-burst-window-seconds: ${YUANFEN_START_BURST_WINDOW:900}
+  # 全站当前小时「真实调 AI」缘分次数上限（上海时区整点小时，Redis）；0=不限制
+  yuanfen-global-ai-hourly-max: ${YUANFEN_GLOBAL_AI_HOURLY_MAX:0}
 
 springdoc:
   api-docs:

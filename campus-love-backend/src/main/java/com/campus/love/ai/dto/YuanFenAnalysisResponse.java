@@ -72,4 +72,7 @@ public class YuanFenAnalysisResponse {
 
     /** 下次可用时间 */
     private String nextAvailableAt;
+
+    /** 本次结果是否来自数据库缓存（便于排查「退出再登是否重复调 AI」） */
+    private Boolean fromCache;
 }
