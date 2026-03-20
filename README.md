@@ -1,4 +1,4 @@
-﻿# Campus Love - 校园交友 App MVP
+# Campus Love - 校园交友 App MVP
 
 基于 Spring Boot 3 + Vue 3 的校园社交交友平台，通过 MBTI、星座、八字、兴趣爱好等多维度匹配算法精准推荐。
 
@@ -45,6 +45,7 @@
      mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V39__comment_like_and_feed_pin.sql
      mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V40__user_avatar_blob.sql
      mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V41__feed_content_vector_enhance.sql
+     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V42__noop_feed_like_behavior_log.sql
      ```
      增量脚本只负责在已有结构上做"补充/升级"，不会重复创建基础表。**登录/注册 500**：若提示表缺失（如 t_user_portrait），执行 `V36__schema_sync_v30_tables.sql` 补齐。向量存储说明见 `docs/architecture/VECTOR_STORAGE.md`。
 5. **Redis** — Windows: [下载](https://github.com/tporadowski/redis/releases)，默认端口 6379
@@ -125,6 +126,7 @@ npm run dev && npm run tunnel  # 分两个终端
 - **关注系统**: 单向/互相关注，权限分级
 - **即时聊天**: WebSocket 实时消息，单向关注每日消息限制
 - **朋友圈**: 互关用户动态流，点赞/评论
+- **行为与画像**: 浏览动态（`FEED_VIEW`）、点赞动态（`FEED_LIKE`）写入 `t_user_behavior_log`，汇总类目偏好并参与 OCEAN 短期/长期更新（详见 `docs/updates/2026-03-20-feed-behavior-portrait.md`）
 
 ## 项目结构
 

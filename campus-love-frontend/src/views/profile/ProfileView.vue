@@ -39,9 +39,15 @@
       </div>
       <div class="profile-main">
         <div class="avatar-wrapper">
-          <img :src="profile?.avatarUrl || defaultAvatar" class="profile-avatar avatar" width="100" height="100" />
+          <el-image
+            :src="getMediaUrl(profile?.avatarUrl) || defaultAvatar"
+            class="profile-avatar avatar"
+            :preview-src-list="[getMediaUrl(profile?.avatarUrl) || defaultAvatar]"
+            preview-teleported
+            fit="cover"
+          />
           <input ref="avatarInput" type="file" accept="image/*" style="display: none" @change="handleAvatarChange" />
-          <button v-if="isMe" class="avatar-upload-btn" @click="avatarInput?.click()">
+          <button v-if="isMe" class="avatar-upload-btn" @click.stop="avatarInput?.click()">
             <el-icon><Camera /></el-icon>
           </button>
         </div>
@@ -1237,15 +1243,28 @@ async function handleAvatarChange(event: Event) {
   width: 100px;
   height: 100px;
   border-radius: 50%;
-  object-fit: cover;
+  overflow: hidden;
   border: 4px solid $bg-primary;
   box-shadow: $shadow-md;
+  cursor: pointer;
+
+  :deep(.el-image__inner) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  :deep(.el-image__error) {
+    width: 100%;
+    height: 100%;
+  }
 }
 
 .avatar {
   width: 100px;
   height: 100px;
   border-radius: 50%;
+  overflow: hidden;
   object-fit: cover;
 }
 

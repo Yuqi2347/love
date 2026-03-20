@@ -460,6 +460,7 @@ public class FeedService {
 
         // 记录点赞活跃度
         activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.LIKE, postId);
+        behaviorTracker.trackFeedLike(userId, postId);
 
         // V39：帖子点赞通知
         User liker = userMapper.selectById(userId);

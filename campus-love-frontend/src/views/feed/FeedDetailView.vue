@@ -15,10 +15,12 @@
 
       <div class="post-card">
         <div class="post-header">
-          <img
+          <el-image
             :src="imageUrl(post.avatarUrl || '') || defaultAvatar"
             class="post-avatar"
-            @click="$router.push(`/profile/${post.userId}`)"
+            :preview-src-list="[imageUrl(post.avatarUrl || '') || defaultAvatar]"
+            preview-teleported
+            fit="cover"
           />
           <div class="post-user">
             <div class="post-name" @click="$router.push(`/profile/${post.userId}`)">{{ post.nickname }}</div>
@@ -137,10 +139,12 @@
           >
             <!-- 根评论 -->
             <div class="root-comment" :class="{ 'comment-deleted': thread.comment.deleted }">
-              <img
+              <el-image
                 :src="thread.comment.avatarUrl || defaultAvatar"
                 class="comment-avatar"
-                @click="$router.push(`/profile/${thread.comment.userId}`)"
+                :preview-src-list="[thread.comment.avatarUrl || defaultAvatar]"
+                preview-teleported
+                fit="cover"
               />
               <div class="comment-body">
                 <div class="comment-meta">
@@ -185,10 +189,12 @@
                 class="reply-item"
                 :class="{ 'comment-deleted': reply.deleted }"
               >
-                <img
+                <el-image
                   :src="reply.avatarUrl || defaultAvatar"
                   class="reply-avatar"
-                  @click="$router.push(`/profile/${reply.userId}`)"
+                  :preview-src-list="[reply.avatarUrl || defaultAvatar]"
+                  preview-teleported
+                  fit="cover"
                 />
                 <div class="reply-body">
                   <div class="reply-content">
@@ -820,7 +826,14 @@ onUnmounted(() => {
   height: 44px;
   border-radius: 50%;
   cursor: pointer;
-  object-fit: cover;
+  overflow: hidden;
+  flex-shrink: 0;
+
+  :deep(.el-image__inner) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 }
 
 .post-user { flex: 1; }
@@ -1021,9 +1034,15 @@ onUnmounted(() => {
   width: 36px;
   height: 36px;
   border-radius: 50%;
-  object-fit: cover;
   flex-shrink: 0;
   cursor: pointer;
+  overflow: hidden;
+
+  :deep(.el-image__inner) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 }
 
 .comment-body {
@@ -1176,6 +1195,7 @@ onUnmounted(() => {
   background: transparent;
   border: none;
   cursor: pointer;
+  white-space: nowrap;
   transition: color 0.2s;
 
   &:hover {
@@ -1204,9 +1224,15 @@ onUnmounted(() => {
   width: 24px;
   height: 24px;
   border-radius: 50%;
-  object-fit: cover;
   flex-shrink: 0;
   cursor: pointer;
+  overflow: hidden;
+
+  :deep(.el-image__inner) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
 }
 
 .reply-body {
@@ -1351,5 +1377,90 @@ onUnmounted(() => {
   background: transparent;
   cursor: pointer;
   margin-top: 16px;
+}
+
+@media (max-width: 640px) {
+  .detail-content {
+    padding: 12px;
+  }
+
+  .post-card,
+  .comments-section {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .post-header {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .post-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .post-name {
+    font-size: 14px;
+  }
+
+  .post-time,
+  .comment-time,
+  .comment-floor {
+    font-size: 11px;
+  }
+
+  .report-btn,
+  .delete-btn {
+    padding: 3px;
+  }
+
+  .post-content,
+  .comment-text,
+  .reply-content {
+    font-size: 13px;
+  }
+
+  .post-actions {
+    gap: 10px;
+    justify-content: space-between;
+  }
+
+  .action-btn,
+  .sort-tab,
+  .reply-btn,
+  .send-btn {
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .action-btn {
+    gap: 3px;
+  }
+
+  .sort-tab {
+    padding: 4px 10px;
+  }
+
+  .comment-footer,
+  .reply-footer {
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .reply-list {
+    margin-left: 12px;
+    padding: 10px;
+  }
+
+  .comment-images .comment-img,
+  .post-image {
+    width: 72px;
+    height: 72px;
+  }
+
+  .send-btn {
+    padding: 0 14px;
+  }
 }
 </style>

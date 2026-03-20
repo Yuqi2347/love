@@ -80,6 +80,25 @@ public class BehaviorTracker {
     }
 
     /**
+     * 追踪动态点赞（FEED_LIKE）
+     * 写入行为日志，供 {@link com.campus.love.profile.service.BehaviorAggregationService}
+     * 汇总浏览/点赞类目偏好，参与 OCEAN 短期/长期画像更新。
+     */
+    public void trackFeedLike(Long userId, Long postId) {
+        if (userId == null || postId == null) return;
+        try {
+            UserBehaviorLog entry = new UserBehaviorLog();
+            entry.setUserId(userId);
+            entry.setTargetId(postId);
+            entry.setBehaviorType("FEED_LIKE");
+            entry.setCreatedAt(java.time.LocalDateTime.now());
+            behaviorLogMapper.insert(entry);
+        } catch (Exception e) {
+            this.log.warn("Track feed like failed: {}", e.getMessage());
+        }
+    }
+
+    /**
      * 追踪邀约浏览（INVITE_VIEW）
      * 用于邀约推荐算法降权已看过的邀约
      */

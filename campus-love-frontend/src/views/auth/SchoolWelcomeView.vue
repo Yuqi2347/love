@@ -1,16 +1,17 @@
 <template>
-  <div class="welcome-page" :class="{ 'fade-out': phase >= 4 }">
+  <div class="welcome-page">
     <!-- Photo background carousel -->
     <div class="bg-slideshow">
+      <!-- Gradient base: always visible until images loaded -->
+      <div class="bg-slide active" :style="{ background: theme.gradient }"></div>
+      <!-- Image slides: fade in only after preload completes -->
       <div
         v-for="(img, i) in theme.images"
         :key="img"
         class="bg-slide"
-        :class="{ active: currentSlide === i }"
+        :class="{ active: imagesReady && currentSlide === i }"
         :style="{ backgroundImage: `url(${img})` }"
       ></div>
-      <!-- Fallback gradient if no images -->
-      <div v-if="!theme.images.length" class="bg-slide active" :style="{ background: theme.gradient }"></div>
     </div>
 
     <!-- Dark overlay with gradient -->
@@ -98,9 +99,21 @@ const theme = computed(() => getSchoolTheme(schoolName.value))
 const phase = ref(0)
 const currentSlide = ref(0)
 const countdown = ref(8)
+const imagesReady = ref(false)
 let timers: ReturnType<typeof setTimeout>[] = []
 let countdownInterval: ReturnType<typeof setInterval> | null = null
 let slideInterval: ReturnType<typeof setInterval> | null = null
+
+async function preloadImages(urls: string[]): Promise<void> {
+  if (!urls.length) return
+  await Promise.all(
+    urls.map(src => new Promise<void>(resolve => {
+      const img = new Image()
+      img.onload = img.onerror = () => resolve()
+      img.src = src
+    }))
+  )
+}
 
 const currentCaption = computed(() => {
   const captions = theme.value.captions
@@ -121,7 +134,7 @@ function startAnimation() {
   // Phase 2: captions start (1.5s)
   timers.push(setTimeout(() => { phase.value = 2 }, 1500))
 
-  // Start photo carousel (every 3s)
+  // Start photo carousel (every 3s) — only once images are ready
   if (theme.value.images.length > 1) {
     slideInterval = setInterval(() => {
       currentSlide.value = (currentSlide.value + 1) % theme.value.images.length
@@ -131,11 +144,9 @@ function startAnimation() {
   // Phase 3: mission + landmarks (5s)
   timers.push(setTimeout(() => { phase.value = 3 }, 5000))
 
-  // Phase 4: fade out + navigate (8s)
-  timers.push(setTimeout(() => {
-    phase.value = 4
-    timers.push(setTimeout(() => goHome(), 600))
-  }, 8000))
+  // Navigate at 8s — Vue's page transition (App.vue) handles the fade,
+  // no manual opacity manipulation needed, which eliminated the old 600ms white flash.
+  timers.push(setTimeout(() => goHome(), 8000))
 }
 
 function goHome() {
@@ -166,7 +177,17 @@ function particleStyle(i: number) {
   }
 }
 
-onMounted(() => { startAnimation() })
+onMounted(async () => {
+  // Preload images before starting animation; fall back after 2 s if network is slow
+  if (theme.value.images.length) {
+    await Promise.race([
+      preloadImages(theme.value.images),
+      new Promise<void>(resolve => setTimeout(resolve, 2000)),
+    ])
+  }
+  imagesReady.value = true
+  startAnimation()
+})
 onUnmounted(() => { cleanup() })
 </script>
 
@@ -181,9 +202,6 @@ onUnmounted(() => { cleanup() })
   justify-content: center;
   overflow: hidden;
   z-index: 9999;
-  transition: opacity 0.6s ease;
-
-  &.fade-out { opacity: 0; }
 }
 
 // Photo slideshow

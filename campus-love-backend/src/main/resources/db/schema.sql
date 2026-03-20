@@ -590,6 +590,7 @@ CREATE TABLE IF NOT EXISTS t_user_behavior_summary (
 CREATE TABLE IF NOT EXISTS t_user_behavior_log (
     id            BIGINT        PRIMARY KEY AUTO_INCREMENT,
     user_id       BIGINT        NOT NULL,
+    -- 常见取值：FEED_VIEW、FEED_LIKE、INVITE_VIEW、MATCH_CARD_VIEW 等（应用层约定，V42 起点赞写 FEED_LIKE）
     behavior_type VARCHAR(30)   NOT NULL,
     target_id     BIGINT,
     metadata      JSON,

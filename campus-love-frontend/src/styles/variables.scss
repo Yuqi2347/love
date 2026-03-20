@@ -1,36 +1,30 @@
-// === Campal 主题变量 — 冷调高级感 ===
+// Shared theme variables for Campus Love
 
-// 主色 - 靛蓝（冷静、高级、科技感）
-$primary: #4F46E5;
-$primary-dark: #3730A3;
-$primary-light: #C7D2FE;
-$primary-gradient: linear-gradient(135deg, rgba($primary, 0.06), rgba($primary, 0.12));
+$primary: #D77FA2;
+$primary-dark: #B76587;
+$primary-light: #F0ABC4;
+$primary-gradient: linear-gradient(135deg, rgba(240, 171, 196, 0.22), rgba(215, 127, 162, 0.14));
 
-// 辅助色
-$accent: #06B6D4;
+$accent: #F3B4C7;
 $success: #10B981;
 $warning: #F59E0B;
 $danger: #EF4444;
-$info: #3B82F6;
+$info: #D77FA2;
 
-// 中性色（Slate 蓝灰系）
-$text-primary: #1E293B;
-$text-secondary: #64748B;
-$text-muted: #94A3B8;
+$text-primary: #4F3941;
+$text-secondary: #7D6670;
+$text-muted: #B198A3;
 $text-inverse: #ffffff;
 
-// 背景色
-$bg-body: #F8FAFC;
+$bg-body: #FFF8FB;
 $bg-primary: #FFFFFF;
-$bg-secondary: #F8FAFC;
-$bg-tertiary: #F1F5F9;
-$bg-dark: #1E293B;
+$bg-secondary: #FFF5F8;
+$bg-tertiary: #FDF0F5;
+$bg-dark: #4F3941;
 
-// 边框
-$border-color: #E2E8F0;
-$border-light: rgba(0, 0, 0, 0.06);
+$border-color: #F0D8E2;
+$border-light: rgba(215, 127, 162, 0.16);
 
-// 圆角
 $radius-xs: 4px;
 $radius-sm: 8px;
 $radius-md: 12px;
@@ -38,25 +32,20 @@ $radius-lg: 16px;
 $radius-xl: 24px;
 $radius-full: 9999px;
 
-// 阴影
 $shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.06);
 $shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06), 0 2px 4px rgba(0, 0, 0, 0.04);
 $shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.08), 0 4px 8px rgba(0, 0, 0, 0.04);
-$shadow-glow: 0 8px 24px rgba(79, 70, 229, 0.15);
+$shadow-glow: 0 10px 28px rgba(215, 127, 162, 0.2);
 
-// 布局
 $sidebar-width: 260px;
 $right-panel-width: 320px;
 $max-content-width: 640px;
 
-// 毛玻璃
-$glass-bg: rgba(255, 255, 255, 0.8);
+$glass-bg: rgba(255, 255, 255, 0.84);
 $glass-blur: blur(16px);
 
-// 字体
 $font-family: 'Inter', 'Noto Sans SC', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
 
-// 间距
 $space-xs: 4px;
 $space-sm: 8px;
 $space-md: 12px;
@@ -65,7 +54,6 @@ $space-xl: 24px;
 $space-2xl: 32px;
 $space-3xl: 48px;
 
-// 字号
 $text-xs: 11px;
 $text-sm: 13px;
 $text-base: 15px;
@@ -73,23 +61,19 @@ $text-lg: 18px;
 $text-xl: 22px;
 $text-2xl: 28px;
 
-// 断点
 $bp-mobile: 640px;
 $bp-tablet: 1024px;
 $bp-desktop: 1280px;
 
-// Z-index
 $z-base: 1;
 $z-sticky: 10;
 $z-dropdown: 20;
 $z-overlay: 50;
 $z-modal: 100;
 
-// 装饰渐变
 $gradient-warm: linear-gradient(135deg, $primary, $accent);
-$gradient-cool: linear-gradient(135deg, #3B82F6, #8B5CF6);
+$gradient-cool: linear-gradient(135deg, #F3B4C7, #D77FA2);
 
-// 动画
 $transition-fast: 0.15s cubic-bezier(0.4, 0, 0.2, 1);
 $transition-base: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
 $transition-slow: 0.4s cubic-bezier(0.4, 0, 0.2, 1);

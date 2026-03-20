@@ -3,59 +3,108 @@
     <div class="page-header">
       <!-- 顶部搜索与发布 -->
       <div class="top-bar">
-        <el-input
-          v-model="searchKeyword"
-          placeholder="搜索邀约、帖子..."
-          class="search-input"
-          clearable
-          @keyup.enter="doSearch"
-        >
-          <template #prefix>
-            <el-icon><Search /></el-icon>
-          </template>
-        </el-input>
+        <div ref="searchBoxRef" class="search-wrap">
+          <el-input
+            v-model="searchKeyword"
+            placeholder="搜索用户、帖子、邀约..."
+            class="search-input"
+            clearable
+            @keyup.enter="doSearch"
+            @focus="searchKeyword.trim().length >= 2 && (showUserDropdown = true)"
+          >
+            <template #prefix>
+              <el-icon><Search /></el-icon>
+            </template>
+          </el-input>
+          <!-- 用户搜索下拉 -->
+          <div v-if="showUserDropdown" class="user-search-dropdown">
+            <div v-if="userSearchLoading" class="usd-hint">搜索中...</div>
+            <div v-else-if="searchKeyword.trim().length < 2" class="usd-hint">输入至少 2 个字符</div>
+            <div v-else-if="!userSearchResults.length" class="usd-hint">未找到用户，按回车搜索帖子</div>
+            <template v-else>
+              <div class="usd-section-label">用户</div>
+              <div
+                v-for="u in userSearchResults"
+                :key="u.id"
+                class="usd-item"
+                @click="goToUserProfile(u.id)"
+              >
+                <AppAvatar :src="u.avatarUrl" :name="u.nickname" :size="32" class="usd-avatar" />
+                <span class="usd-name">{{ u.nickname }}</span>
+                <button
+                  :class="['usd-follow-btn', followStore.isFollowed(u.id) ? 'followed' : '']"
+                  @click.stop="handleUserFollow(u.id)"
+                >
+                  {{ followStore.isFollowed(u.id) ? '已关注' : '关注' }}
+                </button>
+              </div>
+              <div class="usd-divider" />
+              <div class="usd-hint usd-search-posts" @click="doSearch; showUserDropdown = false">
+                <el-icon><Search /></el-icon> 搜索「{{ searchKeyword.trim() }}」相关帖子
+              </div>
+            </template>
+          </div>
+        </div>
         <button class="btn-primary post-btn" @click="showPostDialog = true">
           <el-icon><Plus /></el-icon> 发布
         </button>
       </div>
 
-      <!-- 排序切换（推荐/关注 Tab 显示） -->
-      <div v-if="activeTab === 'recommend' || activeTab === 'following'" class="sort-tabs">
-        <button :class="['sort-tab', { active: feedSort === 'recommend' }]" @click="setFeedSort('recommend')">推荐</button>
-        <button :class="['sort-tab', { active: feedSort === 'time' }]" @click="setFeedSort('time')">最新</button>
-        <button :class="['sort-tab', { active: feedSort === 'hot' }]" @click="setFeedSort('hot')">热度</button>
-      </div>
+      <div class="discover-nav-row">
+        <!-- Primary tabs -->
+        <div class="discover-tabs">
+          <button
+            :class="['tab-btn', { active: activeTab === 'recommend' }]"
+            @click="switchTab('recommend')"
+          >
+            推荐
+          </button>
+          <button
+            :class="['tab-btn', { active: activeTab === 'post' }]"
+            @click="switchTab('post')"
+          >
+            动态
+          </button>
+          <button
+            :class="['tab-btn', { active: activeTab === 'following' }]"
+            @click="switchTab('following')"
+          >
+            关注
+          </button>
+          <button
+            :class="['tab-btn', { active: activeTab === 'liked' }]"
+            @click="switchTab('liked')"
+          >
+            点赞
+          </button>
+        </div>
 
-      <!-- Tab 模块切换 -->
-      <div class="discover-tabs">
-        <button
-          :class="['tab-btn', { active: activeTab === 'recommend' }]"
-          @click="switchTab('recommend')"
+        <el-dropdown
+          v-if="activeTab === 'recommend' || activeTab === 'following'"
+          trigger="click"
+          placement="bottom-end"
+          @command="handleSortCommand"
         >
-          推荐
-        </button>
-        <button
-          :class="['tab-btn', { active: activeTab === 'post' }]"
-          @click="switchTab('post')"
-        >
-          动态
-        </button>
-        <button
-          :class="['tab-btn', { active: activeTab === 'following' }]"
-          @click="switchTab('following')"
-        >
-          关注
-        </button>
-        <button
-          :class="['tab-btn', { active: activeTab === 'liked' }]"
-          @click="switchTab('liked')"
-        >
-          点赞
-        </button>
+          <button class="sort-trigger-btn" type="button" title="排序">
+            <el-icon><Operation /></el-icon>
+          </button>
+          <template #dropdown>
+            <el-dropdown-menu class="sort-dropdown-menu">
+              <el-dropdown-item :class="{ 'is-active': feedSort === 'recommend' }" command="recommend">
+                推荐
+              </el-dropdown-item>
+              <el-dropdown-item :class="{ 'is-active': feedSort === 'time' }" command="time">
+                最新
+              </el-dropdown-item>
+              <el-dropdown-item :class="{ 'is-active': feedSort === 'hot' }" command="hot">
+                热度
+              </el-dropdown-item>
+            </el-dropdown-menu>
+          </template>
+        </el-dropdown>
       </div>
     </div>
 
-    <!-- 手机端下拉刷新指示器 -->
     <div v-if="pullRefreshVisible" class="pull-refresh-indicator">
       <el-icon class="spinning"><Loading /></el-icon> 刷新中...
     </div>
@@ -79,10 +128,12 @@
         <div class="feed-card card" @click="goPostDetail(item.post.id)">
           <div v-if="item.post.pinned" class="feed-pinned-badge">置顶</div>
           <div class="feed-header" @click.stop>
-            <img
+            <el-image
               :src="getMediaUrl(item.post.avatarUrl) || defaultAvatar"
               class="feed-avatar"
-              @click="$router.push(`/profile/${item.post.userId}`)"
+              :preview-src-list="[getMediaUrl(item.post.avatarUrl) || defaultAvatar]"
+              preview-teleported
+              fit="cover"
             />
             <div class="feed-user" @click="$router.push(`/profile/${item.post.userId}`)">
               <div class="feed-name">{{ item.post.nickname }}</div>
@@ -144,6 +195,7 @@
               :src="getMediaUrl(img)"
               class="feed-image"
               loading="lazy"
+              @click.stop="openImagePreview(item.post.images.split(',').map(i => getMediaUrl(i)), idx)"
             />
           </div>
           <!-- 视频展示 -->
@@ -310,6 +362,15 @@
       :post="currentSharePost"
       @success="handleShareSuccess"
     />
+
+    <!-- 图片全屏预览 -->
+    <el-image-viewer
+      v-if="previewVisible"
+      :url-list="previewImages"
+      :initial-index="previewIndex"
+      teleported
+      @close="previewVisible = false"
+    />
   </div>
 </template>
 
@@ -335,18 +396,85 @@ import {
 import { checkReported, getMyReport, getReportCountByPostIds, VIOLATION_TYPES } from '@/api/reportApi'
 import ReportDialog from '@/components/ReportDialog.vue'
 import { useUserStore } from '@/store/userStore'
+import { useFollowStore } from '@/store/followStore'
 import { useInviteStore } from '@/store/inviteStore'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Search, Flag, WarningFilled, Sort, Refresh, Loading } from '@element-plus/icons-vue'
+import { followUser, unfollowUser } from '@/api/followApi'
+import { searchUsers, type UserSearchItem } from '@/api/userApi'
+import { ElMessage, ElMessageBox, ElImageViewer } from 'element-plus'
+import { Plus, Delete, Search, Flag, WarningFilled, Sort, Refresh, Loading, Operation } from '@element-plus/icons-vue'
 import type { Invite } from '@/api/inviteApi'
 import ShareDialog from '@/components/ShareDialog.vue'
+import AppAvatar from '@/components/AppAvatar.vue'
 import { DEFAULT_AVATAR, getMediaUrl, formatRelativeTime } from '@/utils/shared'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const followStore = useFollowStore()
 const inviteStore = useInviteStore()
 const defaultAvatar = DEFAULT_AVATAR
+
+// 用户搜索
+const userSearchResults = ref<UserSearchItem[]>([])
+const userSearchLoading = ref(false)
+const showUserDropdown = ref(false)
+const searchBoxRef = ref<HTMLElement>()
+let userSearchTimer: ReturnType<typeof setTimeout> | null = null
+
+// 图片预览
+const previewImages = ref<string[]>([])
+const previewIndex = ref(0)
+const previewVisible = ref(false)
+
+function openImagePreview(images: string[], index: number) {
+  previewImages.value = images
+  previewIndex.value = index
+  previewVisible.value = true
+}
+
+async function doUserSearch() {
+  const kw = searchKeyword.value.trim()
+  if (!kw || kw.length < 2) return
+  userSearchLoading.value = true
+  try {
+    if (followStore.followedIds.length === 0) await followStore.loadFollowedIds()
+    const res = await searchUsers(kw, 8)
+    userSearchResults.value = res.data.data || []
+  } catch {
+    userSearchResults.value = []
+  } finally {
+    userSearchLoading.value = false
+  }
+}
+
+function goToUserProfile(userId: number) {
+  showUserDropdown.value = false
+  searchKeyword.value = ''
+  router.push(`/profile/${userId}`)
+}
+
+async function handleUserFollow(userId: number) {
+  const isFollowing = followStore.isFollowed(userId)
+  try {
+    if (isFollowing) {
+      await unfollowUser(userId)
+      followStore.removeFollowed(userId)
+      ElMessage.success('已取消关注')
+    } else {
+      await followUser(userId)
+      followStore.addFollowed(userId)
+      ElMessage.success('关注成功')
+    }
+  } catch { /* handled by interceptor */ }
+}
+
+function closeUserDropdown(e: MouseEvent) {
+  if (searchBoxRef.value && !searchBoxRef.value.contains(e.target as Node)) {
+    showUserDropdown.value = false
+  }
+}
+
+// 用户搜索 document click 监听合并到下面的 onMounted
 const posts = ref<FeedPost[]>([])
 const followingPosts = ref<FeedPost[]>([])
 const likedPosts = ref<FeedPost[]>([])
@@ -357,6 +485,23 @@ const CONTENT_MAX_LENGTH = 100
 
 const levelInfo = ref<UserLevelInfo | null>(null)
 const searchKeyword = ref('')
+
+watch(searchKeyword, (val) => {
+  if (userSearchTimer) clearTimeout(userSearchTimer)
+  if (!val?.trim()) {
+    showUserDropdown.value = false
+    userSearchResults.value = []
+    return
+  }
+  if (val.trim().length < 2) {
+    showUserDropdown.value = true
+    userSearchResults.value = []
+    return
+  }
+  showUserDropdown.value = true
+  userSearchTimer = setTimeout(doUserSearch, 300)
+})
+
 const reportedPostIds = ref<Set<number>>(new Set())
 const showReportDialog = ref(false)
 const reportTargetType = ref('POST')
@@ -445,6 +590,12 @@ function setFeedSort(sort: 'recommend' | 'hot' | 'time') {
   refreshPosts()
 }
 
+function handleSortCommand(command: string | number | object) {
+  if (command === 'recommend' || command === 'time' || command === 'hot') {
+    setFeedSort(command)
+  }
+}
+
 function doSearch() {
   refreshPosts()
 }
@@ -514,12 +665,16 @@ onMounted(async () => {
   // 手机端下拉刷新（触摸事件）
   document.addEventListener('touchstart', onTouchStart, { passive: true })
   document.addEventListener('touchend', onTouchEnd, { passive: true })
+  // 用户搜索下拉框点击外关闭
+  document.addEventListener('click', closeUserDropdown)
 })
 
 onUnmounted(() => {
   scrollObserver?.disconnect()
   document.removeEventListener('touchstart', onTouchStart)
   document.removeEventListener('touchend', onTouchEnd)
+  document.removeEventListener('click', closeUserDropdown)
+  if (userSearchTimer) clearTimeout(userSearchTimer)
 })
 
 function onTouchStart(e: TouchEvent) {
@@ -897,12 +1052,126 @@ async function handlePinPost(post: FeedPost) {
   width: 100%;
 }
 
-.search-input {
+.search-wrap {
+  position: relative;
   width: 280px;
+  flex: 1;
+  min-width: 0;
+  max-width: 340px;
+}
+
+.search-input {
+  width: 100%;
 
   :deep(.el-input__wrapper) {
     border-radius: $radius-full;
     box-shadow: 0 0 0 1px $border-light;
+  }
+}
+
+// 用户搜索下拉框
+.user-search-dropdown {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  z-index: 100;
+  background: $bg-primary;
+  border-radius: $radius-lg;
+  box-shadow: 0 8px 24px rgba(215, 127, 162, 0.16), 0 2px 8px rgba(0, 0, 0, 0.06);
+  border: 1px solid $border-light;
+  overflow: hidden;
+  max-height: 320px;
+  overflow-y: auto;
+}
+
+.usd-section-label {
+  padding: 8px 14px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: $text-muted;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.usd-hint {
+  padding: 12px 14px;
+  font-size: 13px;
+  color: $text-muted;
+}
+
+.usd-search-posts {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: $primary;
+  font-weight: 500;
+
+  &:hover {
+    background: rgba($primary, 0.06);
+  }
+}
+
+.usd-divider {
+  height: 1px;
+  background: $border-light;
+  margin: 4px 0;
+}
+
+.usd-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 14px;
+  cursor: pointer;
+  transition: background $transition-fast;
+
+  &:hover {
+    background: rgba($primary, 0.05);
+  }
+}
+
+.usd-avatar {
+  flex-shrink: 0;
+}
+
+.usd-name {
+  flex: 1;
+  font-size: 14px;
+  font-weight: 500;
+  color: $text-primary;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.usd-follow-btn {
+  flex-shrink: 0;
+  padding: 4px 12px;
+  border-radius: $radius-full;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1.5px solid $primary;
+  color: $primary;
+  background: transparent;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    background: rgba($primary, 0.1);
+  }
+
+  &.followed {
+    border-color: $border-color;
+    color: $text-muted;
+    background: $bg-tertiary;
+
+    &:hover {
+      border-color: $danger;
+      color: $danger;
+      background: rgba($danger, 0.06);
+    }
   }
 }
 
@@ -916,43 +1185,36 @@ async function handlePinPost(post: FeedPost) {
   white-space: nowrap;
 }
 
-.sort-tabs {
-  display: flex;
-  gap: 4px;
-  padding-bottom: 8px;
-}
-
-.sort-tab {
-  padding: 4px 12px;
-  font-size: 13px;
-  color: $text-secondary;
-  background: transparent;
-  border: 1px solid $border-light;
-  border-radius: $radius-full;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-.sort-tab:hover { color: $primary; border-color: $primary; }
-.sort-tab.active {
-  color: white;
-  background: $primary;
-  border-color: $primary;
+.discover-nav-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 10px;
+  width: 100%;
+  padding-bottom: 12px;
 }
 
 .discover-tabs {
   display: flex;
-  gap: 8px;
-  padding-bottom: 12px;
+  flex: 1;
+  min-width: 0;
   width: 100%;
+  gap: 8px;
+  padding: 4px;
+  background: $bg-secondary;
+  border: 1px solid $border-light;
+  border-radius: $radius-full;
 }
 
 .tab-btn {
-  padding: 8px 20px;
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 10px 12px;
   border: none;
   background: transparent;
   color: $text-secondary;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
   border-radius: $radius-full;
   transition: all $transition-fast;
@@ -967,6 +1229,38 @@ async function handlePinPost(post: FeedPost) {
     background: $primary;
     color: white;
   }
+}
+
+.sort-trigger-btn {
+  width: 42px;
+  height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
+  flex-shrink: 0;
+  border: 1px solid $border-light;
+  border-radius: $radius-full;
+  background: $bg-primary;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all $transition-fast;
+
+  &:hover {
+    color: $primary;
+    border-color: rgba($primary, 0.3);
+    background: rgba($primary, 0.06);
+  }
+
+  .el-icon {
+    font-size: 18px;
+  }
+}
+
+:deep(.sort-dropdown-menu .el-dropdown-menu__item.is-active) {
+  color: $primary;
+  font-weight: 600;
+  background: rgba($primary, 0.08);
 }
 
 .header-right {
@@ -1171,7 +1465,20 @@ async function handlePinPost(post: FeedPost) {
   width: 44px;
   height: 44px;
   border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
   cursor: pointer;
+
+  :deep(.el-image__inner) {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  :deep(.el-image__error) {
+    width: 100%;
+    height: 100%;
+  }
 }
 
 .feed-user {
@@ -1213,6 +1520,7 @@ async function handlePinPost(post: FeedPost) {
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
+  white-space: nowrap;
   border: none;
   background: transparent;
   color: $text-muted;
@@ -1244,6 +1552,7 @@ async function handlePinPost(post: FeedPost) {
   align-items: center;
   gap: 4px;
   padding: 6px 12px;
+  white-space: nowrap;
   border: none;
   background: transparent;
   color: $text-muted;
@@ -1327,6 +1636,7 @@ async function handlePinPost(post: FeedPost) {
   height: 100px;
   object-fit: cover;
   border-radius: $radius-md;
+  cursor: pointer;
   transition: transform $transition-fast;
 
   &:hover { transform: scale(1.02); }
@@ -1687,9 +1997,133 @@ async function handlePinPost(post: FeedPost) {
 }
 
 @media (max-width: $bp-mobile) {
-  .discover-page { padding: 0 12px 12px; }
-  .discover-header { flex-direction: column; align-items: stretch; gap: 12px; }
-  .discover-search { width: 100%; }
-  .discover-tabs { overflow-x: auto; flex-wrap: nowrap; padding-bottom: 8px; }
+  .discover-page {
+    padding: 0 12px 12px;
+  }
+
+  .page-header {
+    padding: 14px 12px 0;
+  }
+
+  .top-bar {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+
+  .search-wrap {
+    width: 100%;
+    max-width: none;
+    flex: 1;
+  }
+
+  .search-input {
+    width: 100%;
+  }
+
+  .user-search-dropdown {
+    max-height: 260px;
+  }
+
+  .post-btn {
+    flex-shrink: 0;
+    padding: 8px 14px;
+    font-size: 13px;
+  }
+
+  .discover-nav-row {
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 8px;
+    padding-bottom: 10px;
+  }
+
+  .discover-tabs {
+    width: 100%;
+    gap: 4px;
+    padding: 3px;
+  }
+
+  .tab-btn {
+    flex: 1 1 0;
+    font-size: 13px;
+  }
+
+  .tab-btn {
+    padding: 8px 10px;
+  }
+
+  .sort-trigger-btn {
+    width: 38px;
+    height: 38px;
+  }
+
+  .timeline-list {
+    padding: 12px 0 16px;
+  }
+
+  .feed-card {
+    padding: 16px;
+  }
+
+  .feed-header {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .feed-avatar {
+    width: 40px;
+    height: 40px;
+  }
+
+  .feed-name {
+    font-size: 14px;
+  }
+
+  .feed-time,
+  .feed-report-count-badge {
+    font-size: 11px;
+  }
+
+  .feed-report-btn,
+  .feed-delete-btn,
+  .feed-pin-btn {
+    padding: 5px 8px;
+    font-size: 12px;
+    border-radius: 999px;
+  }
+
+  .feed-delete-btn,
+  .feed-pin-btn {
+    gap: 3px;
+  }
+
+  .feed-delete-btn span,
+  .feed-pin-btn span {
+    white-space: nowrap;
+  }
+
+  .feed-actions {
+    gap: 10px;
+    justify-content: space-between;
+  }
+
+  .action-btn {
+    gap: 4px;
+    padding: 6px 8px;
+    font-size: 12px;
+    white-space: nowrap;
+  }
+
+  .feed-content {
+    font-size: 14px;
+  }
+
+  .link-card {
+    gap: 8px;
+    padding: 9px;
+  }
+
+  .link-title {
+    font-size: 12px;
+  }
 }
 </style>

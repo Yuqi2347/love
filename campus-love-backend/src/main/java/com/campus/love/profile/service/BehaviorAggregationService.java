@@ -131,19 +131,31 @@ public class BehaviorAggregationService {
         return count != null && count > 0;
     }
 
+    /**
+     * 根据动态浏览（FEED_VIEW）与点赞（FEED_LIKE）汇总用户对内容类目的偏好。
+     * 点赞权重高于浏览，便于画像更贴近「明确正向反馈」。
+     */
     private Map<String, Object> buildBrowsePreferences(List<UserBehaviorLog> logs) {
-        List<Long> postIds = logs.stream()
-                .filter(log -> "FEED_VIEW".equals(log.getBehaviorType()))
-                .map(UserBehaviorLog::getTargetId)
-                .filter(Objects::nonNull)
-                .distinct()
-                .toList();
-        if (postIds.isEmpty()) return Map.of();
-        List<FeedPost> posts = feedPostMapper.selectList(new LambdaQueryWrapper<FeedPost>().in(FeedPost::getId, postIds));
-        Map<String, Long> byCategory = posts.stream()
-                .map(FeedPost::getPrimaryCategory)
-                .filter(Objects::nonNull)
-                .collect(Collectors.groupingBy(Function.identity(), Collectors.counting()));
+        Map<Long, Integer> postWeights = new HashMap<>();
+        for (UserBehaviorLog log : logs) {
+            if (log.getTargetId() == null) continue;
+            String type = log.getBehaviorType();
+            if ("FEED_VIEW".equals(type)) {
+                postWeights.merge(log.getTargetId(), 1, Integer::sum);
+            } else if ("FEED_LIKE".equals(type)) {
+                postWeights.merge(log.getTargetId(), 2, Integer::sum);
+            }
+        }
+        if (postWeights.isEmpty()) return Map.of();
+        List<FeedPost> posts = feedPostMapper.selectList(
+                new LambdaQueryWrapper<FeedPost>().in(FeedPost::getId, postWeights.keySet()));
+        Map<String, Long> byCategory = new HashMap<>();
+        for (FeedPost post : posts) {
+            String cat = post.getPrimaryCategory();
+            if (cat == null || cat.isBlank()) continue;
+            int w = postWeights.getOrDefault(post.getId(), 1);
+            byCategory.merge(cat, (long) w, Long::sum);
+        }
         long total = byCategory.values().stream().mapToLong(Long::longValue).sum();
         if (total <= 0) return Map.of();
         Map<String, Object> normalized = new LinkedHashMap<>();
