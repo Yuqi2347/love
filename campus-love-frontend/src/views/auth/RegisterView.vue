@@ -51,7 +51,7 @@
               filterable
               remote
               placeholder="搜索或选择学校"
-              :remote-method="searchSchools"
+              :remote-method="onSchoolRemoteQuery"
               :loading="schoolLoading"
               clearable
               style="width: 100%"
@@ -121,6 +121,7 @@ import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { register, sendVerifyCode, searchSchools as searchSchoolsApi, getPublicStats, type SchoolItem } from '@/api/authApi'
+import { SCHOOLS_FALLBACK, filterSchoolsByKeyword } from '@/constants/schoolsFallback'
 import { useUserStore } from '@/store/userStore'
 
 const router = useRouter()
@@ -138,14 +139,29 @@ const activeUserCountDisplay = computed(() => {
 })
 
 onMounted(async () => {
-  try {
-    const res = await getPublicStats()
-    if (res.data?.data?.activeUserCount != null) {
-      activeUserCount.value = res.data.data.activeUserCount
-    }
-  } catch {
-    // 忽略，展示默认值
-  }
+  await Promise.all([
+    (async () => {
+      try {
+        const res = await getPublicStats()
+        if (res.data?.data?.activeUserCount != null) {
+          activeUserCount.value = res.data.data.activeUserCount
+        }
+      } catch {
+        /* 忽略 */
+      }
+    })(),
+    (async () => {
+      try {
+        const res = await searchSchoolsApi()
+        prefetchedSchools.value = res.data.data ?? []
+        schoolOptions.value =
+          prefetchedSchools.value.length > 0 ? prefetchedSchools.value : SCHOOLS_FALLBACK
+      } catch {
+        prefetchedSchools.value = SCHOOLS_FALLBACK
+        schoolOptions.value = SCHOOLS_FALLBACK
+      }
+    })(),
+  ])
 })
 
 const features = [
@@ -200,6 +216,8 @@ const form = reactive({
 
 const schoolOptions = ref<SchoolItem[]>([])
 const schoolLoading = ref(false)
+const prefetchedSchools = ref<SchoolItem[]>([])
+let schoolSearchTimer: ReturnType<typeof setTimeout> | null = null
 
 function checkEmailSuffix(email: string, suffix: string): boolean {
   const domain = email.split('@')[1]?.toLowerCase() || ''
@@ -216,17 +234,34 @@ const isEmailValid = computed(() => {
   return checkEmailSuffix(email, school.emailSuffix)
 })
 
-async function searchSchools(query: string) {
-  if (!query || query.length < 2) {
-    schoolOptions.value = []
+/** 减少 el-select 远程搜索的连发请求，降低连接被中间层关闭的概率 */
+function onSchoolRemoteQuery(query: string) {
+  if (schoolSearchTimer) {
+    clearTimeout(schoolSearchTimer)
+    schoolSearchTimer = null
+  }
+  const q = (query || '').trim()
+  if (q.length < 2) {
+    schoolOptions.value =
+      prefetchedSchools.value.length > 0 ? prefetchedSchools.value : SCHOOLS_FALLBACK
     return
   }
+  schoolSearchTimer = setTimeout(() => {
+    schoolSearchTimer = null
+    void fetchSchoolOptions(q)
+  }, 320)
+}
+
+async function fetchSchoolOptions(query: string) {
+  if (query.length < 2) return
   schoolLoading.value = true
   try {
     const res = await searchSchoolsApi(query)
-    schoolOptions.value = res.data.data || []
+    let list = res.data.data ?? []
+    if (!list.length) list = filterSchoolsByKeyword(query)
+    schoolOptions.value = list
   } catch {
-    schoolOptions.value = []
+    schoolOptions.value = filterSchoolsByKeyword(query)
   } finally {
     schoolLoading.value = false
   }
@@ -343,6 +378,7 @@ async function handleRegister() {
 
 onBeforeUnmount(() => {
   if (cooldownTimer) clearInterval(cooldownTimer)
+  if (schoolSearchTimer) clearTimeout(schoolSearchTimer)
 })
 </script>
 

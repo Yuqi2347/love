@@ -1,30 +1,33 @@
 <template>
   <div class="welcome-page">
-    <!-- Photo background carousel -->
     <div class="bg-slideshow">
-      <!-- Gradient base: always visible until images loaded -->
-      <div class="bg-slide active" :style="{ background: theme.gradient }"></div>
-      <!-- Image slides: fade in only after preload completes -->
+      <!-- 有配图时：图片未就绪前只显示渐变；就绪后由 <img> 全屏覆盖（比 background-image 更不易「半拉子」） -->
       <div
+        class="bg-slide bg-fallback"
+        :class="{ active: !theme.images.length || !photoLayerVisible }"
+        :style="{ background: theme.gradient }"
+      />
+      <img
         v-for="(img, i) in theme.images"
         :key="img"
-        class="bg-slide"
-        :class="{ active: imagesReady && currentSlide === i }"
-        :style="{ backgroundImage: `url(${img})` }"
-      ></div>
+        class="bg-photo"
+        :class="{ active: photoLayerVisible && currentSlide === i }"
+        :src="img"
+        alt=""
+        decoding="async"
+        :fetchpriority="i === 0 ? 'high' : 'low'"
+        @load="onSlideImageLoad(i)"
+        @error="onSlideImageError(i)"
+      />
     </div>
 
-    <!-- Dark overlay with gradient -->
     <div class="bg-overlay"></div>
 
-    <!-- Subtle particles -->
     <div class="particles">
       <span v-for="i in 15" :key="i" class="particle" :style="particleStyle(i)"></span>
     </div>
 
-    <!-- Main content -->
     <div class="welcome-content">
-      <!-- Phase 1: School name entrance -->
       <div class="school-intro" :class="{ show: phase >= 1 }">
         <span class="mascot">{{ theme.mascotEmoji }}</span>
         <h1 class="school-name">{{ theme.name }}</h1>
@@ -35,14 +38,12 @@
         </div>
       </div>
 
-      <!-- Phase 2: Rotating captions synced with photos -->
       <div class="caption-area" :class="{ show: phase >= 2 }">
         <transition name="caption-fade" mode="out-in">
           <p class="caption" :key="currentSlide">{{ currentCaption }}</p>
         </transition>
       </div>
 
-      <!-- Phase 3: Mission + landmarks -->
       <div class="mission-area" :class="{ show: phase >= 3 }">
         <p class="mission">{{ theme.mission }}</p>
         <div v-if="theme.landmarks.length" class="landmarks">
@@ -56,9 +57,7 @@
       </div>
     </div>
 
-    <!-- Bottom area -->
     <div class="bottom-area">
-      <!-- Slide indicators -->
       <div v-if="theme.images.length > 1" class="slide-dots">
         <span
           v-for="(_, i) in theme.images"
@@ -68,13 +67,11 @@
         ></span>
       </div>
 
-      <!-- Progress bar -->
       <div class="progress-bar">
         <div class="progress-fill" :style="{ background: theme.secondaryColor }"></div>
       </div>
     </div>
 
-    <!-- Skip button -->
     <button class="skip-btn" @click="goHome">
       跳过 <span class="skip-countdown">{{ countdown }}s</span>
     </button>
@@ -99,20 +96,35 @@ const theme = computed(() => getSchoolTheme(schoolName.value))
 const phase = ref(0)
 const currentSlide = ref(0)
 const countdown = ref(8)
-const imagesReady = ref(false)
+/** 至少第一张图 load/error 后再盖住渐变，避免半解码背景图 */
+const photoLayerVisible = ref(false)
+const navigating = ref(false)
 let timers: ReturnType<typeof setTimeout>[] = []
 let countdownInterval: ReturnType<typeof setInterval> | null = null
 let slideInterval: ReturnType<typeof setInterval> | null = null
+let revealFallbackTimer: ReturnType<typeof setTimeout> | null = null
 
-async function preloadImages(urls: string[]): Promise<void> {
-  if (!urls.length) return
-  await Promise.all(
-    urls.map(src => new Promise<void>(resolve => {
-      const img = new Image()
-      img.onload = img.onerror = () => resolve()
-      img.src = src
-    }))
-  )
+const slideDone = ref<boolean[]>([])
+
+function resetSlideTracking() {
+  const n = theme.value.images.length
+  slideDone.value = n ? Array.from({ length: n }, () => false) : []
+}
+
+function markSlideReady(i: number) {
+  if (i < 0 || !slideDone.value.length || i >= slideDone.value.length) return
+  const next = [...slideDone.value]
+  next[i] = true
+  slideDone.value = next
+  if (next[0]) photoLayerVisible.value = true
+}
+
+function onSlideImageLoad(i: number) {
+  markSlideReady(i)
+}
+
+function onSlideImageError(i: number) {
+  markSlideReady(i)
 }
 
 const currentCaption = computed(() => {
@@ -122,43 +134,41 @@ const currentCaption = computed(() => {
 })
 
 function startAnimation() {
-  // Countdown
   countdownInterval = setInterval(() => {
     countdown.value--
-    if (countdown.value <= 0 && countdownInterval) clearInterval(countdownInterval)
+    if (countdown.value <= 0) {
+      if (countdownInterval) clearInterval(countdownInterval)
+      goHome()
+    }
   }, 1000)
 
-  // Phase 1: school name (0.3s)
   timers.push(setTimeout(() => { phase.value = 1 }, 300))
-
-  // Phase 2: captions start (1.5s)
   timers.push(setTimeout(() => { phase.value = 2 }, 1500))
 
-  // Start photo carousel (every 3s) — only once images are ready
   if (theme.value.images.length > 1) {
     slideInterval = setInterval(() => {
       currentSlide.value = (currentSlide.value + 1) % theme.value.images.length
     }, 3000)
   }
 
-  // Phase 3: mission + landmarks (5s)
   timers.push(setTimeout(() => { phase.value = 3 }, 5000))
-
-  // Navigate at 8s — Vue's page transition (App.vue) handles the fade,
-  // no manual opacity manipulation needed, which eliminated the old 600ms white flash.
-  timers.push(setTimeout(() => goHome(), 8000))
 }
 
 function goHome() {
+  if (navigating.value) return
+  navigating.value = true
   cleanup()
   sessionStorage.removeItem('register_school')
-  router.replace('/discover')
+  router.replace('/discover').catch(() => {
+    window.location.href = '/discover'
+  })
 }
 
 function cleanup() {
   timers.forEach(clearTimeout)
   if (countdownInterval) clearInterval(countdownInterval)
   if (slideInterval) clearInterval(slideInterval)
+  if (revealFallbackTimer) clearTimeout(revealFallbackTimer)
 }
 
 function particleStyle(i: number) {
@@ -177,17 +187,21 @@ function particleStyle(i: number) {
   }
 }
 
-onMounted(async () => {
-  // Preload images before starting animation; fall back after 2 s if network is slow
-  if (theme.value.images.length) {
-    await Promise.race([
-      preloadImages(theme.value.images),
-      new Promise<void>(resolve => setTimeout(resolve, 2000)),
-    ])
-  }
-  imagesReady.value = true
+onMounted(() => {
+  resetSlideTracking()
   startAnimation()
+
+  if (!theme.value.images.length) {
+    photoLayerVisible.value = true
+    return
+  }
+
+  // 首张图极慢时也不要永远卡在纯渐变：最多等 4s 仍显示照片层（可能空白一切片，随后 onload 再显）
+  revealFallbackTimer = setTimeout(() => {
+    if (!photoLayerVisible.value) photoLayerVisible.value = true
+  }, 4000)
 })
+
 onUnmounted(() => { cleanup() })
 </script>
 
@@ -204,20 +218,24 @@ onUnmounted(() => { cleanup() })
   z-index: 9999;
 }
 
-// Photo slideshow
 .bg-slideshow {
   position: absolute;
   inset: 0;
 }
 
-.bg-slide {
+.bg-slide,
+.bg-photo {
   position: absolute;
   inset: 0;
+}
+
+.bg-fallback {
+  z-index: 0;
   background-size: cover;
   background-position: center;
   opacity: 0;
   transform: scale(1.05);
-  transition: opacity 1.2s ease, transform 6s ease;
+  transition: opacity 0.8s ease, transform 6s ease;
 
   &.active {
     opacity: 1;
@@ -225,7 +243,23 @@ onUnmounted(() => { cleanup() })
   }
 }
 
-// Dark overlay — gradient from bottom for text readability
+.bg-photo {
+  z-index: 1;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  opacity: 0;
+  transform: scale(1.05);
+  transition: opacity 1.2s ease, transform 6s ease;
+  pointer-events: none;
+
+  &.active {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .bg-overlay {
   position: absolute;
   inset: 0;
@@ -236,14 +270,13 @@ onUnmounted(() => { cleanup() })
       rgba(0, 0, 0, 0.3) 60%,
       rgba(0, 0, 0, 0.6) 100%
     );
-  z-index: 1;
+  z-index: 2;
 }
 
-// Particles
 .particles {
   position: absolute;
   inset: 0;
-  z-index: 2;
+  z-index: 3;
   pointer-events: none;
 }
 
@@ -259,10 +292,9 @@ onUnmounted(() => { cleanup() })
   50% { transform: translateY(-30px) translateX(10px); opacity: 0.5; }
 }
 
-// Content
 .welcome-content {
   position: relative;
-  z-index: 3;
+  z-index: 4;
   text-align: center;
   padding: 0 32px;
   max-width: 700px;
@@ -272,7 +304,6 @@ onUnmounted(() => { cleanup() })
   gap: 0;
 }
 
-// Phase 1: School intro
 .school-intro {
   opacity: 0;
   transform: translateY(30px);
@@ -320,7 +351,6 @@ onUnmounted(() => { cleanup() })
   font-weight: 400;
 }
 
-// Phase 2: Captions
 .caption-area {
   margin-top: 40px;
   min-height: 48px;
@@ -338,13 +368,11 @@ onUnmounted(() => { cleanup() })
   text-shadow: 0 2px 20px rgba(0, 0, 0, 0.4);
 }
 
-// Caption transition
 .caption-fade-enter-active { transition: all 0.6s ease; }
 .caption-fade-leave-active { transition: all 0.4s ease; }
 .caption-fade-enter-from { opacity: 0; transform: translateY(15px); }
 .caption-fade-leave-to { opacity: 0; transform: translateY(-10px); }
 
-// Phase 3: Mission + landmarks
 .mission-area {
   margin-top: 36px;
   opacity: 0;
@@ -389,7 +417,6 @@ onUnmounted(() => { cleanup() })
   to { opacity: 1; transform: scale(1); }
 }
 
-// Bottom area
 .bottom-area {
   position: absolute;
   bottom: 0;
@@ -436,7 +463,6 @@ onUnmounted(() => { cleanup() })
   to { width: 100%; }
 }
 
-// Skip button
 .skip-btn {
   position: absolute;
   top: 24px;
@@ -466,7 +492,6 @@ onUnmounted(() => { cleanup() })
   opacity: 0.6;
 }
 
-// Mobile
 @media (max-width: $bp-mobile) {
   .school-name { font-size: 36px; letter-spacing: 3px; }
   .mascot { font-size: 44px; }

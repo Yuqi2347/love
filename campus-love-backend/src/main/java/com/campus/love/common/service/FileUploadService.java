@@ -1,5 +1,7 @@
 package com.campus.love.common.service;
 
+import com.campus.love.common.util.ImageCompressionUtil;
+import com.campus.love.common.util.VideoTranscodeUtil;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
@@ -7,10 +9,12 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.util.UUID;
 
 /**
- * 统一文件上传服务，供 Feed、Moment 等模块复用。
+ * 统一文件上传：图片在服务端压成 JPEG（长边≤1920）；视频在可用 ffmpeg 时转 H.264 MP4。
  */
 @Slf4j
 @Service
@@ -19,26 +23,15 @@ public class FileUploadService {
     @Value("${app.upload.path:${user.home}/campus-love/uploads/}")
     private String uploadPath;
 
-    /** 图片 MIME 前缀 */
     public static final String MIME_IMAGE_PREFIX = "image/";
-    /** 视频 MIME 前缀 */
     public static final String MIME_VIDEO_PREFIX = "video/";
 
-    /** 图片扩展名白名单 */
     private static final String[] IMAGE_EXTENSIONS = {".png", ".jpg", ".jpeg", ".gif", ".webp", ".bmp", ".svg"};
-    /** 视频扩展名白名单 */
     private static final String[] VIDEO_EXTENSIONS = {".mp4", ".mov", ".webm", ".avi", ".mkv"};
 
-    /**
-     * 上传媒体文件（图片或视频）
-     *
-     * @param file        上传的文件
-     * @param mediaType    IMAGE 或 VIDEO
-     * @param maxSizeBytes 最大字节数
-     * @param filenamePrefix 文件名前缀，如 feed_img_、feed_video_、moment_photo_
-     * @param defaultExt   默认扩展名（当无法推断时使用），如 .jpg、.mp4
-     * @return 访问路径，如 /uploads/xxx.jpg
-     */
+    private static final int FEED_IMAGE_MAX_EDGE = 1920;
+    private static final float FEED_JPEG_QUALITY = 0.82f;
+
     public String uploadMedia(MultipartFile file, MediaType mediaType, long maxSizeBytes,
                              String filenamePrefix, String defaultExt) throws IOException {
         if (file == null || file.isEmpty()) {
@@ -51,41 +44,69 @@ public class FileUploadService {
             throw new IllegalArgumentException(hint);
         }
         if (file.getSize() > maxSizeBytes) {
-            String limit = mediaType == MediaType.IMAGE
-                    ? (maxSizeBytes / 1024 / 1024) + "MB"
-                    : (maxSizeBytes / 1024 / 1024) + "MB";
+            String limit = (maxSizeBytes / 1024 / 1024) + "MB";
             String hint = mediaType == MediaType.IMAGE
                     ? "图片大小不能超过" + limit
                     : "视频大小不能超过" + limit;
             throw new IllegalArgumentException(hint);
         }
 
+        File dir = getUploadDir();
+        String uuid = System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+
+        if (mediaType == MediaType.IMAGE) {
+            byte[] raw = file.getBytes();
+            String ext = getFileExtension(file.getOriginalFilename(), contentType, mediaType);
+            if (ext.isEmpty()) {
+                ext = defaultExt;
+            }
+            if (!ImageCompressionUtil.shouldSkipCompression(contentType)
+                    && ImageCompressionUtil.isLikelyRasterImage(contentType)) {
+                byte[] jpg = ImageCompressionUtil.toCompressedJpeg(raw, FEED_IMAGE_MAX_EDGE, FEED_JPEG_QUALITY);
+                if (jpg != null) {
+                    raw = jpg;
+                    ext = ".jpg";
+                }
+            }
+            String filename = filenamePrefix + uuid + ext;
+            Files.write(new File(dir, filename).toPath(), raw);
+            return "/uploads/" + filename;
+        }
+
         String ext = getFileExtension(file.getOriginalFilename(), contentType, mediaType);
         if (ext.isEmpty()) {
             ext = defaultExt;
         }
-        String filename = filenamePrefix + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8) + ext;
-
-        File dir = getUploadDir();
-        File dest = new File(dir, filename);
-        file.transferTo(dest);
-
-        return "/uploads/" + filename;
+        String base = filenamePrefix + uuid;
+        File srcTmp = new File(dir, base + "_src" + ext);
+        file.transferTo(srcTmp);
+        File outMp4 = new File(dir, base + ".mp4");
+        boolean trans = VideoTranscodeUtil.transcodeToMp4(srcTmp, outMp4);
+        if (!trans) {
+            String fallbackName = base + ext;
+            File fallback = new File(dir, fallbackName);
+            Files.move(srcTmp.toPath(), fallback.toPath(), StandardCopyOption.REPLACE_EXISTING);
+            VideoTranscodeUtil.deleteQuietly(outMp4);
+            log.info("Video stored without transcode: {}", fallbackName);
+            return "/uploads/" + fallbackName;
+        }
+        VideoTranscodeUtil.deleteQuietly(srcTmp);
+        log.info("Video transcoded to MP4: {}", outMp4.getName());
+        return "/uploads/" + outMp4.getName();
     }
 
-    /** 上传图片，限制 10MB */
+    /** 动态/聊天等图片：上传上限 25MB，落盘为压缩后 JPEG（或原 GIF/SVG 等） */
     public String uploadImage(MultipartFile file, String filenamePrefix) throws IOException {
-        return uploadMedia(file, MediaType.IMAGE, 10L * 1024 * 1024, filenamePrefix, ".jpg");
+        return uploadMedia(file, MediaType.IMAGE, 25L * 1024 * 1024, filenamePrefix, ".jpg");
     }
 
-    /** 上传图片，可指定最大大小（字节），用于头像等需更严格限制的场景 */
     public String uploadImage(MultipartFile file, String filenamePrefix, long maxSizeBytes) throws IOException {
         return uploadMedia(file, MediaType.IMAGE, maxSizeBytes, filenamePrefix, ".jpg");
     }
 
-    /** 上传视频，限制 100MB */
+    /** 视频：上传上限 120MB，优先转码为压缩 MP4 */
     public String uploadVideo(MultipartFile file, String filenamePrefix) throws IOException {
-        return uploadMedia(file, MediaType.VIDEO, 100L * 1024 * 1024, filenamePrefix, ".mp4");
+        return uploadMedia(file, MediaType.VIDEO, 120L * 1024 * 1024, filenamePrefix, ".mp4");
     }
 
     public File getUploadDir() {

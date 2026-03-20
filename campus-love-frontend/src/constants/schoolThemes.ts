@@ -26,9 +26,9 @@ export const SCHOOL_THEMES: Record<string, SchoolTheme> = {
     mascotEmoji: '🌺',
     bgPattern: 'waves',
     images: [
-      '/images/welcome/szu-1.png',
-      '/images/welcome/szu-2.png',
-      '/images/welcome/szu-3.png',
+      '/images/welcome/szu-1.webp',
+      '/images/welcome/szu-2.webp',
+      '/images/welcome/szu-3.webp',
     ],
     captions: [
       '感受社交的魅力',

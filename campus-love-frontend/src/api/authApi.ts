@@ -1,3 +1,4 @@
+import axios from 'axios'
 import request from './request'
 import type { ApiResult } from './request'
 
@@ -41,8 +42,30 @@ export function getPublicStats() {
   return request.get<ApiResult<PublicStatsResponse>>('/auth/stats')
 }
 
-export function searchSchools(keyword?: string) {
-  return request.get<ApiResult<SchoolItem[]>>('/auth/schools', { params: { keyword } })
+function isRetryableSchoolSearchError(err: unknown): boolean {
+  if (!axios.isAxiosError(err)) return false
+  if (!err.response) return true
+  const s = err.response.status
+  return s >= 500 && s < 600
+}
+
+/**
+ * 学校列表来自服务端内存 JSON，不走数据库。
+ * 生产环境偶发 net::ERR_CONNECTION_CLOSED 时自动重试，减轻 Nginx/连接复用抖动影响。
+ */
+export async function searchSchools(keyword?: string) {
+  const params = { keyword }
+  let lastErr: unknown
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      return await request.get<ApiResult<SchoolItem[]>>('/auth/schools', { params })
+    } catch (e) {
+      lastErr = e
+      if (!isRetryableSchoolSearchError(e) || attempt === 2) throw lastErr
+      await new Promise((r) => setTimeout(r, 280 * (attempt + 1)))
+    }
+  }
+  throw lastErr
 }
 
 export function sendVerifyCode(email: string) {

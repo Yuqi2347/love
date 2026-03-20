@@ -42,11 +42,14 @@ export function buildDefaultAvatar(name?: string | null): string {
 // 默认头像 SVG（无昵称场景兜底）
 export const DEFAULT_AVATAR = buildDefaultAvatar()
 
-// 媒体 URL 处理（补全 /api 前缀）
+// 媒体 URL 处理：相对上传路径补全为 /api 前缀（与 Spring context-path=/api 一致）；blob/data 原样返回
 export function getMediaUrl(url: string | null): string {
   if (!url) return ''
-  if (url.startsWith('http') || url.startsWith('/api')) return url
-  return '/api' + (url.startsWith('/') ? url : '/' + url)
+  const u = url.trim()
+  if (!u) return ''
+  if (u.startsWith('blob:') || u.startsWith('data:')) return u
+  if (u.startsWith('http://') || u.startsWith('https://') || u.startsWith('/api')) return u
+  return '/api' + (u.startsWith('/') ? u : '/' + u)
 }
 
 // 邀约类型颜色映射

@@ -1,7 +1,13 @@
 <template>
   <div class="profile-page">
     <div class="profile-header">
-      <div class="profile-cover" :style="coverStyle">
+      <div class="profile-cover">
+        <img
+          v-if="resolvedDisplayCoverUrl"
+          :src="resolvedDisplayCoverUrl"
+          class="profile-cover-bg"
+          alt=""
+        />
         <!-- Back button for navigation -->
         <button v-if="showBackButton" class="profile-back-btn" @click="goBack">
           <el-icon><ArrowLeft /></el-icon>
@@ -40,9 +46,9 @@
       <div class="profile-main">
         <div class="avatar-wrapper">
           <el-image
-            :src="getMediaUrl(profile?.avatarUrl) || defaultAvatar"
+            :src="getMediaUrl(profile?.avatarUrl ?? null) || defaultAvatar"
             class="profile-avatar avatar"
-            :preview-src-list="[getMediaUrl(profile?.avatarUrl) || defaultAvatar]"
+            :preview-src-list="[getMediaUrl(profile?.avatarUrl ?? null) || defaultAvatar]"
             preview-teleported
             fit="cover"
           />
@@ -276,7 +282,11 @@
         :class="[activeRelationTab === 'mutual' ? 'user-list-item' : 'user-list-item-with-action']"
         @click="goToUserProfile(user.userId)"
       >
-        <img :src="user.avatarUrl || defaultAvatar" class="user-list-avatar" />
+        <img
+          :src="getMediaUrl(user.avatarUrl ?? null) || defaultAvatar"
+          class="user-list-avatar"
+          alt=""
+        />
         <div class="user-list-info">
           <div class="user-list-name">{{ getRelationDisplayName(user) }}</div>
           <div v-if="showRelationOriginalName(user)" class="user-list-original-name">昵称: {{ user.nickname }}</div>
@@ -328,8 +338,14 @@
 
   <BaseModalShell v-model="showCoverSettings" title="背景设置" width="420px" max-body-height="360px">
     <div class="cover-settings-form">
-      <div class="cover-preview" :style="coverPreviewStyle">
-        <span v-if="!coverPreviewUrl" class="cover-placeholder">选择图片作为个人主页背景</span>
+      <div class="cover-preview">
+        <img
+          v-if="resolvedCoverPreviewSrc"
+          :src="resolvedCoverPreviewSrc"
+          class="cover-preview-img"
+          alt=""
+        />
+        <span v-else class="cover-placeholder">选择图片作为个人主页背景</span>
       </div>
       <div class="cover-actions">
         <input ref="coverInput" type="file" accept="image/*" style="display: none" @change="handleCoverChange" />
@@ -479,6 +495,7 @@ import { getYuanFenCooldown } from '@/api/aiApi'
 import YuanFenAnalysisSheet from './components/YuanFenAnalysisSheet.vue'
 import IceBreakPrivacySheet from './components/IceBreakPrivacySheet.vue'
 import { DEFAULT_AVATAR, getMediaUrl } from '@/utils/shared'
+import { compressAvatarFile, compressCoverFile } from '@/utils/mediaCompress'
 import BaseModalShell from '@/components/BaseModalShell.vue'
 
 const defaultAvatar = DEFAULT_AVATAR
@@ -585,22 +602,28 @@ const coverInput = ref<HTMLInputElement | null>(null)
 const coverPreviewUrl = ref<string>('')
 const coverFileToUpload = ref<File | null>(null)
 const coverUploading = ref(false)
-const displayCoverUrl = computed(() => profile.value?.coverImageUrl || userStore.user?.coverImageUrl || '')
-const coverStyle = computed(() => {
-  const url = displayCoverUrl.value
-  if (url) return { backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-  return {}
+// 仅本人主页用 store 兜底；看他人时绝不能回落到自己的 cover，否则会错显
+const displayCoverUrl = computed(() => {
+  const fromProfile = profile.value?.coverImageUrl
+  if (fromProfile) return fromProfile
+  if (isMe.value && userStore.user?.coverImageUrl) return userStore.user.coverImageUrl
+  return ''
 })
-const coverPreviewStyle = computed(() => {
-  const url = coverPreviewUrl.value || displayCoverUrl.value
-  if (url) return { backgroundImage: `url(${url})`, backgroundSize: 'cover', backgroundPosition: 'center' }
-  return {}
-})
+/** 后端存 /uploads/...，需经 getMediaUrl 转为 /api/uploads/... 才能命中 Spring 静态映射 */
+const resolvedDisplayCoverUrl = computed(() => getMediaUrl(displayCoverUrl.value || null))
+const resolvedCoverPreviewSrc = computed(() =>
+  getMediaUrl(coverPreviewUrl.value || displayCoverUrl.value || null),
+)
 
 function handleCoverChange(e: Event) {
   const target = e.target as HTMLInputElement
   const file = target.files?.[0]
   if (!file || !file.type.startsWith('image/')) return
+  if (file.size > 25 * 1024 * 1024) {
+    ElMessage.warning('背景图不能超过 25MB')
+    if (target) target.value = ''
+    return
+  }
   coverFileToUpload.value = file
   coverPreviewUrl.value = URL.createObjectURL(file)
   if (target) target.value = ''
@@ -611,7 +634,8 @@ async function saveCover() {
   if (!file) return
   coverUploading.value = true
   try {
-    const res = await uploadCover(file)
+    const toSend = await compressCoverFile(file)
+    const res = await uploadCover(toSend)
     const url = res.data.data
     if (url && profile.value) profile.value.coverImageUrl = url
     if (url && userStore.user) userStore.user.coverImageUrl = url
@@ -1120,14 +1144,15 @@ async function handleAvatarChange(event: Event) {
     ElMessage.error('请选择图片文件')
     return
   }
-  if (file.size > 5 * 1024 * 1024) {
-    ElMessage.error('图片大小不能超过5MB')
+  if (file.size > 8 * 1024 * 1024) {
+    ElMessage.warning('头像图片不能超过 8MB，请压缩后重试')
     return
   }
 
   try {
     ElMessage.info('上传中...')
-    const res = await uploadAvatar(file)
+    const toSend = await compressAvatarFile(file)
+    const res = await uploadAvatar(toSend)
     if (profile.value) {
       profile.value.avatarUrl = res.data.data
     }
@@ -1151,6 +1176,18 @@ async function handleAvatarChange(event: Event) {
   height: 160px;
   background: $primary-gradient;
   position: relative;
+  overflow: hidden;
+}
+
+.profile-cover-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  object-position: center;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .profile-back-btn {
@@ -2072,6 +2109,8 @@ async function handleAvatarChange(event: Event) {
   padding: 10px 0;
 
   .cover-preview {
+    position: relative;
+    overflow: hidden;
     height: 120px;
     border-radius: $radius-lg;
     background: $bg-secondary;
@@ -2080,7 +2119,18 @@ async function handleAvatarChange(event: Event) {
     align-items: center;
     justify-content: center;
 
+    .cover-preview-img {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      object-position: center;
+    }
+
     .cover-placeholder {
+      position: relative;
+      z-index: 1;
       font-size: 14px;
       color: $text-muted;
     }

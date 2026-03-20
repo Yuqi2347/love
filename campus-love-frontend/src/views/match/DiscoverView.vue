@@ -60,13 +60,9 @@
             推荐
           </button>
           <button
-            :class="['tab-btn', { active: activeTab === 'post' }]"
-            @click="switchTab('post')"
-          >
-            动态
-          </button>
-          <button
             :class="['tab-btn', { active: activeTab === 'following' }]"
+            type="button"
+            title="互相关注好友的朋友圈动态（不含单向关注；与发现页发帖类型不同）"
             @click="switchTab('following')"
           >
             关注
@@ -109,7 +105,7 @@
       <el-icon class="spinning"><Loading /></el-icon> 刷新中...
     </div>
 
-    <!-- 动态刷新工具栏（推荐/关注/动态 tab，仅 PC 显示） -->
+    <!-- 刷新工具栏（推荐/关注 tab，仅 PC 显示） -->
     <div v-if="activeTab !== 'liked'" class="load-toolbar">
       <button class="btn-refresh" :disabled="feedLoading" @click="refreshPosts">
         <el-icon :class="{ spinning: feedLoading }"><Refresh /></el-icon>
@@ -131,9 +127,8 @@
             <el-image
               :src="getMediaUrl(item.post.avatarUrl) || defaultAvatar"
               class="feed-avatar"
-              :preview-src-list="[getMediaUrl(item.post.avatarUrl) || defaultAvatar]"
-              preview-teleported
               fit="cover"
+              @click="$router.push(`/profile/${item.post.userId}`)"
             />
             <div class="feed-user" @click="$router.push(`/profile/${item.post.userId}`)">
               <div class="feed-name">{{ item.post.nickname }}</div>
@@ -248,13 +243,21 @@
     </div>
 
     <!-- 发布动态弹窗 -->
-    <el-dialog v-model="showPostDialog" title="发布动态" width="560px" :close-on-click-modal="false" destroy-on-close>
-      <el-form @submit.prevent="handlePost">
+    <el-dialog
+      v-model="showPostDialog"
+      title="发布动态"
+      :width="postDialogWidth"
+      class="post-publish-dialog"
+      align-center
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-form @submit.prevent="handlePost" label-position="top">
         <el-form-item>
           <el-input
             v-model="postContent"
             type="textarea"
-            :rows="4"
+            :rows="postTextareaRows"
             placeholder="分享你的想法..."
             maxlength="500"
             show-word-limit
@@ -406,6 +409,10 @@ import type { Invite } from '@/api/inviteApi'
 import ShareDialog from '@/components/ShareDialog.vue'
 import AppAvatar from '@/components/AppAvatar.vue'
 import { DEFAULT_AVATAR, getMediaUrl, formatRelativeTime } from '@/utils/shared'
+import { compressImageFile } from '@/utils/mediaCompress'
+import { usePostPublishDialogLayout } from '@/composables/usePostPublishDialogLayout'
+
+const { postDialogWidth, postTextareaRows } = usePostPublishDialogLayout()
 
 const route = useRoute()
 const router = useRouter()
@@ -506,7 +513,7 @@ const reportedPostIds = ref<Set<number>>(new Set())
 const showReportDialog = ref(false)
 const reportTargetType = ref('POST')
 const reportTargetId = ref(0)
-const activeTab = ref<'recommend' | 'post' | 'following' | 'liked'>('recommend')
+const activeTab = ref<'recommend' | 'following' | 'liked'>('recommend')
 const feedSort = ref<'recommend' | 'hot' | 'time'>('recommend')
 
 // 分页状态
@@ -580,7 +587,7 @@ function getInviteTypeFromRoute(): string | undefined {
   return typeof t === 'string' && t ? t : undefined
 }
 
-function switchTab(tab: 'recommend' | 'post' | 'following' | 'liked') {
+function switchTab(tab: 'recommend' | 'following' | 'liked') {
   activeTab.value = tab
   refreshPosts()
 }
@@ -655,7 +662,7 @@ onMounted(async () => {
   // IntersectionObserver：上划触底时加载更多
   scrollObserver = new IntersectionObserver(
     (entries) => {
-      if (entries[0].isIntersecting && !feedLoading.value && feedHasMore.value) {
+      if (entries[0]?.isIntersecting && !feedLoading.value && feedHasMore.value) {
         loadMorePosts()
       }
     },
@@ -730,7 +737,8 @@ async function loadPosts(keyword?: string, isRefresh = false) {
   if (feedLoading.value && !isRefresh) return
   try {
     feedLoading.value = true
-    const res = await getDiscoveryPosts(feedPage.value, 10, feedSort.value, keyword)
+    const sort = feedSort.value
+    const res = await getDiscoveryPosts(feedPage.value, 10, sort, keyword)
     const data = res.data.data || []
     if (isRefresh) {
       posts.value = data
@@ -873,8 +881,8 @@ async function handleMediaSelect(e: Event) {
   for (const file of Array.from(files)) {
     const isVideo = file.type.startsWith('video/')
     if (isVideo) {
-      if (file.size > 100 * 1024 * 1024) {
-        ElMessage.warning('视频大小不能超过100MB')
+      if (file.size > 120 * 1024 * 1024) {
+        ElMessage.warning('视频不能超过 120MB，服务器将尝试压缩存储')
         continue
       }
       try {
@@ -887,13 +895,14 @@ async function handleMediaSelect(e: Event) {
         ElMessage.error('视频上传失败')
       }
     } else {
-      if (file.size > 10 * 1024 * 1024) {
-        ElMessage.warning('图片大小不能超过10MB')
+      if (file.size > 25 * 1024 * 1024) {
+        ElMessage.warning('单张图片不能超过 25MB')
         continue
       }
       try {
         ElMessage.info('上传中...')
-        const res = await uploadImage(file)
+        const toSend = await compressImageFile(file)
+        const res = await uploadImage(toSend)
         const path = res.data.data
         if (path) uploadedImages.value.push(path)
         ElMessage.success('图片上传成功')
@@ -1709,8 +1718,8 @@ async function handlePinPost(post: FeedPost) {
 
 .media-preview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
+  gap: 10px;
   margin-bottom: 12px;
 }
 

@@ -18,9 +18,8 @@
           <el-image
             :src="imageUrl(post.avatarUrl || '') || defaultAvatar"
             class="post-avatar"
-            :preview-src-list="[imageUrl(post.avatarUrl || '') || defaultAvatar]"
-            preview-teleported
             fit="cover"
+            @click="$router.push(`/profile/${post.userId}`)"
           />
           <div class="post-user">
             <div class="post-name" @click="$router.push(`/profile/${post.userId}`)">{{ post.nickname }}</div>
@@ -115,8 +114,9 @@
       <!-- 评论区：虎扑/小红书 两层扁平 -->
       <div class="comments-section">
         <div class="comments-header">
-          <h3 class="comments-title">评论 ({{ post.commentCount || 0 }})</h3>
-          <div class="comment-sort-tabs">
+          <div class="comments-header-top">
+            <h3 class="comments-title">评论 ({{ post.commentCount || 0 }})</h3>
+            <div class="comment-sort-tabs">
             <button
               :class="['sort-tab', { active: commentSort === 'time' }]"
               @click="setCommentSort('time')"
@@ -129,6 +129,7 @@
             >
               热度
             </button>
+            </div>
           </div>
         </div>
         <div v-if="commentThreads.length" class="comment-list">
@@ -140,11 +141,10 @@
             <!-- 根评论 -->
             <div class="root-comment" :class="{ 'comment-deleted': thread.comment.deleted }">
               <el-image
-                :src="thread.comment.avatarUrl || defaultAvatar"
+                :src="imageUrl(thread.comment.avatarUrl || '') || defaultAvatar"
                 class="comment-avatar"
-                :preview-src-list="[thread.comment.avatarUrl || defaultAvatar]"
-                preview-teleported
                 fit="cover"
+                @click="$router.push(`/profile/${thread.comment.userId}`)"
               />
               <div class="comment-body">
                 <div class="comment-meta">
@@ -190,11 +190,10 @@
                 :class="{ 'comment-deleted': reply.deleted }"
               >
                 <el-image
-                  :src="reply.avatarUrl || defaultAvatar"
+                  :src="imageUrl(reply.avatarUrl || '') || defaultAvatar"
                   class="reply-avatar"
-                  :preview-src-list="[reply.avatarUrl || defaultAvatar]"
-                  preview-teleported
                   fit="cover"
+                  @click="$router.push(`/profile/${reply.userId}`)"
                 />
                 <div class="reply-body">
                   <div class="reply-content">
@@ -348,6 +347,7 @@ import EmojiPicker from '@/components/EmojiPicker.vue'
 import FeedTagConfirmBar from './components/FeedTagConfirmBar.vue'
 import { uploadImage } from '@/api/feedApi'
 import { DEFAULT_AVATAR, formatRelativeTime } from '@/utils/shared'
+import { compressImageFile } from '@/utils/mediaCompress'
 
 const defaultAvatar = DEFAULT_AVATAR
 
@@ -398,11 +398,21 @@ const replyingTo = ref<{
 const showAllThreads = ref(false)
 const expandedReplies = ref<Set<number>>(new Set())
 const MAX_THREADS = 10
-const MAX_REPLIES = 2
+/** 每条主楼下默认展示的子回复条数，超出则折叠 */
+const MAX_REPLIES = 3
 
 interface CommentThread {
   comment: FeedComment
   replies: FeedComment[]
+}
+
+/** 已删除占位：仅保留「仍有直接子评论」的条目，与后端 dropErasedCommentsWithoutReplies 一致 */
+function filterCommentsForDisplay(comments: FeedComment[]): FeedComment[] {
+  if (!comments?.length) return comments || []
+  return comments.filter((c) => {
+    if (!c.deleted) return true
+    return comments.some((x) => x.parentId === c.id)
+  })
 }
 
 /**
@@ -411,15 +421,16 @@ interface CommentThread {
  * 通过 parentId 链向上追溯到根评论。
  */
 function buildCommentThreads(comments: FeedComment[]): CommentThread[] {
-  if (!comments || !comments.length) return []
+  const list = filterCommentsForDisplay(comments)
+  if (!list.length) return []
 
   const commentMap = new Map<number, FeedComment>()
-  for (const c of comments) commentMap.set(c.id, c)
+  for (const c of list) commentMap.set(c.id, c)
 
   const roots: FeedComment[] = []
   const replyMap = new Map<number, FeedComment[]>()
 
-  for (const c of comments) {
+  for (const c of list) {
     if (!c.parentId) {
       roots.push(c)
     } else {
@@ -435,10 +446,13 @@ function buildCommentThreads(comments: FeedComment[]): CommentThread[] {
     }
   }
 
-  return roots.map(c => ({
-    comment: c,
-    replies: replyMap.get(c.id) || [],
-  }))
+  return roots.map((c) => {
+    const replies = replyMap.get(c.id) || []
+    replies.sort(
+      (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
+    )
+    return { comment: c, replies }
+  })
 }
 
 const commentThreads = computed(() => {
@@ -492,6 +506,28 @@ function canDeleteComment(c: FeedComment) {
   return userStore.user?.id === c.userId || userStore.user?.isAdmin
 }
 
+/** 是否存在以该评论为直接父级的回复（与后端「有子才软删占位」一致） */
+function commentHasDirectReplies(p: FeedPost, commentId: number): boolean {
+  return (p.comments || []).some((c) => c.parentId === commentId)
+}
+
+/**
+ * 仅当有子评论时本地占位；叶子删除请用 removeCommentFromLocalPost，避免占一行「已删除」。
+ */
+function patchCommentAsDeletedLocally(p: FeedPost, commentId: number) {
+  const c = (p.comments || []).find((x) => x.id === commentId)
+  if (!c || c.deleted) return
+  c.deleted = true
+  c.content = '该评论已删除'
+  c.images = null
+}
+
+/** 仅适用于确定已物理删除、且刷新失败时的兜底（叶子评论） */
+function removeCommentFromLocalPost(p: FeedPost, commentId: number) {
+  p.comments = (p.comments || []).filter((c) => c.id !== commentId)
+  if (p.commentCount && p.commentCount > 0) p.commentCount -= 1
+}
+
 async function handleDeleteComment(commentId: number) {
   try {
     await ElMessageBox.confirm('确定删除这条评论吗？', '提示', {
@@ -499,12 +535,24 @@ async function handleDeleteComment(commentId: number) {
       cancelButtonText: '取消',
       type: 'warning',
     })
+    const hadReplies = post.value ? commentHasDirectReplies(post.value, commentId) : false
     await deleteComment(commentId)
-    ElMessage.success('已删除')
     if (post.value) {
-      const p = await getPostDetail(postId.value, commentSort.value)
-      post.value = p.data.data
+      if (hadReplies) {
+        patchCommentAsDeletedLocally(post.value, commentId)
+      } else {
+        removeCommentFromLocalPost(post.value, commentId)
+      }
+      try {
+        const res = await getPostDetail(postId.value, commentSort.value)
+        post.value = res.data.data
+      } catch {
+        if (hadReplies && post.value.commentCount && post.value.commentCount > 0) {
+          post.value.commentCount -= 1
+        }
+      }
     }
+    ElMessage.success('已删除')
   } catch (e) {
     if (e !== 'cancel') ElMessage.error('删除失败')
   }
@@ -643,8 +691,13 @@ async function handleCommentImageSelect(e: Event) {
     const file = files.item(i)
     if (!file) continue
     if (!file.type.startsWith('image/')) continue
+    if (file.size > 25 * 1024 * 1024) {
+      ElMessage.warning('单张图片不能超过 25MB')
+      continue
+    }
     try {
-      const res = await uploadImage(file)
+      const toSend = await compressImageFile(file)
+      const res = await uploadImage(toSend)
       const url = res.data.data
       if (url) commentImages.value.push(url)
     } catch {
@@ -965,13 +1018,20 @@ onUnmounted(() => {
 
 .comments-header {
   display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--el-border-color-lighter);
+}
+
+.comments-header-top {
+  display: flex;
   align-items: center;
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 12px;
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--el-border-color-lighter);
 }
 
 .comments-title {

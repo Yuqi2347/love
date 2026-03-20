@@ -65,7 +65,11 @@ public class GlobalExceptionHandler {
                 path = sra.getRequest().getRequestURI();
             }
         } catch (Exception ignored) {}
-        String msg = path.contains("avatar") ? "头像图片不能超过 5MB" : "文件过大，请上传不超过 " + maxMB + "MB 的图片";
+        String msg = path.contains("avatar")
+                ? "头像图片不能超过 8MB，请压缩后重试"
+                : path.contains("video")
+                ? "视频不能超过 120MB，请压缩后重试"
+                : "文件过大，请压缩后重试（图片约 25MB 内、视频约 120MB 内）";
         return Result.error(413, msg);
     }
 

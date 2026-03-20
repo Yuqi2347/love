@@ -103,11 +103,13 @@ public class FeedService {
         post.setCommentCount(0);
         feedPostMapper.insert(post);
         activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.POST, post.getId());
-        feedTaggingSkill.tagPost(post.getId());
         log.info("用户{}发布动态: postId={}, postType={}", userId, post.getId(), postType);
-        // 重新查询以获取 tagPost 写入的 aiTags
-        FeedPost tagged = feedPostMapper.selectById(post.getId());
-        return toResponse(tagged != null ? tagged : post, userId);
+        final Long pid = post.getId();
+        Thread.ofVirtual().start(() -> {
+            try { feedTaggingSkill.tagPost(pid); }
+            catch (Exception e) { log.warn("Async tagging failed for post {}: {}", pid, e.getMessage()); }
+        });
+        return toResponse(post, userId);
     }
 
     /**
@@ -590,7 +592,10 @@ public class FeedService {
     public void deleteComment(Long commentId) {
         Long currentUserId = CurrentUser.getId();
         FeedComment comment = feedCommentMapper.selectById(commentId);
-        if (comment == null) throw new BusinessException(ResultCode.NOT_FOUND);
+        // 已删除或重复请求：幂等返回，避免接口返回 code=404 被前端当成失败（实际已删成功）
+        if (comment == null) {
+            return;
+        }
 
         User currentUser = userMapper.selectById(currentUserId);
         if (currentUser == null) throw new BusinessException(ResultCode.USER_NOT_FOUND);
@@ -605,14 +610,16 @@ public class FeedService {
                 new LambdaQueryWrapper<FeedComment>().eq(FeedComment::getParentId, commentId));
         int toDec = 1;
         if (subCount > 0) {
-            comment.setDeleted(FeedComment.DELETED);
+            comment.setEraseFlag(FeedComment.DELETED);
+            comment.setContent("该评论已删除");
+            comment.setImages(null);
             feedCommentMapper.updateById(comment);
         } else {
             feedCommentMapper.deleteById(commentId);
             Long parentId = comment.getParentId();
             if (parentId != null) {
                 FeedComment parent = feedCommentMapper.selectById(parentId);
-                if (parent != null && parent.getDeleted() != null && parent.getDeleted() == FeedComment.DELETED) {
+                if (parent != null && parent.getEraseFlag() != null && parent.getEraseFlag() == FeedComment.DELETED) {
                     long otherReplies = feedCommentMapper.selectCount(
                             new LambdaQueryWrapper<FeedComment>()
                                     .eq(FeedComment::getParentId, parentId)
@@ -721,7 +728,7 @@ public class FeedService {
                     .in(FeedComment::getPostId, myPostIds)
                     .ne(FeedComment::getUserId, userId)
                     .gt(FeedComment::getCreatedAt, since)
-                    .and(w -> w.isNull(FeedComment::getDeleted).or().ne(FeedComment::getDeleted, FeedComment.DELETED));
+                    .and(w -> w.isNull(FeedComment::getEraseFlag).or().ne(FeedComment::getEraseFlag, FeedComment.DELETED));
             likeCount = feedLikeMapper.selectCount(likeW);
             commentCount = feedCommentMapper.selectCount(commentW);
         }
@@ -780,7 +787,7 @@ public class FeedService {
                 new LambdaQueryWrapper<FeedComment>()
                         .and(w -> w.in(FeedComment::getPostId, myPostIds).or().eq(FeedComment::getRepliedUserId, userId))
                         .ne(FeedComment::getUserId, userId)
-                        .and(w -> w.isNull(FeedComment::getDeleted).or().ne(FeedComment::getDeleted, FeedComment.DELETED))
+                        .and(w -> w.isNull(FeedComment::getEraseFlag).or().ne(FeedComment::getEraseFlag, FeedComment.DELETED))
                         .orderByDesc(FeedComment::getCreatedAt)
                         .last("LIMIT " + FeedConstants.SOCIAL_NOTIFICATION_LIMIT));
         for (FeedComment comment : comments) {
@@ -824,6 +831,129 @@ public class FeedService {
         return result;
     }
 
+    /**
+     * 详情页评论：先按排序取一批根评论，再拉取候选子回复并归属到这些根下，避免「按时间 LIMIT 200 条扁平行」导致老主楼丢失、头像/楼层错乱。
+     */
+    private List<FeedComment> loadCommentsForPostDetail(Long postId, String commentSort) {
+        String sort = (commentSort == null || commentSort.isBlank()) ? "time" : commentSort;
+        LambdaQueryWrapper<FeedComment> rootWrapper = new LambdaQueryWrapper<FeedComment>()
+                .eq(FeedComment::getPostId, postId)
+                .isNull(FeedComment::getParentId);
+        if ("hot".equalsIgnoreCase(sort)) {
+            rootWrapper.last("ORDER BY COALESCE(like_count,0) DESC, id DESC LIMIT " + FeedConstants.DETAIL_COMMENT_ROOT_LIMIT);
+        } else {
+            rootWrapper.last("ORDER BY COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC LIMIT " + FeedConstants.DETAIL_COMMENT_ROOT_LIMIT);
+        }
+        List<FeedComment> roots = feedCommentMapper.selectList(rootWrapper);
+        if (roots.isEmpty()) {
+            return List.of();
+        }
+        Set<Long> allowedRootIds = roots.stream().map(FeedComment::getId).collect(Collectors.toSet());
+
+        LambdaQueryWrapper<FeedComment> repWrapper = new LambdaQueryWrapper<FeedComment>()
+                .eq(FeedComment::getPostId, postId)
+                .isNotNull(FeedComment::getParentId)
+                .last("ORDER BY COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC LIMIT " + FeedConstants.DETAIL_COMMENT_REPLY_FETCH_LIMIT);
+        List<FeedComment> candidateReplies = feedCommentMapper.selectList(repWrapper);
+
+        Map<Long, FeedComment> byId = new HashMap<>();
+        for (FeedComment r : roots) {
+            byId.put(r.getId(), r);
+        }
+        for (FeedComment c : candidateReplies) {
+            byId.put(c.getId(), c);
+        }
+        expandMissingCommentParents(byId);
+
+        List<FeedComment> filtered = new ArrayList<>();
+        for (FeedComment c : candidateReplies) {
+            Long rootId = ultimateCommentRootId(c, byId);
+            if (rootId != null && allowedRootIds.contains(rootId)) {
+                filtered.add(c);
+            }
+        }
+        filtered.sort(Comparator.comparing(FeedComment::getCreatedAt, Comparator.nullsLast(Comparator.naturalOrder())));
+        List<FeedComment> merged = new ArrayList<>(roots.size() + filtered.size());
+        merged.addAll(roots);
+        merged.addAll(filtered);
+        return merged;
+    }
+
+    /**
+     * 业务软删的评论：仅当数据库里仍存在直接子评论时才返回（用于占位「该评论已删除」）。
+     * 无子评论的软删行不入列表，避免占楼层、占位置（与 deleteComment 物理删叶子一致，并兼容历史脏数据）。
+     */
+    private List<FeedComment> dropErasedCommentsWithoutReplies(List<FeedComment> comments) {
+        if (comments == null || comments.isEmpty()) {
+            return comments;
+        }
+        List<Long> erasedIds = comments.stream()
+                .filter(c -> c.getEraseFlag() != null && c.getEraseFlag() == FeedComment.DELETED)
+                .map(FeedComment::getId)
+                .distinct()
+                .collect(Collectors.toList());
+        if (erasedIds.isEmpty()) {
+            return comments;
+        }
+        List<FeedComment> rowsWithErasedParent = feedCommentMapper.selectList(
+                new LambdaQueryWrapper<FeedComment>().in(FeedComment::getParentId, erasedIds));
+        Set<Long> erasedIdsHavingChild = rowsWithErasedParent.stream()
+                .map(FeedComment::getParentId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        return comments.stream()
+                .filter(c -> {
+                    if (c.getEraseFlag() == null || c.getEraseFlag() != FeedComment.DELETED) {
+                        return true;
+                    }
+                    return erasedIdsHavingChild.contains(c.getId());
+                })
+                .collect(Collectors.toList());
+    }
+
+    /** 补齐链式回复的中间节点，便于向上追溯到根评论 */
+    private void expandMissingCommentParents(Map<Long, FeedComment> byId) {
+        for (int pass = 0; pass < 8; pass++) {
+            Set<Long> missing = new HashSet<>();
+            for (FeedComment c : new ArrayList<>(byId.values())) {
+                Long pid = c.getParentId();
+                if (pid == null) {
+                    continue;
+                }
+                if (!byId.containsKey(pid)) {
+                    missing.add(pid);
+                }
+            }
+            if (missing.isEmpty()) {
+                return;
+            }
+            List<FeedComment> more = feedCommentMapper.selectList(
+                    new LambdaQueryWrapper<FeedComment>().in(FeedComment::getId, missing));
+            if (more.isEmpty()) {
+                return;
+            }
+            for (FeedComment m : more) {
+                byId.putIfAbsent(m.getId(), m);
+            }
+        }
+    }
+
+    private Long ultimateCommentRootId(FeedComment start, Map<Long, FeedComment> byId) {
+        FeedComment cur = start;
+        int depth = 0;
+        while (cur != null && cur.getParentId() != null && depth++ < 48) {
+            FeedComment p = byId.get(cur.getParentId());
+            if (p == null) {
+                return null;
+            }
+            cur = p;
+        }
+        if (cur == null || cur.getParentId() != null) {
+            return null;
+        }
+        return cur.getId();
+    }
+
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId) {
         return toResponse(post, currentUserId, null, FeedConstants.LIST_COMMENT_LIMIT, null);
     }
@@ -846,16 +976,22 @@ public class FeedService {
                         .eq(FeedLike::getPostId, post.getId())
                         .eq(FeedLike::getUserId, currentUserId)) > 0;
 
-        LambdaQueryWrapper<FeedComment> commentWrapper = new LambdaQueryWrapper<FeedComment>()
-                .eq(FeedComment::getPostId, post.getId());
-        if ("hot".equalsIgnoreCase(commentSort)) {
-            // 热度排序：点赞数降序，同分时按 id 降序（最新楼层优先）
-            commentWrapper.last("ORDER BY COALESCE(like_count,0) DESC, id DESC LIMIT " + commentLimit);
+        List<FeedComment> comments;
+        if (commentLimit == FeedConstants.DETAIL_COMMENT_LIMIT) {
+            comments = loadCommentsForPostDetail(post.getId(), commentSort);
         } else {
-            // 时间排序：最新的在最上面，created_at 为 NULL 时用 id 降序兜底（id 越大越新）
-            commentWrapper.last("ORDER BY COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC LIMIT " + commentLimit);
+            LambdaQueryWrapper<FeedComment> commentWrapper = new LambdaQueryWrapper<FeedComment>()
+                    .eq(FeedComment::getPostId, post.getId());
+            if ("hot".equalsIgnoreCase(commentSort)) {
+                // 热度排序：点赞数降序，同分时按 id 降序（最新楼层优先）
+                commentWrapper.last("ORDER BY COALESCE(like_count,0) DESC, id DESC LIMIT " + commentLimit);
+            } else {
+                // 时间排序：最新的在最上面，created_at 为 NULL 时用 id 降序兜底（id 越大越新）
+                commentWrapper.last("ORDER BY COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC LIMIT " + commentLimit);
+            }
+            comments = feedCommentMapper.selectList(commentWrapper);
         }
-        List<FeedComment> comments = feedCommentMapper.selectList(commentWrapper);
+        comments = dropErasedCommentsWithoutReplies(comments);
 
         Map<Long, User> userCache = new HashMap<>();
         List<FeedPostResponse.CommentItem> commentItems = comments.stream().map(c -> {
@@ -866,7 +1002,7 @@ public class FeedService {
                 User repliedUser = userCache.computeIfAbsent(c.getRepliedUserId(), userMapper::selectById);
                 repliedToName = repliedUser != null ? repliedUser.getNickname() : null;
             }
-            boolean isDeleted = c.getDeleted() != null && c.getDeleted() == FeedComment.DELETED;
+            boolean isDeleted = c.getEraseFlag() != null && c.getEraseFlag() == FeedComment.DELETED;
             boolean commentLiked = feedCommentLikeMapper.selectCount(
                     new LambdaQueryWrapper<FeedCommentLike>()
                             .eq(FeedCommentLike::getCommentId, c.getId())

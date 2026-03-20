@@ -11,7 +11,7 @@ export interface ApiResult<T = unknown> {
 
 const service: AxiosInstance = axios.create({
   baseURL: '/api',
-  timeout: 60000, // AI 接口耗时较长，放宽到 60s
+  timeout: 60000,
 })
 
 function clearAuthAndRedirectToLogin() {
@@ -51,15 +51,15 @@ service.interceptors.response.use(
       return Promise.reject(error)
     }
     if (isNetworkError) {
-      const method = (error.config?.method || 'GET').toUpperCase()
-      const url = error.config?.url || '(unknown)'
-      // 网络抖动不应直接清空登录态，保留 token 便于用户自动恢复
-      console.warn(`[api] network error: ${method} ${url}`, error)
-      ElMessage.error('网络连接异常，请稍后重试')
       return Promise.reject(error)
     }
     if (error.response?.status === 401 || error.response?.status === 403) {
       clearAuthAndRedirectToLogin()
+      return Promise.reject(error)
+    }
+    if (error.response?.status === 413) {
+      const backendMsg = error.response?.data?.message
+      ElMessage.warning(backendMsg || '文件过大，请压缩后重试')
       return Promise.reject(error)
     }
     const msg = error.response?.data?.message || error.message || '请求失败'

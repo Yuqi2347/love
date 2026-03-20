@@ -164,8 +164,16 @@
     </nav>
 
     <!-- Post Dialog -->
-    <el-dialog v-model="showPostDialog" title="发布动态" width="560px" :close-on-click-modal="false" destroy-on-close>
-      <el-input v-model="postContent" type="textarea" :rows="4" placeholder="分享你的校园生活..." maxlength="500" show-word-limit />
+    <el-dialog
+      v-model="showPostDialog"
+      title="发布动态"
+      :width="postDialogWidth"
+      class="post-publish-dialog"
+      align-center
+      :close-on-click-modal="false"
+      destroy-on-close
+    >
+      <el-input v-model="postContent" type="textarea" :rows="postTextareaRows" placeholder="分享你的校园生活..." maxlength="500" show-word-limit />
 
       <!-- 多媒体上传区域 -->
       <div class="post-media-section">
@@ -246,8 +254,10 @@ import { ElMessage } from 'element-plus'
 import { getHotInviteTypeCounts, type InviteTypeCount } from '@/api/inviteApi'
 import { InviteType, INVITE_TYPE_LABELS } from '@/constants/inviteConst'
 import { getMediaUrl, getTypeColor } from '@/utils/shared'
+import { usePostPublishDialogLayout } from '@/composables/usePostPublishDialogLayout'
 import { getSchoolTheme } from '@/constants/schoolThemes'
 import AppAvatar from '@/components/AppAvatar.vue'
+import { compressImageFile } from '@/utils/mediaCompress'
 
 const route = useRoute()
 const router = useRouter()
@@ -314,6 +324,7 @@ const topNotFollowedMatches = computed(() => {
 const topFollowedMatches = computed(() => {
   return followedMatches.value.slice(0, 5)
 })
+const { postDialogWidth, postTextareaRows } = usePostPublishDialogLayout()
 const showPostDialog = ref(false)
 const postContent = ref('')
 
@@ -476,13 +487,9 @@ onMounted(() => {
   if (userStore.user) badgeStore.fetchBadges()
   badgePollTimer = setInterval(() => {
     if (userStore.user) badgeStore.fetchBadges()
-  }, 15000)
+  }, 60000)
   loadRecommendations()
 })
-
-watch(() => route.path, () => {
-  if (userStore.user) badgeStore.fetchBadges()
-}, { immediate: false })
 
 watch(() => userStore.user, (u) => {
   if (u) badgeStore.fetchBadges()
@@ -552,8 +559,8 @@ async function handleMediaSelect(e: Event) {
   for (const file of Array.from(files)) {
     const isVideo = file.type.startsWith('video/')
     if (isVideo) {
-      if (file.size > 100 * 1024 * 1024) {
-        ElMessage.warning('视频大小不能超过100MB')
+      if (file.size > 120 * 1024 * 1024) {
+        ElMessage.warning('视频不能超过 120MB，服务器将尝试压缩存储')
         continue
       }
       try {
@@ -566,13 +573,14 @@ async function handleMediaSelect(e: Event) {
         ElMessage.error('视频上传失败')
       }
     } else {
-      if (file.size > 10 * 1024 * 1024) {
-        ElMessage.warning('图片大小不能超过10MB')
+      if (file.size > 25 * 1024 * 1024) {
+        ElMessage.warning('单张图片不能超过 25MB')
         continue
       }
       try {
         ElMessage.info('上传中...')
-        const res = await uploadImage(file)
+        const toSend = await compressImageFile(file)
+        const res = await uploadImage(toSend)
         const path = res.data.data
         if (path) uploadedImages.value.push(path)
         ElMessage.success('图片上传成功')
@@ -747,8 +755,8 @@ onMounted(loadInviteBoard)
 
 .media-preview-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-  gap: 8px;
+  grid-template-columns: repeat(auto-fill, minmax(112px, 1fr));
+  gap: 10px;
   margin-bottom: 12px;
 }
 

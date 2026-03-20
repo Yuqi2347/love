@@ -589,7 +589,7 @@ onMounted(() => {
   // IntersectionObserver：上划触底加载更多
   inviteObserver = new IntersectionObserver(
     (entries) => {
-      if (entries[0].isIntersecting && inviteSource.value === 'public') {
+      if (entries[0]?.isIntersecting && inviteSource.value === 'public') {
         loadMorePublicInvites()
       }
     },

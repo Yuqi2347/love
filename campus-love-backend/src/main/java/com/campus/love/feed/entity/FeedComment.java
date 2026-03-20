@@ -1,6 +1,10 @@
 package com.campus.love.feed.entity;
 
-import com.baomidou.mybatisplus.annotation.*;
+import com.baomidou.mybatisplus.annotation.FieldFill;
+import com.baomidou.mybatisplus.annotation.IdType;
+import com.baomidou.mybatisplus.annotation.TableField;
+import com.baomidou.mybatisplus.annotation.TableId;
+import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
 
 import java.time.LocalDateTime;
@@ -22,8 +26,13 @@ public class FeedComment {
     /** 被回复的用户ID（用于显示"回复 @用户名"） */
     private Long repliedUserId;
 
-    /** 软删除：0 正常，1 已删除（业务手动设置，不用 @TableLogic） */
-    private Integer deleted;
+    /**
+     * 业务软删：0 正常，1 已删除（对应列名仍为 deleted）。
+     * Java 属性不能叫 deleted，否则会命中全局 mybatis-plus.logic-delete-field=deleted，
+     * 被当成 MP 逻辑删除字段，UPDATE 为 1 后普通 SELECT 永远带 deleted=0，评论从接口里「消失」。
+     */
+    @TableField("deleted")
+    private Integer eraseFlag;
 
     /** V39：点赞数 */
     private Integer likeCount;

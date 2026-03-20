@@ -4,6 +4,7 @@ import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.common.service.FileUploadService;
+import com.campus.love.common.util.ImageCompressionUtil;
 import com.campus.love.common.utils.BaziUtil;
 import com.campus.love.common.utils.InterestTagConverter;
 import com.campus.love.common.utils.ZodiacUtil;
@@ -257,9 +258,9 @@ public class UserService {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("头像文件不能为空");
         }
-        long maxBytes = 5L * 1024 * 1024;
+        long maxBytes = 8L * 1024 * 1024;
         if (file.getSize() > maxBytes) {
-            throw new IllegalArgumentException("头像图片不能超过 5MB");
+            throw new IllegalArgumentException("头像图片不能超过 8MB，请压缩后重试");
         }
         String contentType = file.getContentType();
         if (contentType == null || !contentType.startsWith("image/")) {
@@ -267,20 +268,29 @@ public class UserService {
         }
 
         byte[] data = file.getBytes();
+        String storeType = contentType;
+        if (ImageCompressionUtil.isLikelyRasterImage(contentType)
+                && !ImageCompressionUtil.shouldSkipCompression(contentType)) {
+            byte[] jpg = ImageCompressionUtil.toCompressedJpeg(data, 512, 0.86f);
+            if (jpg != null) {
+                data = jpg;
+                storeType = "image/jpeg";
+            }
+        }
 
         // 存入数据库
         UserAvatar existing = userAvatarMapper.selectById(userId);
         if (existing != null) {
             existing.setAvatarData(data);
-            existing.setContentType(contentType);
-            existing.setFileSize((int) file.getSize());
+            existing.setContentType(storeType);
+            existing.setFileSize(data.length);
             userAvatarMapper.updateById(existing);
         } else {
             UserAvatar avatar = new UserAvatar();
             avatar.setUserId(userId);
             avatar.setAvatarData(data);
-            avatar.setContentType(contentType);
-            avatar.setFileSize((int) file.getSize());
+            avatar.setContentType(storeType);
+            avatar.setFileSize(data.length);
             userAvatarMapper.insert(avatar);
         }
 
@@ -302,7 +312,7 @@ public class UserService {
 
     public String uploadCover(MultipartFile file) throws IOException {
         Long userId = CurrentUser.getId();
-        String coverUrl = fileUploadService.uploadImage(file, "cover_" + userId + "_", 5L * 1024 * 1024);
+        String coverUrl = fileUploadService.uploadImage(file, "cover_" + userId + "_", 25L * 1024 * 1024);
 
         User user = userMapper.selectById(userId);
         user.setCoverImageUrl(coverUrl);

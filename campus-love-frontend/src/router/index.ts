@@ -184,4 +184,14 @@ router.isReady().then(() => {
   setTimeout(cleanupStaleOverlayContainers, 400)
 })
 
+router.onError((error) => {
+  if (
+    error.message?.includes('Failed to fetch dynamically imported module') ||
+    error.message?.includes('Importing a module script failed') ||
+    error.message?.includes('error loading dynamically imported module')
+  ) {
+    window.location.reload()
+  }
+})
+
 export default router

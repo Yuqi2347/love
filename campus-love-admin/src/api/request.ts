@@ -10,7 +10,7 @@ export interface ApiResult<T = unknown> {
 }
 
 const service: AxiosInstance = axios.create({
-  baseURL: 'http://127.0.0.1:8082/api',
+  baseURL: '/api',
   timeout: 15000,
 })
 
@@ -32,7 +32,7 @@ service.interceptors.response.use(
       ElMessage.error(res.message || '请求失败')
       if (res.code === 401 || res.code === 403) {
         localStorage.removeItem('admin_token')
-        window.location.href = '/login'
+        window.location.href = '/admin/login'
       }
       return Promise.reject(new Error(res.message))
     }
@@ -44,7 +44,7 @@ service.interceptors.response.use(
     if (status === 401 || status === 403) {
       localStorage.removeItem('admin_token')
       ElMessage.error(status === 401 ? '登录已过期，请重新使用管理员账号登录' : '无权限访问，请使用管理员账号登录')
-      window.location.href = '/login'
+      window.location.href = '/admin/login'
       return Promise.reject(error)
     }
     ElMessage.error(msg)

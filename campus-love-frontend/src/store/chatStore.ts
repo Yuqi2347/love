@@ -16,8 +16,10 @@ export const useChatStore = defineStore('chat', () => {
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null
   let isReconnecting = false
-  const HEARTBEAT_INTERVAL = 25000  // 25 秒发一次 ping，防止 Nginx/代理断开空闲连接
-  const RECONNECT_DELAY    = 3000   // 断线后 3 秒重连
+  let reconnectAttempts = 0
+  const HEARTBEAT_INTERVAL = 25000
+  const RECONNECT_BASE_DELAY = 5000
+  const RECONNECT_MAX_DELAY  = 60000
 
   function startHeartbeat() {
     stopHeartbeat()
@@ -36,14 +38,16 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function scheduleReconnect() {
-    if (isReconnecting) return  // 防止重复创建多个重连 timer
+    if (isReconnecting) return
     isReconnecting = true
     if (reconnectTimer !== null) clearTimeout(reconnectTimer)
+    const delay = Math.min(RECONNECT_BASE_DELAY * Math.pow(1.5, reconnectAttempts), RECONNECT_MAX_DELAY)
+    reconnectAttempts++
     reconnectTimer = setTimeout(() => {
       isReconnecting = false
       reconnectTimer = null
       connectWebSocket()
-    }, RECONNECT_DELAY)
+    }, delay)
   }
 
   async function fetchConversations() {
@@ -69,6 +73,7 @@ export const useChatStore = defineStore('chat', () => {
     socket.onopen = () => {
       connected.value = true
       isReconnecting = false
+      reconnectAttempts = 0
       startHeartbeat()
     }
 

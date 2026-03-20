@@ -352,7 +352,7 @@ async function doSave(interestTags: Record<string, { code: string; sharing: numb
   display: flex;
   align-items: center;
   justify-content: center;
-  background: $bg-secondary;
+  background: #ffffff;
   padding: 40px 20px;
 }
 
