@@ -52,12 +52,18 @@ public class ChatWebSocketHandler extends TextWebSocketHandler {
         if (senderId == null) return;
 
         JsonNode node = objectMapper.readTree(message.getPayload());
+
+        // 前端心跳 ping，静默忽略（保持连接活跃，无需业务处理）
+        String frameType = node.has("type") ? node.get("type").asText() : null;
+        if ("ping".equals(frameType)) return;
+
         Long receiverId = node.has("receiverId") && !node.get("receiverId").isNull()
                 ? node.get("receiverId").asLong()
                 : null;
         Long groupId = node.has("groupId") && !node.get("groupId").isNull()
                 ? node.get("groupId").asLong()
                 : null;
+        if (!node.has("content") || node.get("content").isNull()) return;
         String content = node.get("content").asText();
         Integer msgType = node.has("msgType") ? node.get("msgType").asInt() : 1;
 

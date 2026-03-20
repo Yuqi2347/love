@@ -60,6 +60,18 @@
       </el-select>
     </div>
 
+    <!-- 公共邀约列表工具栏 -->
+    <div v-if="activeTab === 'list' && inviteSource === 'public'" class="list-toolbar">
+      <div class="sort-pills">
+        <button :class="['pill', { active: inviteSort === 'recommend' }]" @click="setInviteSort('recommend')">推荐</button>
+        <button :class="['pill', { active: inviteSort === 'time' }]" @click="setInviteSort('time')">最新</button>
+      </div>
+      <button class="btn-refresh-sm" :disabled="inviteStore.loading" @click="handleInviteRefresh">
+        <el-icon :class="{ spinning: inviteStore.loading }"><Refresh /></el-icon>
+        {{ inviteStore.loading ? '刷新中...' : '刷新' }}
+      </button>
+    </div>
+
     <div v-if="activeTab === 'list'" class="invite-list">
       <div v-if="inviteStore.loading && !currentList.length" class="loading-hint">
         加载中...
@@ -142,6 +154,15 @@
         </div>
       </div>
       <AppEmptyState v-else icon="📅" text="暂无邀约，快发起一个或去发现里加入吧" />
+      <!-- 加载更多 sentinel（在 v-if 链之外，始终渲染） -->
+      <div ref="inviteSentinelRef" class="sentinel">
+        <div v-if="inviteStore.loading && currentList.length" class="loading-more">
+          <el-icon class="spinning"><Loading /></el-icon> 加载中...
+        </div>
+        <div v-else-if="!inviteStore.inviteHasMore && currentList.length && inviteSource === 'public'" class="no-more">
+          已加载全部
+        </div>
+      </div>
     </div>
 
     <div v-else-if="activeTab === 'wait'" class="wait-list">
@@ -278,7 +299,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useInviteStore } from '@/store/inviteStore'
 import { useBadgeStore } from '@/store/badgeStore'
@@ -294,7 +315,7 @@ import {
   type HistoryRange,
 } from '@/api/inviteApi'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, User, Clock, Location, UserFilled } from '@element-plus/icons-vue'
+import { Plus, User, Clock, Location, UserFilled, Refresh, Loading } from '@element-plus/icons-vue'
 import {
   InviteType,
   InviteStatus,
@@ -318,6 +339,7 @@ const badgeStore = useBadgeStore()
 
 const activeTab = ref<string>('list')
 const inviteSource = ref<'public' | 'created' | 'joined'>('public')
+const inviteSort = ref<'recommend' | 'time'>('recommend')
 const filterType = ref<string>()
 const filterStatus = ref<string>()
 const filterTimeRange = ref<string>('week')
@@ -326,6 +348,22 @@ const createdHistory = ref<Invite[]>([])
 const joinedHistory = ref<Invite[]>([])
 const historyRange = ref<HistoryRange>('week')
 const historyType = ref<'created' | 'joined'>('created')
+
+// 加载更多 sentinel
+const inviteSentinelRef = ref<HTMLElement>()
+let inviteObserver: IntersectionObserver | null = null
+
+// 手机端下拉刷新
+let iTouchStartY = 0
+
+function setInviteSort(sort: 'recommend' | 'time') {
+  inviteSort.value = sort
+  loadInvitesBySource()
+}
+
+function handleInviteRefresh() {
+  loadInvitesBySource()
+}
 
 const tabs = [
   { label: '邀约', value: 'list' },
@@ -486,15 +524,22 @@ function handleSourceChange() {
   loadInvitesBySource()
 }
 
-// 根据来源加载邀约
+// 根据来源加载邀约（刷新：清空重拉）
 async function loadInvitesBySource() {
   if (inviteSource.value === 'public') {
-    await inviteStore.fetchInvites(filterType.value, filterStatus.value, filterTimeRange.value, undefined, true)
+    await inviteStore.fetchInvites(filterType.value, filterStatus.value, filterTimeRange.value, undefined, true, inviteSort.value)
   } else if (inviteSource.value === 'created') {
     await inviteStore.fetchCreatedInvites(filterTimeRange.value)
   } else {
     await inviteStore.fetchJoinedInvites(filterTimeRange.value)
   }
+}
+
+// 加载更多公共邀约
+async function loadMorePublicInvites() {
+  if (inviteSource.value !== 'public') return
+  if (!inviteStore.inviteHasMore || inviteStore.loading) return
+  await inviteStore.loadMoreInvites(undefined, true)
 }
 
 // 取消等待邀约
@@ -540,7 +585,42 @@ onMounted(() => {
   inviteStore.fetchStats()
   loadWaitList()
   loadHistory()
+
+  // IntersectionObserver：上划触底加载更多
+  inviteObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting && inviteSource.value === 'public') {
+        loadMorePublicInvites()
+      }
+    },
+    { rootMargin: '120px' }
+  )
+  if (inviteSentinelRef.value) inviteObserver.observe(inviteSentinelRef.value)
+
+  // 手机端下拉刷新
+  document.addEventListener('touchstart', onInviteTouchStart, { passive: true })
+  document.addEventListener('touchend', onInviteTouchEnd, { passive: true })
 })
+
+onUnmounted(() => {
+  inviteObserver?.disconnect()
+  document.removeEventListener('touchstart', onInviteTouchStart)
+  document.removeEventListener('touchend', onInviteTouchEnd)
+})
+
+function onInviteTouchStart(e: TouchEvent) {
+  iTouchStartY = e.touches[0]?.clientY ?? 0
+}
+
+function onInviteTouchEnd(e: TouchEvent) {
+  if (!iTouchStartY) return
+  const endY = e.changedTouches[0]?.clientY ?? 0
+  const delta = endY - iTouchStartY
+  if (delta > 80 && window.scrollY < 10 && !inviteStore.loading) {
+    loadInvitesBySource()
+  }
+  iTouchStartY = 0
+}
 
 watch(() => [route.query.type, route.query.source], () => {
   initFromRouteQuery()
@@ -550,6 +630,74 @@ watch(() => [route.query.type, route.query.source], () => {
 
 <style lang="scss" scoped>
 .invite-page { padding: 0 20px 20px 20px; }
+
+.list-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  gap: 12px;
+}
+
+.sort-pills {
+  display: flex;
+  gap: 6px;
+}
+
+.pill {
+  padding: 4px 14px;
+  border: 1px solid $border-light;
+  border-radius: $radius-full;
+  font-size: 13px;
+  color: $text-secondary;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover { color: $primary; border-color: $primary; }
+  &.active { background: $primary; color: white; border-color: $primary; }
+}
+
+.btn-refresh-sm {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 12px;
+  border: 1px solid $border-light;
+  border-radius: $radius-full;
+  font-size: 13px;
+  color: $text-secondary;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+
+  &:hover:not(:disabled) { color: $primary; border-color: $primary; }
+  &:disabled { opacity: 0.6; cursor: not-allowed; }
+}
+
+.sentinel {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 4px 0;
+}
+
+.loading-more, .no-more {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: $text-muted;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinning { animation: spin 1s linear infinite; }
 
 .page-header {
   display: flex;

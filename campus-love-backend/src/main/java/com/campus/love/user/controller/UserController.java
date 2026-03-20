@@ -9,15 +9,22 @@ import com.campus.love.user.dto.UserAiProfileResponse;
 import com.campus.love.user.dto.UserProfileRequest;
 import com.campus.love.user.dto.UserProfileResponse;
 import com.campus.love.user.dto.UserSearchItemResponse;
+import com.campus.love.user.entity.UserAvatar;
 import com.campus.love.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.CacheControl;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.concurrent.TimeUnit;
 import org.springframework.web.multipart.MultipartFile;
 
 @Tag(name = "用户", description = "个人信息管理")
@@ -92,15 +99,33 @@ public class UserController {
         return Result.success(userService.updateFeedVisibilityTime(days));
     }
 
-    @Operation(summary = "上传头像")
+    @Operation(summary = "上传头像（存储到数据库）")
     @PostMapping("/avatar")
     public Result<String> uploadAvatar(@RequestParam("file") MultipartFile file) {
         try {
-            return Result.success("头像上传成功", userService.uploadAvatar(file));
+            String url = userService.uploadAvatar(file);
+            return Result.success("头像上传成功", url);
+        } catch (IllegalArgumentException e) {
+            return Result.error(ResultCode.BAD_REQUEST, e.getMessage());
         } catch (Exception e) {
             log.warn("头像上传失败: {}", e.getMessage());
             return Result.error(ResultCode.INTERNAL_ERROR, "头像上传失败，请稍后重试");
         }
+    }
+
+    @Operation(summary = "获取用户头像（从数据库读取二进制）")
+    @GetMapping("/avatar/{userId}")
+    public ResponseEntity<byte[]> getAvatar(@PathVariable Long userId) {
+        UserAvatar avatar = userService.getAvatarData(userId);
+        if (avatar == null || avatar.getAvatarData() == null) {
+            return ResponseEntity.notFound().build();
+        }
+        String ct = avatar.getContentType() != null ? avatar.getContentType() : "image/jpeg";
+        return ResponseEntity.ok()
+                .contentType(MediaType.parseMediaType(ct))
+                .cacheControl(CacheControl.maxAge(7, TimeUnit.DAYS).cachePublic())
+                .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
+                .body(avatar.getAvatarData());
     }
 
     @Operation(summary = "上传个人主页背景图")

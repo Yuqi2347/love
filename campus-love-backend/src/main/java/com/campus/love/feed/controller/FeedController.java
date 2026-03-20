@@ -47,8 +47,9 @@ public class FeedController {
     @GetMapping("/timeline")
     public Result<List<FeedPostResponse>> getTimeline(
             @RequestParam(defaultValue = "0") int page,
-            @RequestParam(defaultValue = "10") int size) {
-        return Result.success(feedService.getTimeline(page, size));
+            @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String sort) {
+        return Result.success(feedService.getTimeline(page, size, sort));
     }
 
     @Operation(summary = "用户动态摘要（总数+最近图片，用于个人主页入口卡片）")
@@ -98,6 +99,20 @@ public class FeedController {
         return Result.success();
     }
 
+    @Operation(summary = "点赞评论")
+    @PostMapping("/like/comment/{commentId}")
+    public Result<Void> likeComment(@PathVariable Long commentId) {
+        feedService.likeComment(commentId);
+        return Result.success();
+    }
+
+    @Operation(summary = "取消点赞评论")
+    @DeleteMapping("/like/comment/{commentId}")
+    public Result<Void> unlikeComment(@PathVariable Long commentId) {
+        feedService.unlikeComment(commentId);
+        return Result.success();
+    }
+
     @Operation(summary = "评论")
     @PostMapping("/comment")
     public Result<Void> comment(@Valid @RequestBody FeedCommentRequest request) {
@@ -116,6 +131,20 @@ public class FeedController {
     @DeleteMapping("/{postId}")
     public Result<Void> deletePost(@PathVariable Long postId) {
         feedService.deletePost(postId);
+        return Result.success();
+    }
+
+    @Operation(summary = "置顶帖子（仅管理员）")
+    @PostMapping("/{postId}/pin")
+    public Result<Void> pinPost(@PathVariable Long postId) {
+        feedService.pinPost(postId);
+        return Result.success();
+    }
+
+    @Operation(summary = "取消置顶（仅管理员）")
+    @DeleteMapping("/{postId}/pin")
+    public Result<Void> unpinPost(@PathVariable Long postId) {
+        feedService.unpinPost(postId);
         return Result.success();
     }
 
@@ -143,19 +172,22 @@ public class FeedController {
         return Result.success(feedService.getLikedPosts(page, size));
     }
 
-    @Operation(summary = "获取帖子详情", description = "单条帖子及完整评论列表（爬楼式）")
+    @Operation(summary = "获取帖子详情", description = "单条帖子及完整评论列表")
     @GetMapping("/{postId}")
-    public Result<FeedPostResponse> getPostDetail(@PathVariable Long postId) {
-        return Result.success(feedService.getPostDetail(postId));
+    public Result<FeedPostResponse> getPostDetail(
+            @PathVariable Long postId,
+            @RequestParam(required = false) String commentSort) {
+        return Result.success(feedService.getPostDetail(postId, commentSort));
     }
 
-    @Operation(summary = "获取发现模块帖子列表", description = "按时间排序，展示管理员和高级用户发布的帖子")
+    @Operation(summary = "获取发现模块帖子列表", description = "展示管理员和高级用户发布的帖子")
     @GetMapping("/discovery")
     public Result<List<FeedPostResponse>> getDiscoveryPosts(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "10") int size,
+            @RequestParam(required = false) String sort,
             @RequestParam(required = false) String keyword) {
-        return Result.success(feedService.getDiscoveryPosts(page, size, keyword));
+        return Result.success(feedService.getDiscoveryPosts(page, size, sort, keyword));
     }
 
     @Operation(summary = "获取我的等级信息")

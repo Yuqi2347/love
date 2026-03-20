@@ -112,7 +112,23 @@
 
       <!-- 评论区：虎扑/小红书 两层扁平 -->
       <div class="comments-section">
-        <h3 class="comments-title">评论 ({{ post.commentCount || 0 }})</h3>
+        <div class="comments-header">
+          <h3 class="comments-title">评论 ({{ post.commentCount || 0 }})</h3>
+          <div class="comment-sort-tabs">
+            <button
+              :class="['sort-tab', { active: commentSort === 'time' }]"
+              @click="setCommentSort('time')"
+            >
+              时间
+            </button>
+            <button
+              :class="['sort-tab', { active: commentSort === 'hot' }]"
+              @click="setCommentSort('hot')"
+            >
+              热度
+            </button>
+          </div>
+        </div>
         <div v-if="commentThreads.length" class="comment-list">
           <div
             v-for="(thread, idx) in displayedThreads"
@@ -148,6 +164,14 @@
                 </div>
                 <div class="comment-footer">
                   <span class="comment-time">{{ formatTime(thread.comment.createdAt) }}</span>
+                  <button
+                    v-if="!thread.comment.deleted"
+                    :class="['reply-btn', 'comment-like-btn', { active: thread.comment.liked }]"
+                    @click="handleCommentLike(thread.comment)"
+                  >
+                    <el-icon :size="14"><StarFilled v-if="thread.comment.liked" /><Star v-else /></el-icon>
+                    {{ thread.comment.likeCount ?? 0 }}
+                  </button>
                   <button v-if="!thread.comment.deleted" class="reply-btn" @click="handleReplyClick(thread.comment, thread.comment)">回复</button>
                   <button v-if="canDeleteComment(thread.comment)" class="reply-btn delete-comment-btn" @click="handleDeleteComment(thread.comment.id)">删除</button>
                 </div>
@@ -189,6 +213,14 @@
                   </div>
                   <div class="reply-footer">
                     <span class="comment-time">{{ formatTime(reply.createdAt) }}</span>
+                    <button
+                      v-if="!reply.deleted"
+                      :class="['reply-btn', 'comment-like-btn', { active: reply.liked }]"
+                      @click="handleCommentLike(reply)"
+                    >
+                      <el-icon :size="14"><StarFilled v-if="reply.liked" /><Star v-else /></el-icon>
+                      {{ reply.likeCount ?? 0 }}
+                    </button>
                     <button v-if="!reply.deleted" class="reply-btn" @click="handleReplyClick(reply, thread.comment)">回复</button>
                     <button v-if="canDeleteComment(reply)" class="reply-btn delete-comment-btn" @click="handleDeleteComment(reply.id)">删除</button>
                   </div>
@@ -292,6 +324,8 @@ import {
   getPostDetail,
   likePost,
   unlikePost,
+  likeComment,
+  unlikeComment,
   addComment,
   deletePost,
   deleteComment,
@@ -302,7 +336,7 @@ import {
 import { checkReported, getMyReport } from '@/api/reportApi'
 import ReportDialog from '@/components/ReportDialog.vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { ArrowLeft, Delete, Flag, Picture, Close } from '@element-plus/icons-vue'
+import { ArrowLeft, Delete, Flag, Picture, Close, Star, StarFilled } from '@element-plus/icons-vue'
 import ShareDialog from '@/components/ShareDialog.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import FeedTagConfirmBar from './components/FeedTagConfirmBar.vue'
@@ -328,6 +362,7 @@ const submitting = ref(false)
 const retagging = ref(false)
 const commentInputRef = ref()
 const commentImageInputRef = ref<HTMLInputElement | null>(null)
+const commentSort = ref<'hot' | 'time'>('time')
 
 // 分享相关状态
 const showShareDialog = ref(false)
@@ -461,7 +496,7 @@ async function handleDeleteComment(commentId: number) {
     await deleteComment(commentId)
     ElMessage.success('已删除')
     if (post.value) {
-      const p = await getPostDetail(postId.value)
+      const p = await getPostDetail(postId.value, commentSort.value)
       post.value = p.data.data
     }
   } catch (e) {
@@ -481,6 +516,30 @@ async function handleLike(p: FeedPost) {
       p.likeCount = (p.likeCount || 0) + 1
     }
   } catch { /* handled */ }
+}
+
+async function handleCommentLike(c: FeedComment) {
+  if (!post.value) return
+  try {
+    if (c.liked) {
+      await unlikeComment(c.id)
+      c.liked = false
+      c.likeCount = Math.max(0, (c.likeCount ?? 1) - 1)
+    } else {
+      await likeComment(c.id)
+      c.liked = true
+      c.likeCount = (c.likeCount ?? 0) + 1
+    }
+  } catch { /* handled */ }
+}
+
+async function setCommentSort(sort: 'hot' | 'time') {
+  commentSort.value = sort
+  if (!post.value) return
+  try {
+    const res = await getPostDetail(postId.value, sort)
+    post.value = res.data.data || null
+  } catch { /* ignore */ }
 }
 
 async function handleReportClick(targetId: number, targetType: string) {
@@ -514,7 +573,7 @@ async function handleRetag() {
   retagging.value = true
   try {
     await retagPost(post.value.id)
-    const res = await getPostDetail(postId.value)
+    const res = await getPostDetail(postId.value, commentSort.value)
     if (res.data.data) {
       post.value = res.data.data
       ElMessage.success('AI 标签已生成')
@@ -614,6 +673,8 @@ async function submitComment() {
       parentId: parentId ?? null,
       repliedToName: replyingTo.value?.nickname || null,
       createdAt: new Date().toISOString(),
+      likeCount: 0,
+      liked: false,
     }
     if (!post.value.comments) post.value.comments = []
     post.value.comments.push(newComment)
@@ -639,7 +700,7 @@ onMounted(async () => {
     return
   }
   try {
-    const res = await getPostDetail(postId.value)
+    const res = await getPostDetail(postId.value, commentSort.value)
     post.value = res.data.data || null
     if (post.value) {
       const reported = await checkReported('POST', post.value.id)
@@ -655,7 +716,7 @@ onMounted(async () => {
             return
           }
           try {
-            const r = await getPostDetail(postId.value)
+            const r = await getPostDetail(postId.value, commentSort.value)
             const p = r.data.data
             if (p?.aiTags && post.value) {
               post.value.aiTags = p.aiTags
@@ -889,13 +950,51 @@ onUnmounted(() => {
   padding: 16px;
 }
 
-.comments-title {
-  font-size: 16px;
-  font-weight: 600;
+.comments-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 12px;
   margin-bottom: 16px;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--el-border-color-lighter);
 }
+
+.comments-title {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.comment-sort-tabs {
+  display: flex;
+  gap: 4px;
+}
+
+.sort-tab {
+  padding: 4px 12px;
+  font-size: 13px;
+  color: var(--el-text-color-secondary);
+  background: transparent;
+  border: 1px solid var(--el-border-color-light);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.sort-tab:hover { color: var(--el-color-primary); border-color: var(--el-color-primary); }
+.sort-tab.active {
+  color: var(--el-color-primary);
+  border-color: var(--el-color-primary);
+  background: rgba(var(--el-color-primary-rgb), 0.08);
+}
+
+.comment-like-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+.comment-like-btn.active { color: var(--el-color-primary); }
 
 .comment-list {
   display: flex;

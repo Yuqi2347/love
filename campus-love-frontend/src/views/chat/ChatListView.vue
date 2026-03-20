@@ -75,7 +75,7 @@
           <AppAvatar :src="item.senderAvatarUrl" :name="item.senderNickname" :size="40" class="avatar" @click.stop="goToProfile(item.senderId)" />
           <div class="notify-body">
             <span class="notify-sender" @click.stop="goToProfile(item.senderId)">{{ item.senderNickname }}</span>
-            <span class="notify-text">赞了你的动态</span>
+            <span class="notify-text">{{ item.type === 'COMMENT_LIKE' ? '赞了你的评论' : '赞了你的动态' }}</span>
             <div class="notify-time">{{ formatConvTime(item.createdAt) }}</div>
           </div>
           <span v-if="!readIds.has(item.id)" class="unread-indicator" />
@@ -274,7 +274,7 @@ function saveDismissedInviteIds() {
 }
 const dismissedInviteIds = ref<Set<number>>(loadDismissedInviteIds())
 
-const likeNotifications = computed(() => socialNotifications.value.filter(n => n.type === 'LIKE'))
+const likeNotifications = computed(() => socialNotifications.value.filter(n => n.type === 'LIKE' || n.type === 'COMMENT_LIKE'))
 const followerNotifications = computed(() => {
   return followerUsers.value.map((u, i) => ({
     id: -i - 1,

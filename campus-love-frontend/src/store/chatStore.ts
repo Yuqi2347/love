@@ -12,6 +12,40 @@ export const useChatStore = defineStore('chat', () => {
   const ws = ref<WebSocket | null>(null)
   const connected = ref(false)
 
+  // 心跳与重连控制
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null
+  let isReconnecting = false
+  const HEARTBEAT_INTERVAL = 25000  // 25 秒发一次 ping，防止 Nginx/代理断开空闲连接
+  const RECONNECT_DELAY    = 3000   // 断线后 3 秒重连
+
+  function startHeartbeat() {
+    stopHeartbeat()
+    heartbeatTimer = setInterval(() => {
+      if (ws.value?.readyState === WebSocket.OPEN) {
+        try { ws.value.send(JSON.stringify({ type: 'ping' })) } catch { /* ignore */ }
+      }
+    }, HEARTBEAT_INTERVAL)
+  }
+
+  function stopHeartbeat() {
+    if (heartbeatTimer !== null) {
+      clearInterval(heartbeatTimer)
+      heartbeatTimer = null
+    }
+  }
+
+  function scheduleReconnect() {
+    if (isReconnecting) return  // 防止重复创建多个重连 timer
+    isReconnecting = true
+    if (reconnectTimer !== null) clearTimeout(reconnectTimer)
+    reconnectTimer = setTimeout(() => {
+      isReconnecting = false
+      reconnectTimer = null
+      connectWebSocket()
+    }, RECONNECT_DELAY)
+  }
+
   async function fetchConversations() {
     const res = await getConversations()
     conversations.value = res.data.data || []
@@ -21,36 +55,58 @@ export const useChatStore = defineStore('chat', () => {
     const token = localStorage.getItem('access_token')
     if (!token) return
 
+    // 若已有一个 OPEN 连接则不重复建立
+    if (ws.value && ws.value.readyState === WebSocket.OPEN) return
+
+    stopHeartbeat()
+
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     // 后端开启了 context-path=/api，WebSocket 实际路径为 /api/ws/chat
     const wsUrl = `${protocol}//${window.location.host}/api/ws/chat?token=${token}`
-    ws.value = new WebSocket(wsUrl)
+    const socket = new WebSocket(wsUrl)
+    ws.value = socket
 
-    ws.value.onopen = () => { connected.value = true }
-
-    ws.value.onmessage = (event: MessageEvent) => {
-      const data = JSON.parse(event.data)
-      if (data.type === 'RECALL' && typeof data.messageId === 'number') {
-        const mid = data.messageId
-        currentMessages.value = currentMessages.value.map(m =>
-          m.id === mid ? { ...m, deleted: true, content: '消息已撤回' } : m
-        )
-        return
-      }
-      const msg: ChatMessage = data
-      removeOptimisticIfReplaced(msg)
-      removePendingReplaced(msg)
-      // 避免重复添加：若已存在同 id 消息则不再 push（防止 WebSocket 重复推送或竞态）
-      if (typeof msg.id === 'number' && msg.id > 0) {
-        if (currentMessages.value.some(m => m.id === msg.id)) return
-      }
-      currentMessages.value.push(msg)
-      updateConversation(msg)
+    socket.onopen = () => {
+      connected.value = true
+      isReconnecting = false
+      startHeartbeat()
     }
 
-    ws.value.onclose = () => {
+    socket.onmessage = (event: MessageEvent) => {
+      try {
+        const data = JSON.parse(event.data)
+        // 忽略心跳响应
+        if (data.type === 'pong' || data.type === 'ping') return
+        if (data.type === 'RECALL' && typeof data.messageId === 'number') {
+          const mid = data.messageId
+          currentMessages.value = currentMessages.value.map(m =>
+            m.id === mid ? { ...m, deleted: true, content: '消息已撤回' } : m
+          )
+          return
+        }
+        const msg: ChatMessage = data
+        removeOptimisticIfReplaced(msg)
+        removePendingReplaced(msg)
+        // 避免重复添加：若已存在同 id 消息则不再 push（防止 WebSocket 重复推送或竞态）
+        if (typeof msg.id === 'number' && msg.id > 0) {
+          if (currentMessages.value.some(m => m.id === msg.id)) return
+        }
+        currentMessages.value.push(msg)
+        updateConversation(msg)
+      } catch { /* ignore parse errors */ }
+    }
+
+    socket.onerror = () => {
+      // 错误后 onclose 也会触发，交由 onclose 处理重连
+    }
+
+    socket.onclose = () => {
+      stopHeartbeat()
       connected.value = false
-      setTimeout(connectWebSocket, 3000)
+      // 只有当这次关闭的 socket 还是当前 ws 时才重连（避免 disconnect() 后误触发重连）
+      if (ws.value === socket) {
+        scheduleReconnect()
+      }
     }
   }
 
@@ -119,8 +175,15 @@ export const useChatStore = defineStore('chat', () => {
   }
 
   function disconnect() {
-    ws.value?.close()
-    ws.value = null
+    stopHeartbeat()
+    if (reconnectTimer !== null) {
+      clearTimeout(reconnectTimer)
+      reconnectTimer = null
+    }
+    isReconnecting = false
+    const cur = ws.value
+    ws.value = null  // 先置 null，阻止 onclose 触发重连
+    cur?.close()
     connected.value = false
   }
 

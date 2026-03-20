@@ -22,6 +22,8 @@ import com.campus.love.user.entity.UserIceBreakAllow;
 import com.campus.love.feed.constants.VisibilityConstants;
 import com.campus.love.follow.service.FollowService;
 import com.campus.love.user.mapper.UserMapper;
+import com.campus.love.user.entity.UserAvatar;
+import com.campus.love.user.mapper.UserAvatarMapper;
 import com.campus.love.user.mapper.UserIceBreakAllowMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -45,6 +47,7 @@ import java.util.stream.Collectors;
 public class UserService {
 
     private final UserMapper userMapper;
+    private final UserAvatarMapper userAvatarMapper;
     private final FileUploadService fileUploadService;
     private final UserProfileSkill userProfileSkill;
     private final UserAiProfileMapper userAiProfileMapper;
@@ -251,13 +254,50 @@ public class UserService {
 
     public String uploadAvatar(MultipartFile file) throws IOException {
         Long userId = CurrentUser.getId();
-        String avatarUrl = fileUploadService.uploadImage(file, "avatar_" + userId + "_", 5L * 1024 * 1024);
+        if (file == null || file.isEmpty()) {
+            throw new IllegalArgumentException("头像文件不能为空");
+        }
+        long maxBytes = 5L * 1024 * 1024;
+        if (file.getSize() > maxBytes) {
+            throw new IllegalArgumentException("头像图片不能超过 5MB");
+        }
+        String contentType = file.getContentType();
+        if (contentType == null || !contentType.startsWith("image/")) {
+            throw new IllegalArgumentException("只支持图片格式");
+        }
 
+        byte[] data = file.getBytes();
+
+        // 存入数据库
+        UserAvatar existing = userAvatarMapper.selectById(userId);
+        if (existing != null) {
+            existing.setAvatarData(data);
+            existing.setContentType(contentType);
+            existing.setFileSize((int) file.getSize());
+            userAvatarMapper.updateById(existing);
+        } else {
+            UserAvatar avatar = new UserAvatar();
+            avatar.setUserId(userId);
+            avatar.setAvatarData(data);
+            avatar.setContentType(contentType);
+            avatar.setFileSize((int) file.getSize());
+            userAvatarMapper.insert(avatar);
+        }
+
+        // avatar_url 指向 API 端点
+        String avatarUrl = "/user/avatar/" + userId;
         User user = userMapper.selectById(userId);
-        user.setAvatarUrl(avatarUrl);
-        userMapper.updateById(user);
+        if (user != null) {
+            user.setAvatarUrl(avatarUrl);
+            userMapper.updateById(user);
+        }
 
         return avatarUrl;
+    }
+
+    /** 从数据库读取头像数据 */
+    public UserAvatar getAvatarData(Long userId) {
+        return userAvatarMapper.selectById(userId);
     }
 
     public String uploadCover(MultipartFile file) throws IOException {

@@ -15,6 +15,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -83,6 +84,15 @@ public class NotificationService {
     @Transactional
     public void createNotification(Long userId, Long senderId, Long inviteId, Long postId,
                                    NotificationTypeEnum type, String title, String content) {
+        createNotification(userId, senderId, inviteId, postId, null, type, title, content);
+    }
+
+    /**
+     * 创建通用通知（支持 postId、commentId）
+     */
+    @Transactional
+    public void createNotification(Long userId, Long senderId, Long inviteId, Long postId, Long commentId,
+                                   NotificationTypeEnum type, String title, String content) {
         if (userId == null || type == null) {
             throw new IllegalArgumentException("userId and type are required");
         }
@@ -91,6 +101,7 @@ public class NotificationService {
         notification.setSenderId(senderId);
         notification.setInviteId(inviteId);
         notification.setPostId(postId);
+        notification.setCommentId(commentId);
         notification.setType(type.name());
         notification.setTitle(title);
         notification.setContent(content);
@@ -128,9 +139,73 @@ public class NotificationService {
                 NotificationTypeEnum.COMMENT_ON_POST, title, content);
     }
 
+    /**
+     * 有人赞了你的动态（V39）
+     */
+    public void notifyPostLike(Long postAuthorId, Long likerId, Long postId, String likerNickname) {
+        if (postAuthorId == null || likerId == null || postAuthorId.equals(likerId)) {
+            return;
+        }
+        String title = "有人赞了你的动态";
+        String content = (likerNickname != null ? likerNickname : "有人") + "赞了你的动态";
+        createNotification(postAuthorId, likerId, null, postId,
+                NotificationTypeEnum.POST_LIKE, title, content);
+    }
+
+    /**
+     * 有人赞了你的评论（V39）
+     */
+    public void notifyCommentLike(Long commentAuthorId, Long likerId, Long postId, Long commentId, String likerNickname) {
+        if (commentAuthorId == null || likerId == null || commentAuthorId.equals(likerId)) {
+            return;
+        }
+        String title = "有人赞了你的评论";
+        String content = (likerNickname != null ? likerNickname : "有人") + "赞了你的评论";
+        createNotification(commentAuthorId, likerId, null, postId, commentId,
+                NotificationTypeEnum.COMMENT_LIKE, title, content);
+    }
+
     private static String truncate(String s, int maxLen) {
         if (s == null || s.length() <= maxLen) return s;
         return s.substring(0, maxLen) + "...";
+    }
+
+    /**
+     * 统计某用户在指定时间之后收到的评论点赞数（用于红点计数）
+     */
+    public long countCommentLikesSince(Long userId, java.time.LocalDateTime since) {
+        if (userId == null || since == null) return 0;
+        return notificationMapper.selectCount(
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getUserId, userId)
+                        .eq(Notification::getType, NotificationTypeEnum.COMMENT_LIKE.name())
+                        .gt(Notification::getCreatedAt, since));
+    }
+
+    /**
+     * 获取用户收到的评论点赞通知列表（用于社交消息中心）
+     */
+    public List<Notification> getCommentLikeNotifications(Long userId, int limit) {
+        if (userId == null) return new java.util.ArrayList<>();
+        return notificationMapper.selectList(
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getUserId, userId)
+                        .eq(Notification::getType, NotificationTypeEnum.COMMENT_LIKE.name())
+                        .orderByDesc(Notification::getCreatedAt)
+                        .last("LIMIT " + limit));
+    }
+
+    /**
+     * 获取用户收到的动态点赞通知列表（用于社交消息中心，补充 t_feed_like 直查的数据）
+     */
+    public List<Notification> getPostLikeNotifications(Long userId, int limit) {
+        if (userId == null) return new java.util.ArrayList<>();
+        return notificationMapper.selectList(
+                new LambdaQueryWrapper<Notification>()
+                        .eq(Notification::getUserId, userId)
+                        .eq(Notification::getType, NotificationTypeEnum.POST_LIKE.name())
+                        .orderByDesc(Notification::getCreatedAt)
+                        .last("LIMIT " + limit));
     }
 
     /**

@@ -13,6 +13,10 @@ export interface FeedComment {
   repliedUserId?: number | null  // 被回复的用户ID
   createdAt: string
   deleted?: boolean
+  /** V39：点赞数 */
+  likeCount?: number
+  /** V39：当前用户是否已点赞 */
+  liked?: boolean
 }
 
 export interface FeedPost {
@@ -34,6 +38,10 @@ export interface FeedPost {
   comments: FeedComment[]
   /** V24：AI 提取的标签，逗号分隔 */
   aiTags?: string | null
+  /** V39：是否置顶 */
+  pinned?: boolean
+  /** V39：置顶时间 */
+  pinnedAt?: string | null
 }
 
 export function createPost(data: {
@@ -78,8 +86,8 @@ export function uploadVideo(file: File) {
   })
 }
 
-export function getTimeline(page = 0, size = 10) {
-  return request.get<ApiResult<FeedPost[]>>('/feed/timeline', { params: { page, size } })
+export function getTimeline(page = 0, size = 10, sort?: string) {
+  return request.get<ApiResult<FeedPost[]>>('/feed/timeline', { params: { page, size, sort } })
 }
 
 export function getUserPostsSummary(userId: number) {
@@ -106,6 +114,14 @@ export function unlikePost(postId: number) {
   return request.delete<ApiResult<void>>(`/feed/like/${postId}`)
 }
 
+export function likeComment(commentId: number) {
+  return request.post<ApiResult<void>>(`/feed/like/comment/${commentId}`)
+}
+
+export function unlikeComment(commentId: number) {
+  return request.delete<ApiResult<void>>(`/feed/like/comment/${commentId}`)
+}
+
 export function addComment(data: { postId: number; content: string; images?: string; parentId?: number; repliedUserId?: number }) {
   return request.post<ApiResult<void>>('/feed/comment', data)
 }
@@ -126,16 +142,24 @@ export function retagPost(postId: number) {
   return request.post<ApiResult<void>>(`/feed/retag/${postId}`)
 }
 
-export function getDiscoveryPosts(page = 0, size = 10, keyword?: string) {
-  return request.get<ApiResult<FeedPost[]>>('/feed/discovery', { params: { page, size, keyword } })
+export function getDiscoveryPosts(page = 0, size = 10, sort?: string, keyword?: string) {
+  return request.get<ApiResult<FeedPost[]>>('/feed/discovery', { params: { page, size, sort, keyword } })
 }
 
-export function getPostDetail(postId: number) {
+export function getPostDetail(postId: number, commentSort?: string) {
   const id = Number(postId)
   if (!Number.isFinite(id) || id <= 0) {
     return Promise.reject(new Error('无效的动态 ID'))
   }
-  return request.get<ApiResult<FeedPost>>(`/feed/${id}`)
+  return request.get<ApiResult<FeedPost>>(`/feed/${id}`, { params: commentSort ? { commentSort } : {} })
+}
+
+export function pinPost(postId: number) {
+  return request.post<ApiResult<void>>(`/feed/${postId}/pin`)
+}
+
+export function unpinPost(postId: number) {
+  return request.delete<ApiResult<void>>(`/feed/${postId}/pin`)
 }
 
 export function getLikedPosts(page = 0, size = 20) {

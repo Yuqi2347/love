@@ -33,6 +33,8 @@ public class SecurityConfig {
             "/api/v3/api-docs/**",
             "/uploads/**",
             "/api/uploads/**",
+            "/user/avatar/**",
+            "/api/user/avatar/**",
             "/ws/**",
             "/api/ws/**"
     };

@@ -1,7 +1,10 @@
 package com.campus.love.ai.skill;
 
+import com.campus.love.ai.rag.EmbeddingService;
 import com.campus.love.ai.service.AiService;
+import com.campus.love.feed.entity.FeedContentVector;
 import com.campus.love.feed.entity.FeedPost;
+import com.campus.love.feed.mapper.FeedContentVectorMapper;
 import com.campus.love.feed.mapper.FeedPostMapper;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -11,6 +14,7 @@ import org.springframework.stereotype.Component;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -25,6 +29,8 @@ public class FeedTaggingSkill {
 
     private final AiService aiService;
     private final FeedPostMapper feedPostMapper;
+    private final FeedContentVectorMapper feedContentVectorMapper;
+    private final EmbeddingService embeddingService;
     private final ObjectMapper objectMapper;
 
     private static final String TAG_PROMPT = """
@@ -62,10 +68,56 @@ public class FeedTaggingSkill {
                     post.setTagConfidence(parsed.tagConfidence());
                     feedPostMapper.updateById(post);
                     log.info("Feed post {} tagged: {}", postId, tags);
+                    // 生成内容向量（AI Key 有效时）
+                    saveContentVector(postId, post.getUserId(), post.getContent(), tags);
+                    return;
                 }
+            }
+            // AI 未能生成标签时（内容过短等），设置默认标签
+            if (post.getAiTags() == null) {
+                post.setAiTags("日常");
+                post.setPrimaryCategory("日常");
+                feedPostMapper.updateById(post);
+                log.info("Feed post {} fallback tagged: 日常", postId);
             }
         } catch (Exception e) {
             log.warn("Feed tagging failed for post {}: {}", postId, e.getMessage());
+            // AI 调用失败时也设置默认标签，避免标签始终为空
+            try {
+                FeedPost fallback = feedPostMapper.selectById(postId);
+                if (fallback != null && fallback.getAiTags() == null) {
+                    fallback.setAiTags("日常");
+                    fallback.setPrimaryCategory("日常");
+                    feedPostMapper.updateById(fallback);
+                    log.info("Feed post {} fallback tagged after AI error: 日常", postId);
+                }
+            } catch (Exception ignored) { }
+        }
+    }
+
+    /** 生成帖子内容向量并存入 t_feed_content_vector，失败时静默忽略 */
+    private void saveContentVector(Long postId, Long userId, String content, String tags) {
+        try {
+            String textForEmbed = (content != null ? content : "") + " " + (tags != null ? tags : "");
+            String vectorJson = embeddingService.embedAsJson(textForEmbed.trim());
+            if (vectorJson == null) return;
+            FeedContentVector existing = feedContentVectorMapper.selectById(postId);
+            if (existing == null) {
+                FeedContentVector cv = new FeedContentVector();
+                cv.setFeedId(postId);
+                cv.setUserId(userId);
+                cv.setContentVector(vectorJson);
+                try { cv.setAiTags(objectMapper.writeValueAsString(tags != null ? List.of(tags.split(",")) : List.of())); } catch (Exception ignored) {}
+                cv.setPrimaryCategory(tags != null ? tags.split(",")[0].trim() : null);
+                cv.setCreatedAt(LocalDateTime.now());
+                feedContentVectorMapper.insert(cv);
+            } else {
+                existing.setContentVector(vectorJson);
+                feedContentVectorMapper.updateById(existing);
+            }
+            log.info("Feed post {} content vector saved", postId);
+        } catch (Exception e) {
+            log.warn("Feed vector generation failed for post {}: {}", postId, e.getMessage());
         }
     }
 

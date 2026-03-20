@@ -19,6 +19,13 @@
         </button>
       </div>
 
+      <!-- 排序切换（推荐/关注 Tab 显示） -->
+      <div v-if="activeTab === 'recommend' || activeTab === 'following'" class="sort-tabs">
+        <button :class="['sort-tab', { active: feedSort === 'recommend' }]" @click="setFeedSort('recommend')">推荐</button>
+        <button :class="['sort-tab', { active: feedSort === 'time' }]" @click="setFeedSort('time')">最新</button>
+        <button :class="['sort-tab', { active: feedSort === 'hot' }]" @click="setFeedSort('hot')">热度</button>
+      </div>
+
       <!-- Tab 模块切换 -->
       <div class="discover-tabs">
         <button
@@ -48,6 +55,19 @@
       </div>
     </div>
 
+    <!-- 手机端下拉刷新指示器 -->
+    <div v-if="pullRefreshVisible" class="pull-refresh-indicator">
+      <el-icon class="spinning"><Loading /></el-icon> 刷新中...
+    </div>
+
+    <!-- 动态刷新工具栏（推荐/关注/动态 tab，仅 PC 显示） -->
+    <div v-if="activeTab !== 'liked'" class="load-toolbar">
+      <button class="btn-refresh" :disabled="feedLoading" @click="refreshPosts">
+        <el-icon :class="{ spinning: feedLoading }"><Refresh /></el-icon>
+        {{ feedLoading ? '加载中...' : '刷新' }}
+      </button>
+    </div>
+
     <!-- 统一信息流：动态 -->
     <div v-if="timelineItems.length" class="timeline-list">
       <div
@@ -57,6 +77,7 @@
       >
         <!-- 社交动态：白色卡片 -->
         <div class="feed-card card" @click="goPostDetail(item.post.id)">
+          <div v-if="item.post.pinned" class="feed-pinned-badge">置顶</div>
           <div class="feed-header" @click.stop>
             <img
               :src="getMediaUrl(item.post.avatarUrl) || defaultAvatar"
@@ -94,6 +115,16 @@
             >
               <el-icon><Delete /></el-icon>
               <span>删除</span>
+            </button>
+            <button
+              v-if="isAdmin"
+              type="button"
+              :class="['feed-pin-btn', { pinned: item.post.pinned }]"
+              :title="item.post.pinned ? '取消置顶' : '置顶'"
+              @click.stop="handlePinPost(item.post)"
+            >
+              <el-icon><Sort /></el-icon>
+              <span>{{ item.post.pinned ? '取消置顶' : '置顶' }}</span>
             </button>
           </div>
           <div class="feed-content">
@@ -250,7 +281,17 @@
       </template>
     </el-dialog>
 
-    <div v-if="!timelineItems.length" class="empty-state">
+    <!-- 加载更多指示（sentinel for IntersectionObserver） -->
+    <div ref="sentinelRef" class="sentinel">
+      <div v-if="feedLoading && timelineItems.length" class="loading-more">
+        <el-icon class="spinning"><Loading /></el-icon> 加载中...
+      </div>
+      <div v-else-if="!feedHasMore && timelineItems.length" class="no-more">
+        已加载全部内容
+      </div>
+    </div>
+
+    <div v-if="!timelineItems.length && !feedLoading" class="empty-state">
       <div class="empty-icon">📭</div>
       <p>暂无内容</p>
     </div>
@@ -273,7 +314,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getDiscoveryPosts,
@@ -281,6 +322,8 @@ import {
   getLikedPosts,
   likePost,
   unlikePost,
+  pinPost,
+  unpinPost,
   getLevelInfo,
   createDiscoveryPost,
   deletePost,
@@ -294,7 +337,7 @@ import ReportDialog from '@/components/ReportDialog.vue'
 import { useUserStore } from '@/store/userStore'
 import { useInviteStore } from '@/store/inviteStore'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { Plus, Delete, Search, Flag, WarningFilled } from '@element-plus/icons-vue'
+import { Plus, Delete, Search, Flag, WarningFilled, Sort, Refresh, Loading } from '@element-plus/icons-vue'
 import type { Invite } from '@/api/inviteApi'
 import ShareDialog from '@/components/ShareDialog.vue'
 import { DEFAULT_AVATAR, getMediaUrl, formatRelativeTime } from '@/utils/shared'
@@ -319,6 +362,20 @@ const showReportDialog = ref(false)
 const reportTargetType = ref('POST')
 const reportTargetId = ref(0)
 const activeTab = ref<'recommend' | 'post' | 'following' | 'liked'>('recommend')
+const feedSort = ref<'recommend' | 'hot' | 'time'>('recommend')
+
+// 分页状态
+const feedPage = ref(0)
+const feedHasMore = ref(true)
+const feedLoading = ref(false)
+const sentinelRef = ref<HTMLElement>()
+let scrollObserver: IntersectionObserver | null = null
+
+// 触摸下拉刷新状态（手机端）
+let touchStartY = 0
+let isPullRefreshing = false
+const pullRefreshVisible = ref(false)
+
 const showPostDialog = ref(false)
 const postContent = ref('')
 const postVisibility = ref('ALL')
@@ -380,45 +437,118 @@ function getInviteTypeFromRoute(): string | undefined {
 
 function switchTab(tab: 'recommend' | 'post' | 'following' | 'liked') {
   activeTab.value = tab
-  loadByTab()
+  refreshPosts()
+}
+
+function setFeedSort(sort: 'recommend' | 'hot' | 'time') {
+  feedSort.value = sort
+  refreshPosts()
 }
 
 function doSearch() {
-  loadByTab()
+  refreshPosts()
 }
 
-async function loadByTab() {
+/** 刷新：清空列表，从第 0 页重新拉取 */
+async function refreshPosts() {
+  feedPage.value = 0
+  feedHasMore.value = true
+  posts.value = []
+  followingPosts.value = []
+  likedPosts.value = []
+  await loadByTab(true)
+}
+
+async function loadByTab(isRefresh = false) {
   const kw = searchKeyword.value.trim() || undefined
-  if (activeTab.value === 'recommend') {
-    await loadPosts(kw)
+  if (activeTab.value === 'liked') {
+    await loadLikedPosts(isRefresh)
   } else if (activeTab.value === 'following') {
-    await loadFollowingPosts()
-  } else if (activeTab.value === 'liked') {
-    await loadLikedPosts()
+    await loadFollowingPosts(isRefresh)
   } else {
-    await loadPosts(kw)
+    await loadPosts(kw, isRefresh)
   }
 }
 
-async function loadLikedPosts() {
+/** 加载更多（追加）：上划触底触发 */
+async function loadMorePosts() {
+  if (feedLoading.value || !feedHasMore.value) return
+  if (activeTab.value === 'liked') return // 点赞列表不分页加载更多
+  feedPage.value++
+  await loadByTab(false)
+}
+
+async function loadLikedPosts(isRefresh = false) {
+  if (isRefresh) likedPosts.value = []
   try {
-    const res = await getLikedPosts(0, 20)
-    likedPosts.value = res.data.data || []
-    if (isAdmin.value && likedPosts.value.length) {
-      fetchReportCountsForPosts(likedPosts.value.map((p) => p.id))
+    feedLoading.value = true
+    const res = await getLikedPosts(feedPage.value, 10)
+    const data = res.data.data || []
+    if (isRefresh) {
+      likedPosts.value = data
+    } else {
+      likedPosts.value = [...likedPosts.value, ...data]
     }
-  } catch { /* empty */ }
+    feedHasMore.value = data.length >= 10
+    if (isAdmin.value && data.length) {
+      fetchReportCountsForPosts(data.map((p) => p.id))
+    }
+  } catch { /* empty */ } finally {
+    feedLoading.value = false
+  }
 }
 
 onMounted(async () => {
   await loadLevelInfo()
-  await loadByTab()
+  await refreshPosts()
+  // IntersectionObserver：上划触底时加载更多
+  scrollObserver = new IntersectionObserver(
+    (entries) => {
+      if (entries[0].isIntersecting && !feedLoading.value && feedHasMore.value) {
+        loadMorePosts()
+      }
+    },
+    { rootMargin: '120px' }
+  )
+  if (sentinelRef.value) scrollObserver.observe(sentinelRef.value)
+  // 手机端下拉刷新（触摸事件）
+  document.addEventListener('touchstart', onTouchStart, { passive: true })
+  document.addEventListener('touchend', onTouchEnd, { passive: true })
 })
 
-// 路由 query.type 变化时重新拉取邀约（如从热门看板切换类型）
+onUnmounted(() => {
+  scrollObserver?.disconnect()
+  document.removeEventListener('touchstart', onTouchStart)
+  document.removeEventListener('touchend', onTouchEnd)
+})
+
+function onTouchStart(e: TouchEvent) {
+  touchStartY = e.touches[0]?.clientY ?? 0
+  isPullRefreshing = false
+}
+
+function onTouchEnd(e: TouchEvent) {
+  if (!touchStartY) return
+  const endY = e.changedTouches[0]?.clientY ?? 0
+  const delta = endY - touchStartY
+  // 下拉距离 > 80px 且处于页面顶部 → 刷新
+  if (delta > 80 && window.scrollY < 10 && !isPullRefreshing && !feedLoading.value) {
+    isPullRefreshing = true
+    pullRefreshVisible.value = true
+    refreshPosts().finally(() => {
+      pullRefreshVisible.value = false
+    })
+  }
+  touchStartY = 0
+}
+
+// 路由 query.type 变化时重新拉取邀约
 watch(() => route.query.type, () => {
   loadInvites(searchKeyword.value.trim() || undefined)
 })
+
+// 发布新帖后插入到列表头部，不刷新分页
+
 
 type TimelineItem = { kind: 'post'; post: FeedPost; time: string; key: string }
 
@@ -431,39 +561,54 @@ const timelineItems = computed<TimelineItem[]>(() => {
   } else {
     postList = posts.value
   }
-  const postItems: TimelineItem[] = postList.map(post => ({
-    kind: 'post',
+  // 保持后端返回的排序顺序（recommend/hot/time 均由后端处理）
+  return postList.map(post => ({
+    kind: 'post' as const,
     post,
     time: post.createdAt,
     key: `post-${post.id}`,
   }))
-
-  return postItems.sort((a, b) => {
-    const ta = a.time ? new Date(a.time).getTime() : 0
-    const tb = b.time ? new Date(b.time).getTime() : 0
-    return tb - ta
-  })
 })
 
 
-async function loadPosts(keyword?: string) {
+async function loadPosts(keyword?: string, isRefresh = false) {
+  if (feedLoading.value && !isRefresh) return
   try {
-    const res = await getDiscoveryPosts(0, 20, keyword)
-    posts.value = res.data.data || []
-    if (isAdmin.value && posts.value.length) {
-      fetchReportCountsForPosts(posts.value.map((p) => p.id))
+    feedLoading.value = true
+    const res = await getDiscoveryPosts(feedPage.value, 10, feedSort.value, keyword)
+    const data = res.data.data || []
+    if (isRefresh) {
+      posts.value = data
+    } else {
+      posts.value = [...posts.value, ...data]
     }
-  } catch { /* empty */ }
+    feedHasMore.value = data.length >= 10
+    if (isAdmin.value && data.length) {
+      fetchReportCountsForPosts(data.map((p) => p.id))
+    }
+  } catch { /* empty */ } finally {
+    feedLoading.value = false
+  }
 }
 
-async function loadFollowingPosts() {
+async function loadFollowingPosts(isRefresh = false) {
+  if (feedLoading.value && !isRefresh) return
   try {
-    const res = await getTimeline(0, 20)
-    followingPosts.value = res.data.data || []
-    if (isAdmin.value && followingPosts.value.length) {
-      fetchReportCountsForPosts(followingPosts.value.map((p) => p.id))
+    feedLoading.value = true
+    const res = await getTimeline(feedPage.value, 10, feedSort.value)
+    const data = res.data.data || []
+    if (isRefresh) {
+      followingPosts.value = data
+    } else {
+      followingPosts.value = [...followingPosts.value, ...data]
     }
-  } catch { /* empty */ }
+    feedHasMore.value = data.length >= 10
+    if (isAdmin.value && data.length) {
+      fetchReportCountsForPosts(data.map((p) => p.id))
+    }
+  } catch { /* empty */ } finally {
+    feedLoading.value = false
+  }
 }
 
 async function loadInvites(keyword?: string) {
@@ -702,9 +847,28 @@ async function handleDeletePost(postId: number) {
     await ElMessageBox.confirm('确定删除这条动态？', '提示', { type: 'warning' })
     await deletePost(postId)
     posts.value = posts.value.filter(p => p.id !== postId)
+    followingPosts.value = followingPosts.value.filter(p => p.id !== postId)
     ElMessage.success('已删除')
   } catch {
     // 用户取消或删除失败
+  }
+}
+
+async function handlePinPost(post: FeedPost) {
+  try {
+    if (post.pinned) {
+      await unpinPost(post.id)
+      post.pinned = false
+      post.pinnedAt = null
+      ElMessage.success('已取消置顶')
+    } else {
+      await pinPost(post.id)
+      post.pinned = true
+      post.pinnedAt = new Date().toISOString()
+      ElMessage.success('已置顶')
+    }
+  } catch {
+    ElMessage.error('操作失败')
   }
 }
 </script>
@@ -750,6 +914,29 @@ async function handleDeletePost(postId: number) {
   align-items: center;
   gap: 6px;
   white-space: nowrap;
+}
+
+.sort-tabs {
+  display: flex;
+  gap: 4px;
+  padding-bottom: 8px;
+}
+
+.sort-tab {
+  padding: 4px 12px;
+  font-size: 13px;
+  color: $text-secondary;
+  background: transparent;
+  border: 1px solid $border-light;
+  border-radius: $radius-full;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+.sort-tab:hover { color: $primary; border-color: $primary; }
+.sort-tab.active {
+  color: white;
+  background: $primary;
+  border-color: $primary;
 }
 
 .discover-tabs {
@@ -957,6 +1144,7 @@ async function handleDeletePost(postId: number) {
 }
 
 .feed-card {
+  position: relative;
   background: $bg-primary;
   border-radius: $radius-xl;
   padding: 20px;
@@ -1036,6 +1224,41 @@ async function handleDeletePost(postId: number) {
   &:hover {
     color: $danger;
     background: rgba($danger, 0.08);
+  }
+}
+
+.feed-pinned-badge {
+  position: absolute;
+  top: 12px;
+  left: 12px;
+  padding: 2px 8px;
+  font-size: 11px;
+  font-weight: 600;
+  color: $primary;
+  background: rgba($primary, 0.12);
+  border-radius: $radius-md;
+}
+
+.feed-pin-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 12px;
+  border: none;
+  background: transparent;
+  color: $text-muted;
+  font-size: 13px;
+  cursor: pointer;
+  border-radius: $radius-md;
+  transition: color $transition-fast, background $transition-fast;
+
+  &:hover {
+    color: $primary;
+    background: rgba($primary, 0.08);
+  }
+
+  &.pinned {
+    color: $primary;
   }
 }
 
@@ -1385,6 +1608,82 @@ async function handleDeletePost(postId: number) {
 .link-url {
   font-size: 11px;
   color: $text-muted;
+}
+
+.load-toolbar {
+  display: flex;
+  justify-content: center;
+  padding: 8px 24px 0;
+
+  // 手机端隐藏刷新按钮（手机用下拉刷新）
+  @media (max-width: $bp-mobile) {
+    display: none;
+  }
+}
+
+.btn-refresh {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 18px;
+  background: transparent;
+  border: 1px solid $border-light;
+  border-radius: $radius-full;
+  font-size: 13px;
+  color: $text-secondary;
+  cursor: pointer;
+  transition: all 0.2s;
+
+  &:hover:not(:disabled) {
+    background: rgba($primary, 0.08);
+    color: $primary;
+    border-color: $primary;
+  }
+
+  &:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+}
+
+// 手机端下拉刷新指示器（PC 端不显示）
+.pull-refresh-indicator {
+  display: none;
+
+  @media (max-width: $bp-mobile) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px;
+    font-size: 13px;
+    color: $text-secondary;
+  }
+}
+
+.sentinel {
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 8px 0;
+}
+
+.loading-more, .no-more {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: $text-muted;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.spinning {
+  animation: spin 1s linear infinite;
 }
 
 @media (max-width: $bp-mobile) {

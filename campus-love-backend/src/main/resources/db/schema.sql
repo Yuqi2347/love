@@ -1,9 +1,12 @@
 -- =============================================
 -- 校园交友 App - 数据库完整初始化脚本（最新结构）
+-- 版本：V1.1.2（含 V1～V41 全部结构）
+-- 更新时间：2026-03-20
+--
 -- 新环境首次初始化时只需执行本脚本一次：
 --   mysql -uroot -p campus_love < schema.sql
 -- 或在客户端：SOURCE /绝对路径/schema.sql;
--- 已有数据库升级请使用增量脚本 V2～V38。
+-- 已有数据库升级请使用增量脚本 V39、V40、V41。
 -- =============================================
 
 CREATE DATABASE IF NOT EXISTS campus_love
@@ -108,6 +111,8 @@ CREATE TABLE IF NOT EXISTS t_feed_post (
     ocean_hints     JSON            COMMENT 'AI推断的OCEAN信号（V24）',
     tag_confidence  DECIMAL(3,2)    COMMENT '标签置信权重（V24）',
     deleted         TINYINT(1)      DEFAULT 0,
+    pinned_at       DATETIME        DEFAULT NULL COMMENT '置顶时间（V39）',
+    pinned_by       BIGINT          DEFAULT NULL COMMENT '置顶操作人（V39）',
     created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
     updated_at      DATETIME        DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     INDEX idx_user (user_id),
@@ -123,7 +128,7 @@ CREATE TABLE IF NOT EXISTS t_feed_like (
     UNIQUE KEY uk_like (post_id, user_id)
 ) COMMENT '朋友圈点赞';
 
--- 朋友圈评论表（含 V16 被回复用户ID，V17 软删除）
+-- 朋友圈评论表（含 V16 被回复用户ID，V17 软删除，V39 点赞数）
 CREATE TABLE IF NOT EXISTS t_feed_comment (
     id              BIGINT PRIMARY KEY AUTO_INCREMENT,
     post_id         BIGINT          NOT NULL,
@@ -133,9 +138,20 @@ CREATE TABLE IF NOT EXISTS t_feed_comment (
     parent_id       BIGINT          DEFAULT NULL COMMENT '父评论ID，用于回复',
     replied_user_id BIGINT          DEFAULT NULL COMMENT '被回复的用户ID（V16）',
     deleted         TINYINT(1)      DEFAULT 0 COMMENT '0=正常 1=已删除（V17）',
+    like_count      INT             DEFAULT 0 COMMENT '点赞数（V39）',
     created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_post (post_id)
 ) COMMENT '朋友圈评论';
+
+-- 评论点赞表（V39）
+CREATE TABLE IF NOT EXISTS t_feed_comment_like (
+    id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+    comment_id      BIGINT          NOT NULL,
+    user_id         BIGINT          NOT NULL,
+    created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE KEY uk_comment_user (comment_id, user_id),
+    INDEX idx_comment (comment_id)
+) COMMENT '评论点赞';
 
 -- 用户相册表
 CREATE TABLE IF NOT EXISTS t_user_album (
@@ -274,13 +290,14 @@ CREATE TABLE IF NOT EXISTS t_chat_group_member (
     INDEX idx_user (user_id)
 ) COMMENT '聊天群成员表';
 
--- 站内通知表（V5，含 V7 索引、V23 post_id）
+-- 站内通知表（V5，含 V7 索引、V23 post_id、V39 comment_id）
 CREATE TABLE IF NOT EXISTS t_notification (
     id              BIGINT PRIMARY KEY AUTO_INCREMENT,
     user_id         BIGINT          NOT NULL COMMENT '接收通知的用户ID',
     sender_id       BIGINT          DEFAULT NULL COMMENT '触发通知的用户ID',
     invite_id       BIGINT          DEFAULT NULL COMMENT '关联的邀约ID',
     post_id         BIGINT          DEFAULT NULL COMMENT '关联的动态ID（评论/回复通知）（V23）',
+    comment_id      BIGINT          DEFAULT NULL COMMENT '关联的评论ID（评论点赞通知）（V39）',
     type            VARCHAR(32)     NOT NULL COMMENT '通知类型',
     title           VARCHAR(128)    NOT NULL COMMENT '通知标题',
     content         VARCHAR(512)    DEFAULT NULL COMMENT '通知内容',
@@ -791,3 +808,25 @@ CREATE TABLE IF NOT EXISTS t_user_embedding (
     embedding   JSON NOT NULL,
     updated_at  DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) COMMENT 'embedding暂用JSON存储-技术债-用户量超5000或ANN查询P99超500ms时迁移至pgvector或Milvus';
+
+-- =============================================
+-- V39：评论点赞、动态置顶（已在上方各表中内联）
+-- V40：用户头像 BLOB 存储（独立服务器存储场景）
+-- =============================================
+
+-- 用户头像 BLOB 独立存储表（V40）
+-- 说明：两服务器部署时头像文件统一存数据库，避免跨服务器文件同步问题
+CREATE TABLE IF NOT EXISTS t_user_avatar (
+    user_id      BIGINT       PRIMARY KEY COMMENT '用户ID（与 t_user.id 对应）',
+    avatar_data  MEDIUMBLOB   NOT NULL    COMMENT '头像二进制数据（最大 5 MB）',
+    content_type VARCHAR(64)  DEFAULT 'image/jpeg' COMMENT 'MIME 类型',
+    file_size    INT          DEFAULT NULL COMMENT '文件大小（字节）',
+    created_at   DATETIME     DEFAULT CURRENT_TIMESTAMP,
+    updated_at   DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+    INDEX idx_updated (updated_at)
+) COMMENT '用户头像 BLOB 存储（V40）';
+
+-- =============================================
+-- V41：t_feed_content_vector 列补充（user_id/ai_tags/primary_category）
+-- 说明：新环境直接由 schema.sql 建表时已包含这些列，无需额外执行 V41
+-- =============================================

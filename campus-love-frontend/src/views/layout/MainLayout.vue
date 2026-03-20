@@ -271,7 +271,7 @@ const navItems = computed(() => {
     { path: '/discover', label: '探索', icon: 'Compass', showDot: false },
     { path: '/moment', label: '心动', icon: 'Aim', showDot: false },
     { path: '/invite', label: '约局', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
-    { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 || b.newInviteActivityCount > 0 },
+    { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 || b.newFeedActivityCount > 0 || b.newInviteActivityCount > 0 },
   ]
   if (SHOW_MATCH_NAV) {
     items.splice(1, 0, { path: '/match', label: '缘分', icon: 'MagicStick', showDot: false })
@@ -291,7 +291,7 @@ const mobileNavItems = computed(() => {
     { path: '/discover', label: '发现', icon: 'Compass', showDot: false },
     { path: '/moment', label: '心动', icon: 'Aim', showDot: false },
     { path: '/invite', label: '约局', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
-    { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 },
+    { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 || b.newFeedActivityCount > 0 },
     { path: '/profile', label: '我', icon: 'User', showDot: false },
   ]
   if (SHOW_MATCH_NAV) {

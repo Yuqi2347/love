@@ -17,6 +17,7 @@ import com.campus.love.invite.enums.InviteStatusEnum;
 import com.campus.love.invite.mapper.InviteDeclineMapper;
 import com.campus.love.invite.mapper.InviteMapper;
 import com.campus.love.invite.mapper.InviteParticipantMapper;
+import com.campus.love.tracking.mapper.UserBehaviorLogMapper;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import lombok.RequiredArgsConstructor;
@@ -25,11 +26,15 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toMap;
@@ -46,6 +51,7 @@ public class InviteQueryService {
     private final InviteParticipantMapper participantMapper;
     private final InviteDeclineMapper declineMapper;
     private final UserMapper userMapper;
+    private final UserBehaviorLogMapper userBehaviorLogMapper;
 
     /**
      * 获取邀约（未删除），不存在则抛 INVITE_NOT_FOUND。
@@ -85,38 +91,21 @@ public class InviteQueryService {
 
     @Transactional(readOnly = true)
     public IPage<InviteResponse> getInviteList(String type, String status, String timeRange, String keyword, Boolean publicOnly, Integer page, Integer size) {
-        int current = (page == null || page < 1) ? 1 : page;
-        int pageSize = (size == null || size < 1) ? 20 : Math.min(size, 100);
+        return getInviteList(type, status, timeRange, keyword, publicOnly, page, size, null);
+    }
 
-        LambdaQueryWrapper<Invite> wrapper = new LambdaQueryWrapper<>();
-        wrapper.eq(Invite::getDeleted, false);
-        if (Boolean.TRUE.equals(publicOnly)) {
-            wrapper.eq(Invite::getInviteMode, InviteModeEnum.PUBLIC.name());
+    @Transactional(readOnly = true)
+    public IPage<InviteResponse> getInviteList(String type, String status, String timeRange, String keyword, Boolean publicOnly, Integer page, Integer size, String sort) {
+        int current = (page == null || page < 1) ? 1 : page;
+        int pageSize = (size == null || size < 1) ? 10 : Math.min(size, 100);
+
+        // 推荐排序：取候选池在内存中打分
+        boolean isRecommend = "recommend".equalsIgnoreCase(sort) && Boolean.TRUE.equals(publicOnly);
+        if (isRecommend) {
+            return getRecommendInviteList(type, timeRange, keyword, current, pageSize);
         }
-        if (type != null && !type.isEmpty()) {
-            wrapper.eq(Invite::getInviteType, type);
-        }
-        if (status != null && !status.isEmpty()) {
-            wrapper.eq(Invite::getStatus, status);
-        } else {
-            // 未指定 status 时，仅展示招募中
-            wrapper.eq(Invite::getStatus, InviteStatusEnum.RECRUITING.name());
-        }
-        if (keyword != null && !keyword.trim().isEmpty()) {
-            String k = keyword.trim();
-            wrapper.and(w -> w.like(Invite::getTitle, k).or().like(Invite::getContent, k).or().like(Invite::getLocation, k));
-        }
-        LocalDateTime now = LocalDateTime.now();
-        String range = (timeRange != null && !timeRange.isEmpty()) ? timeRange.toUpperCase() : "WEEK";
-        if ("ALL".equals(range)) {
-            // 不限制时间，展示所有
-        } else if ("WEEK".equals(range)) {
-            wrapper.ge(Invite::getInviteTime, now.minusDays(7));
-        } else if ("MONTH".equals(range)) {
-            wrapper.ge(Invite::getInviteTime, now.minusDays(30));
-        } else if ("YEAR".equals(range)) {
-            wrapper.ge(Invite::getInviteTime, now.minusDays(365));
-        }
+
+        LambdaQueryWrapper<Invite> wrapper = buildInviteListWrapper(type, status, timeRange, keyword, publicOnly);
         wrapper.orderByDesc(Invite::getInviteTime).orderByDesc(Invite::getCreatedAt);
 
         Page<Invite> pageInfo = new Page<>(current, pageSize);
@@ -129,6 +118,141 @@ public class InviteQueryService {
                 .map(inv -> buildInviteResponse(inv, creatorMap, participantCountMap))
                 .collect(Collectors.toList()));
         return responsePage;
+    }
+
+    private LambdaQueryWrapper<Invite> buildInviteListWrapper(String type, String status, String timeRange, String keyword, Boolean publicOnly) {
+        LambdaQueryWrapper<Invite> wrapper = new LambdaQueryWrapper<>();
+        wrapper.eq(Invite::getDeleted, false);
+        if (Boolean.TRUE.equals(publicOnly)) {
+            wrapper.eq(Invite::getInviteMode, InviteModeEnum.PUBLIC.name());
+        }
+        if (type != null && !type.isEmpty()) {
+            wrapper.eq(Invite::getInviteType, type);
+        }
+        if (status != null && !status.isEmpty()) {
+            wrapper.eq(Invite::getStatus, status);
+        } else {
+            wrapper.eq(Invite::getStatus, InviteStatusEnum.RECRUITING.name());
+        }
+        if (keyword != null && !keyword.trim().isEmpty()) {
+            String k = keyword.trim();
+            wrapper.and(w -> w.like(Invite::getTitle, k).or().like(Invite::getContent, k).or().like(Invite::getLocation, k));
+        }
+        LocalDateTime now = LocalDateTime.now();
+        String range = (timeRange != null && !timeRange.isEmpty()) ? timeRange.toUpperCase() : "WEEK";
+        if ("WEEK".equals(range)) {
+            wrapper.ge(Invite::getInviteTime, now.minusDays(7));
+        } else if ("MONTH".equals(range)) {
+            wrapper.ge(Invite::getInviteTime, now.minusDays(30));
+        } else if ("YEAR".equals(range)) {
+            wrapper.ge(Invite::getInviteTime, now.minusDays(365));
+        }
+        return wrapper;
+    }
+
+    /**
+     * 推荐排序：热度 + 关键词匹配 + 已看过降权
+     */
+    private IPage<InviteResponse> getRecommendInviteList(String type, String timeRange, String keyword, int page, int pageSize) {
+        Long userId = CurrentUser.getId();
+
+        // 取候选池（最多 60 条）
+        LambdaQueryWrapper<Invite> wrapper = buildInviteListWrapper(type, null, timeRange, keyword, true);
+        wrapper.orderByDesc(Invite::getIsUrgent).orderByDesc(Invite::getCreatedAt);
+        Page<Invite> candidatePage = new Page<>(1, Math.max(pageSize * 6, 60));
+        IPage<Invite> candidateResult = inviteMapper.selectPage(candidatePage, wrapper);
+        List<Invite> candidates = candidateResult.getRecords();
+
+        if (candidates.isEmpty()) {
+            IPage<InviteResponse> empty = new Page<>(page, pageSize, 0);
+            empty.setRecords(Collections.emptyList());
+            return empty;
+        }
+
+        // 用户兴趣标签
+        Set<String> userTags = new HashSet<>();
+        if (userId != null) {
+            try {
+                User user = userMapper.selectById(userId);
+                if (user != null && user.getInterests() != null) {
+                    for (String t : user.getInterests().split(",")) {
+                        String trimmed = t.trim().toLowerCase();
+                        if (!trimmed.isEmpty()) userTags.add(trimmed);
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
+
+        // 近 7 天已看过的邀约 ID
+        Set<Long> viewedIds = Collections.emptySet();
+        if (userId != null) {
+            try {
+                List<Long> viewed = userBehaviorLogMapper.selectViewedTargetIds(
+                        userId, "INVITE_VIEW", LocalDateTime.now().minusDays(7), 300);
+                viewedIds = new HashSet<>(viewed);
+            } catch (Exception ignored) {}
+        }
+
+        // 排除自己创建的
+        final Long finalUserId = userId;
+        final Set<Long> finalViewedIds = viewedIds;
+        final Set<String> finalUserTags = userTags;
+
+        // 最大参与率归一化
+        int maxPCount = candidates.stream().mapToInt(i -> i.getParticipantCount() != null ? i.getParticipantCount() : 0).max().orElse(1);
+        if (maxPCount == 0) maxPCount = 1;
+        final int finalMaxP = maxPCount;
+
+        candidates.sort((a, b) -> Double.compare(
+                computeInviteScore(b, finalUserTags, finalViewedIds, finalMaxP),
+                computeInviteScore(a, finalUserTags, finalViewedIds, finalMaxP)));
+
+        // 过滤自己发起的（在推荐中不展示自己的邀约）
+        if (finalUserId != null) {
+            candidates = candidates.stream().filter(i -> !finalUserId.equals(i.getCreatorId())).collect(Collectors.toList());
+        }
+
+        int from = (page - 1) * pageSize;
+        int to = Math.min(from + pageSize, candidates.size());
+        List<Invite> pageRecords = from >= candidates.size() ? Collections.emptyList() : candidates.subList(from, to);
+
+        Map<Long, User> creatorMap = batchLoadCreators(pageRecords);
+        Map<Long, Integer> participantCountMap = getParticipantCountMap(pageRecords.stream().map(Invite::getId).collect(Collectors.toList()));
+
+        IPage<InviteResponse> responsePage = new Page<>(page, pageSize, candidates.size());
+        responsePage.setRecords(pageRecords.stream()
+                .map(inv -> buildInviteResponse(inv, creatorMap, participantCountMap))
+                .collect(Collectors.toList()));
+        return responsePage;
+    }
+
+    private double computeInviteScore(Invite invite, Set<String> userTags, Set<Long> viewedIds, int maxParticipants) {
+        // 关键词匹配分（0~1）
+        double matchScore = 0.5;
+        if (!userTags.isEmpty()) {
+            String text = ((invite.getTitle() != null ? invite.getTitle() : "") + " "
+                    + (invite.getAtmosphereTags() != null ? invite.getAtmosphereTags() : "")).toLowerCase();
+            long matches = userTags.stream().filter(t -> text.contains(t)).count();
+            matchScore = 0.5 + (double) matches / Math.max(userTags.size(), 1) * 0.5;
+        }
+
+        // 热度分：参与率（0~1）+ 社交评分（0~1）
+        double fillRate = invite.getMaxParticipants() != null && invite.getMaxParticipants() > 0
+                ? Math.min(1.0, (double) (invite.getParticipantCount() != null ? invite.getParticipantCount() : 0) / invite.getMaxParticipants())
+                : (double) (invite.getParticipantCount() != null ? invite.getParticipantCount() : 0) / maxParticipants;
+        double ratingScore = invite.getSocialRating() != null ? Math.min(1.0, invite.getSocialRating().doubleValue() / 5.0) : 0.5;
+        double hotnessScore = fillRate * 0.6 + ratingScore * 0.4;
+
+        // 紧急度加分
+        double urgencyBonus = Boolean.TRUE.equals(invite.getIsUrgent()) ? 0.10 : 0.0;
+
+        double total = matchScore * 0.40 + hotnessScore * 0.35 + urgencyBonus;
+
+        // 已看过降权
+        if (viewedIds.contains(invite.getId())) {
+            total *= 0.35;
+        }
+        return total;
     }
 
     @Transactional(readOnly = true)

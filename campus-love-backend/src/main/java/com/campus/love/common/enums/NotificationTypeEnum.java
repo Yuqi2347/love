@@ -66,7 +66,17 @@ public enum NotificationTypeEnum {
     /**
      * 有人评论了你的动态（发送给动态作者）
      */
-    COMMENT_ON_POST("评论了你的动态");
+    COMMENT_ON_POST("评论了你的动态"),
+
+    /**
+     * 有人赞了你的动态（发送给动态作者）
+     */
+    POST_LIKE("赞了你的动态"),
+
+    /**
+     * 有人赞了你的评论（发送给评论作者）
+     */
+    COMMENT_LIKE("赞了你的评论");
 
     private final String description;
 

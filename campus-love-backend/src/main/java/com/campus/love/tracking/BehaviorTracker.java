@@ -72,9 +72,28 @@ public class BehaviorTracker {
             entry.setUserId(userId);
             entry.setTargetId(postId);
             entry.setBehaviorType("FEED_VIEW");
+            entry.setCreatedAt(java.time.LocalDateTime.now());
             behaviorLogMapper.insert(entry);
         } catch (Exception e) {
             this.log.warn("Track feed view failed: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 追踪邀约浏览（INVITE_VIEW）
+     * 用于邀约推荐算法降权已看过的邀约
+     */
+    public void trackInviteView(Long userId, Long inviteId) {
+        if (userId == null || inviteId == null) return;
+        try {
+            UserBehaviorLog entry = new UserBehaviorLog();
+            entry.setUserId(userId);
+            entry.setTargetId(inviteId);
+            entry.setBehaviorType("INVITE_VIEW");
+            entry.setCreatedAt(java.time.LocalDateTime.now());
+            behaviorLogMapper.insert(entry);
+        } catch (Exception e) {
+            this.log.warn("Track invite view failed: {}", e.getMessage());
         }
     }
 }

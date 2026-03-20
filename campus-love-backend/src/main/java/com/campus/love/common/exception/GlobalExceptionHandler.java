@@ -10,6 +10,7 @@ import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
 import java.util.stream.Collectors;
@@ -51,6 +52,23 @@ public class GlobalExceptionHandler {
         return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body(Result.error(ResultCode.INTERNAL_ERROR.getCode(), msg));
     }
 
+    /** V39：文件过大 413 友好提示 */
+    @ExceptionHandler(MaxUploadSizeExceededException.class)
+    @ResponseStatus(HttpStatus.PAYLOAD_TOO_LARGE)
+    public Result<Void> handleMaxUploadSize(MaxUploadSizeExceededException e) {
+        long maxBytes = e.getMaxUploadSize();
+        long maxMB = maxBytes > 0 ? maxBytes / 1024 / 1024 : 10;
+        String path = "";
+        try {
+            var attrs = org.springframework.web.context.request.RequestContextHolder.getRequestAttributes();
+            if (attrs instanceof org.springframework.web.context.request.ServletRequestAttributes sra && sra.getRequest() != null) {
+                path = sra.getRequest().getRequestURI();
+            }
+        } catch (Exception ignored) {}
+        String msg = path.contains("avatar") ? "头像图片不能超过 5MB" : "文件过大，请上传不超过 " + maxMB + "MB 的图片";
+        return Result.error(413, msg);
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     @ResponseStatus(HttpStatus.BAD_REQUEST)
     public Result<Void> handleValidationException(MethodArgumentNotValidException e) {
@@ -77,6 +95,9 @@ public class GlobalExceptionHandler {
         }
         if (detail != null && !detail.isEmpty()) {
             if (detail.contains("doesn't exist") || detail.contains("不存在") || detail.contains("Unknown table") || detail.contains("Table '")) {
+                if (detail.contains("t_user_portrait") || detail.contains("t_user_stats") || detail.contains("t_user_embedding") || detail.contains("t_interest_tag_meta") || detail.contains("t_questionnaire_meta")) {
+                    return "数据库表缺失: " + detail + "。请执行 db/V36__schema_sync_v30_tables.sql 补齐 V30 表结构";
+                }
                 return "数据库表缺失: " + detail + "。请执行 db/fix_v24_tables.sql 或 db/V24__rag_ai_profile.sql";
             }
             if (detail.contains("Unknown column") || detail.contains("未知列")) {

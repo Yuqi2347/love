@@ -43,6 +43,11 @@ public class FeedPost {
     @TableLogic
     private Integer deleted;
 
+    /** V39：置顶时间，非空表示置顶 */
+    private LocalDateTime pinnedAt;
+    /** V39：置顶操作人（管理员ID） */
+    private Long pinnedBy;
+
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;
 

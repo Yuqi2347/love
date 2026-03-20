@@ -23,6 +23,11 @@ export const useInviteStore = defineStore('invite', () => {
   const currentType = ref<string | undefined>(undefined)
   const currentStatus = ref<string | undefined>(undefined)
   const currentTimeRange = ref<string | undefined>(undefined)
+  const currentSort = ref<string | undefined>(undefined)
+  /** 分页状态：公共邀约列表 */
+  const invitePage = ref(1)
+  const invitePageSize = ref(10)
+  const inviteHasMore = ref(true)
   /** 我的邀约列表（我发起的 + 我参与的，含已退出） */
   const myListInvites = ref<Invite[]>([])
   /** 我发起的邀约列表 */
@@ -40,15 +45,20 @@ export const useInviteStore = defineStore('invite', () => {
     return invites.value.filter(i => i.creatorId === uid)
   })
 
-  // 获取邀约列表
-  async function fetchInvites(type?: string, status?: string, timeRange?: string, keyword?: string, publicOnly?: boolean) {
+  // 获取邀约列表（首次/刷新：清空重拉第 1 页）
+  async function fetchInvites(type?: string, status?: string, timeRange?: string, keyword?: string, publicOnly?: boolean, sort?: string) {
     loading.value = true
     currentType.value = type
     currentStatus.value = status
     currentTimeRange.value = timeRange
+    currentSort.value = sort
+    invitePage.value = 1
+    inviteHasMore.value = true
     try {
-      const res = await getInviteList(type, status, timeRange, keyword, publicOnly, 1, 50)
-      invites.value = res.data.data?.records || []
+      const res = await getInviteList(type, status, timeRange, keyword, publicOnly, 1, invitePageSize.value, sort)
+      const records = res.data.data?.records || []
+      invites.value = records
+      inviteHasMore.value = records.length >= invitePageSize.value
     } catch (error) {
       console.error('获取邀约列表失败:', error)
     } finally {
@@ -56,8 +66,10 @@ export const useInviteStore = defineStore('invite', () => {
     }
   }
 
-  // 加载更多邀约
-  async function loadMoreInvites(page: number, keyword?: string, publicOnly?: boolean) {
+  // 加载更多邀约（追加下一页）
+  async function loadMoreInvites(keyword?: string, publicOnly?: boolean) {
+    if (!inviteHasMore.value || loading.value) return false
+    const nextPage = invitePage.value + 1
     try {
       const res = await getInviteList(
         currentType.value,
@@ -65,11 +77,14 @@ export const useInviteStore = defineStore('invite', () => {
         currentTimeRange.value,
         keyword,
         publicOnly,
-        page,
-        20
+        nextPage,
+        invitePageSize.value,
+        currentSort.value
       )
       const newInvites = res.data.data?.records || []
       invites.value = [...invites.value, ...newInvites]
+      invitePage.value = nextPage
+      inviteHasMore.value = newInvites.length >= invitePageSize.value
       return newInvites.length > 0
     } catch (error) {
       console.error('加载更多邀约失败:', error)
@@ -77,9 +92,9 @@ export const useInviteStore = defineStore('invite', () => {
     }
   }
 
-  // 刷新邀约列表
+  // 刷新邀约列表（清空重拉）
   function refreshInvites(keyword?: string, publicOnly?: boolean) {
-    return fetchInvites(currentType.value, currentStatus.value, currentTimeRange.value, keyword, publicOnly)
+    return fetchInvites(currentType.value, currentStatus.value, currentTimeRange.value, keyword, publicOnly, currentSort.value)
   }
 
   // 获取「我的邀约」列表（我发起的 + 我参与的，含已退出）
@@ -219,6 +234,10 @@ export const useInviteStore = defineStore('invite', () => {
     currentType,
     currentStatus,
     currentTimeRange,
+    currentSort,
+    invitePage,
+    invitePageSize,
+    inviteHasMore,
     myListInvites,
     createdInvites,
     joinedInvites,

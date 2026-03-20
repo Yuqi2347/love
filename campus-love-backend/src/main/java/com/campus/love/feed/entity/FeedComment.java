@@ -25,6 +25,9 @@ public class FeedComment {
     /** 软删除：0 正常，1 已删除（业务手动设置，不用 @TableLogic） */
     private Integer deleted;
 
+    /** V39：点赞数 */
+    private Integer likeCount;
+
     public static final int DELETED = 1;
 
     @TableField(fill = FieldFill.INSERT)

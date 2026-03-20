@@ -40,6 +40,11 @@ public class Notification {
     private Long postId;
 
     /**
+     * V39：关联的评论ID（评论点赞通知）
+     */
+    private Long commentId;
+
+    /**
      * 通知类型
      */
     private String type;
