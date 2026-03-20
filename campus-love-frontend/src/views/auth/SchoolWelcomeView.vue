@@ -29,7 +29,6 @@
 
     <div class="welcome-content">
       <div class="school-intro" :class="{ show: phase >= 1 }">
-        <span class="mascot">{{ theme.mascotEmoji }}</span>
         <h1 class="school-name">{{ theme.name }}</h1>
         <div class="motto-divider">
           <span class="divider-line"></span>
@@ -315,13 +314,6 @@ onUnmounted(() => { cleanup() })
   }
 }
 
-.mascot {
-  font-size: 56px;
-  display: block;
-  margin-bottom: 8px;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.3));
-}
-
 .school-name {
   font-size: 52px;
   font-weight: 800;
@@ -494,7 +486,6 @@ onUnmounted(() => { cleanup() })
 
 @media (max-width: $bp-mobile) {
   .school-name { font-size: 36px; letter-spacing: 3px; }
-  .mascot { font-size: 44px; }
   .caption { font-size: 22px; letter-spacing: 2px; }
   .motto-text { font-size: 14px; letter-spacing: 2px; }
   .mission { font-size: 14px; }
