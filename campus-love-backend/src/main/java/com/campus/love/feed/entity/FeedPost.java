@@ -24,6 +24,10 @@ public class FeedPost {
     private String linkUrl;
     private String linkTitle;
     private String linkImage;
+
+    /** 引用的邀约 ID（站内卡片跳转，与历史 link_* 独立） */
+    private Long inviteId;
+
     private Integer likeCount;
     private Integer commentCount;
 

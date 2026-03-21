@@ -22,10 +22,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.context.request.WebRequest;
 
 import java.util.List;
-import java.util.concurrent.TimeUnit;
 import org.springframework.web.multipart.MultipartFile;
+
+import java.time.ZoneId;
 
 @Tag(name = "用户", description = "个人信息管理")
 @Slf4j
@@ -115,17 +117,44 @@ public class UserController {
 
     @Operation(summary = "获取用户头像（从数据库读取二进制）")
     @GetMapping("/avatar/{userId}")
-    public ResponseEntity<byte[]> getAvatar(@PathVariable Long userId) {
+    public ResponseEntity<byte[]> getAvatar(WebRequest request, @PathVariable Long userId) {
+        // URL 固定为 /user/avatar/{userId}，换图后地址不变：ETag + no-cache，避免长期命中旧 public 缓存
+        String ifNoneMatch = request.getHeader(HttpHeaders.IF_NONE_MATCH);
+        if (org.springframework.util.StringUtils.hasText(ifNoneMatch)) {
+            UserAvatar meta = userService.getAvatarMeta(userId);
+            if (meta == null) {
+                return ResponseEntity.notFound().build();
+            }
+            String etag = buildAvatarEtag(meta);
+            if (request.checkNotModified(etag)) {
+                return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
+                        .eTag(etag)
+                        .cacheControl(CacheControl.noCache().cachePrivate())
+                        .build();
+            }
+        }
+
         UserAvatar avatar = userService.getAvatarData(userId);
         if (avatar == null || avatar.getAvatarData() == null) {
             return ResponseEntity.notFound().build();
         }
+        String etag = buildAvatarEtag(avatar);
         String ct = avatar.getContentType() != null ? avatar.getContentType() : "image/jpeg";
         return ResponseEntity.ok()
+                .eTag(etag)
                 .contentType(MediaType.parseMediaType(ct))
-                .cacheControl(CacheControl.maxAge(7, TimeUnit.DAYS).cachePublic())
+                .cacheControl(CacheControl.noCache().cachePrivate())
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
                 .body(avatar.getAvatarData());
+    }
+
+    /** 与头像内容变更一致：依赖 updated_at + file_size（上传时由 MyBatis 更新） */
+    private static String buildAvatarEtag(UserAvatar a) {
+        long t = a.getUpdatedAt() != null
+                ? a.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+                : 0L;
+        int size = a.getFileSize() != null ? a.getFileSize() : 0;
+        return a.getUserId() + "-" + t + "-" + size;
     }
 
     @Operation(summary = "上传个人主页背景图")

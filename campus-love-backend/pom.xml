@@ -67,6 +67,16 @@
             <scope>runtime</scope>
         </dependency>
 
+        <!-- Flyway：应用启动时按 classpath:db/migration 执行版本化迁移 -->
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.flywaydb</groupId>
+            <artifactId>flyway-mysql</artifactId>
+        </dependency>
+
         <!-- JWT -->
         <dependency>
             <groupId>io.jsonwebtoken</groupId>

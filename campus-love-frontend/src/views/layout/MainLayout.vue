@@ -197,17 +197,6 @@
           </div>
         </div>
 
-        <!-- 链接预览 -->
-        <div v-if="linkPreview.url" class="link-preview-card">
-          <img v-if="linkPreview.image" :src="getMediaUrl(linkPreview.image)" class="link-preview-img" />
-          <div class="link-preview-content">
-            <div class="link-preview-title">{{ linkPreview.title || linkPreview.url }}</div>
-            <button class="link-preview-remove" @click="clearLink">
-              <el-icon><Close /></el-icon>
-            </button>
-          </div>
-        </div>
-
         <!-- 上传按钮：统一图片/视频选择 -->
         <div class="media-actions">
           <input ref="mediaInputRef" type="file" accept="image/*,video/*" multiple hidden @change="handleMediaSelect" />
@@ -215,26 +204,40 @@
             <el-icon><Picture /></el-icon>
             <span>图片/视频</span>
           </button>
-
-          <button class="media-btn" @click="showLinkInput = !showLinkInput">
-            <el-icon><Link /></el-icon>
-            <span>链接</span>
-          </button>
         </div>
 
-        <!-- 链接输入 -->
-        <div v-if="showLinkInput" class="link-input-wrapper">
-          <el-input v-model="linkUrlInput" placeholder="粘贴链接 (https://...)" @keyup.enter="handleAddLink" />
-          <button class="btn-link-add" @click="handleAddLink">添加</button>
+        <div class="invite-picker-row">
+          <span class="invite-picker-label">关联邀约（可选）</span>
+          <el-select
+            v-model="selectedInviteId"
+            clearable
+            filterable
+            placeholder="选择已发起或参与的邀约"
+            :loading="loadingInvitesForFeed"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="inv in inviteOptionsForFeed"
+              :key="inv.id"
+              :label="inviteOptionLabel(inv)"
+              :value="inv.id"
+            />
+          </el-select>
         </div>
       </div>
 
       <template #footer>
-        <button class="btn-primary" :disabled="isPublishing || (!postContent.trim() && !uploadedImages.length && !uploadedVideos.length && !linkPreview.url)" @click="handleCreatePost">
+        <button
+          class="btn-primary"
+          :disabled="isPublishing || (!postContent.trim() && !uploadedImages.length && !uploadedVideos.length && selectedInviteId == null)"
+          @click="handleCreatePost"
+        >
           {{ isPublishing ? '发布中...' : '发布' }}
         </button>
       </template>
     </el-dialog>
+
+    <SiteAnnouncementLayer ref="announcementLayerRef" />
   </div>
 </template>
 
@@ -251,17 +254,19 @@ import { createPost, uploadImage, uploadVideo } from '@/api/feedApi'
 import { searchUsers, type UserSearchItem } from '@/api/userApi'
 import { ElMessage } from 'element-plus'
 // 右侧面板不再展示”热门标签”，改为热门邀约看板
-import { getHotInviteTypeCounts, type InviteTypeCount } from '@/api/inviteApi'
+import { getHotInviteTypeCounts, getInvitesForFeed, type Invite, type InviteTypeCount } from '@/api/inviteApi'
 import { InviteType, INVITE_TYPE_LABELS } from '@/constants/inviteConst'
 import { getMediaUrl, getTypeColor } from '@/utils/shared'
 import { usePostPublishDialogLayout } from '@/composables/usePostPublishDialogLayout'
 import { getSchoolTheme } from '@/constants/schoolThemes'
 import AppAvatar from '@/components/AppAvatar.vue'
+import SiteAnnouncementLayer from '@/components/SiteAnnouncementLayer.vue'
 import { compressImageFile } from '@/utils/mediaCompress'
 
 const route = useRoute()
 const router = useRouter()
 const userStore = useUserStore()
+const announcementLayerRef = ref<InstanceType<typeof SiteAnnouncementLayer> | null>(null)
 const badgeStore = useBadgeStore()
 const followStore = useFollowStore()
 const matchStore = useMatchStore()
@@ -328,12 +333,33 @@ const { postDialogWidth, postTextareaRows } = usePostPublishDialogLayout()
 const showPostDialog = ref(false)
 const postContent = ref('')
 
+watch(showPostDialog, (open) => {
+  if (open) void loadInvitesForFeedPicker()
+})
+
+function inviteOptionLabel(inv: Invite) {
+  const t = INVITE_TYPE_LABELS[inv.inviteType as InviteType] || inv.inviteType
+  return `${t} · ${inv.title}`
+}
+
+async function loadInvitesForFeedPicker() {
+  loadingInvitesForFeed.value = true
+  try {
+    const res = await getInvitesForFeed(1, 50)
+    inviteOptionsForFeed.value = res.data.data?.records ?? []
+  } catch {
+    inviteOptionsForFeed.value = []
+  } finally {
+    loadingInvitesForFeed.value = false
+  }
+}
+
 // 多媒体上传状态
 const uploadedImages = ref<string[]>([])
 const uploadedVideos = ref<string[]>([])
-const linkPreview = ref<{ url: string; title: string; image: string }>({ url: '', title: '', image: '' })
-const linkUrlInput = ref('')
-const showLinkInput = ref(false)
+const selectedInviteId = ref<number | undefined>(undefined)
+const inviteOptionsForFeed = ref<Invite[]>([])
+const loadingInvitesForFeed = ref(false)
 const isPublishing = ref(false)
 const mediaInputRef = ref<HTMLInputElement>()
 
@@ -495,6 +521,14 @@ watch(() => userStore.user, (u) => {
   if (u) badgeStore.fetchBadges()
 }, { immediate: true })
 
+watch(
+  () => userStore.user?.id,
+  (id) => {
+    if (id) announcementLayerRef.value?.load()
+  },
+  { immediate: true },
+)
+
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
   document.removeEventListener('visibilitychange', onVisibilityChange)
@@ -517,7 +551,12 @@ async function handleRecommendFollow(userId: number) {
 }
 
 async function handleCreatePost() {
-  if (!postContent.value.trim() && !uploadedImages.value.length && !uploadedVideos.value.length && !linkPreview.value.url) {
+  if (
+    !postContent.value.trim()
+    && !uploadedImages.value.length
+    && !uploadedVideos.value.length
+    && selectedInviteId.value == null
+  ) {
     return
   }
 
@@ -527,9 +566,7 @@ async function handleCreatePost() {
       content: postContent.value.trim(),
       images: uploadedImages.value.length ? uploadedImages.value.join(',') : undefined,
       videos: uploadedVideos.value.length ? uploadedVideos.value.join(',') : undefined,
-      linkUrl: linkPreview.value.url || undefined,
-      linkTitle: linkPreview.value.title || undefined,
-      linkImage: linkPreview.value.image || undefined
+      inviteId: selectedInviteId.value,
     })
     ElMessage.success('发布成功')
     showPostDialog.value = false
@@ -545,9 +582,7 @@ function resetPostForm() {
   postContent.value = ''
   uploadedImages.value = []
   uploadedVideos.value = []
-  linkPreview.value = { url: '', title: '', image: '' }
-  linkUrlInput.value = ''
-  showLinkInput.value = false
+  selectedInviteId.value = undefined
 }
 
 // 图片上传
@@ -598,29 +633,6 @@ function removeImage(index: number) {
 
 function removeVideo(index: number) {
   uploadedVideos.value.splice(index, 1)
-}
-
-// 链接处理
-function handleAddLink() {
-  const url = linkUrlInput.value.trim()
-  if (!url) return
-
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    ElMessage.warning('请输入有效的链接（以 http:// 或 https:// 开头）')
-    return
-  }
-
-  linkPreview.value = {
-    url,
-    title: url, // 简单处理，实际可以抓取标题
-    image: '' // 简单处理，实际可以抓取预览图
-  }
-  linkUrlInput.value = ''
-  showLinkInput.value = false
-}
-
-function clearLink() {
-  linkPreview.value = { url: '', title: '', image: '' }
 }
 
 function typeLabel(t: string) {
@@ -794,54 +806,6 @@ onMounted(loadInviteBoard)
   }
 }
 
-.link-preview-card {
-  display: flex;
-  gap: 12px;
-  padding: 12px;
-  background: $bg-tertiary;
-  border-radius: 8px;
-  margin-bottom: 12px;
-
-  .link-preview-img {
-    width: 60px;
-    height: 60px;
-    border-radius: 6px;
-    object-fit: cover;
-    flex-shrink: 0;
-  }
-
-  .link-preview-content {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 8px;
-  }
-
-  .link-preview-title {
-    flex: 1;
-    font-size: 14px;
-    font-weight: 500;
-    word-break: break-all;
-  }
-
-  .link-preview-remove {
-    flex-shrink: 0;
-    width: 20px;
-    height: 20px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.1);
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    &:hover { background: rgba(245, 34, 45, 0.2); }
-  }
-}
-
 .media-actions {
   display: flex;
   gap: 8px;
@@ -868,25 +832,16 @@ onMounted(loadInviteBoard)
   }
 }
 
-.link-input-wrapper {
+.invite-picker-row {
   display: flex;
+  flex-direction: column;
   gap: 8px;
-  margin-top: 8px;
-
-  .el-input { flex: 1; }
+  margin-bottom: 8px;
 }
 
-.btn-link-add {
-  padding: 8px 16px;
-  background: $primary;
-  color: white;
-  border: none;
-  border-radius: $radius-md;
-  font-size: 14px;
-  cursor: pointer;
-  transition: all 0.2s;
-
-  &:hover { opacity: 0.9; }
+.invite-picker-label {
+  font-size: 13px;
+  color: $text-secondary;
 }
 
 .sidebar-user {

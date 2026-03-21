@@ -220,6 +220,14 @@ public class InviteController {
         return Result.success(inviteService.getMyInvitesList(range));
     }
 
+    @Operation(summary = "动态发帖引用：可选邀约列表（分页，排除已取消）")
+    @GetMapping("/me/for-feed")
+    public Result<IPage<InviteResponse>> pageInvitesForFeed(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "20") Integer size) {
+        return Result.success(inviteService.pageInvitesForFeed(page, size));
+    }
+
     @Operation(summary = "邀约新活动数量（我的邀约有人加入/发言、等待匹配成功，用于导航红点）")
     @GetMapping("/activity/new-count")
     public Result<Integer> getNewInviteActivityCount() {

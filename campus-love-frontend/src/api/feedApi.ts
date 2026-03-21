@@ -1,6 +1,22 @@
 import request from './request'
 import type { ApiResult } from './request'
 
+/** 动态流中引用的邀约卡片（与后端 InviteFeedCard 一致） */
+export interface InviteFeedCard {
+  id: number
+  title: string
+  inviteType: string
+  status: string
+  inviteTime: string
+  inviteEndTime?: string | null
+  location: string | null
+  participantCount: number | null
+  maxParticipants: number | null
+  creatorId: number | null
+  creatorNickname: string | null
+  creatorAvatarUrl: string | null
+}
+
 export interface FeedComment {
   id: number
   userId: number
@@ -27,9 +43,13 @@ export interface FeedPost {
   content: string
   images: string | null
   videos: string | null
-  linkUrl: string | null
-  linkTitle: string | null
-  linkImage: string | null
+  /** 引用的邀约 ID */
+  inviteId?: number | null
+  inviteCard?: InviteFeedCard | null
+  /** 已下线通用外链，接口可能仍返回 null */
+  linkUrl?: string | null
+  linkTitle?: string | null
+  linkImage?: string | null
   likeCount: number
   commentCount: number
   liked: boolean
@@ -48,9 +68,7 @@ export function createPost(data: {
   content: string
   images?: string
   videos?: string
-  linkUrl?: string
-  linkTitle?: string
-  linkImage?: string
+  inviteId?: number
   visibility?: string
 }) {
   return request.post<ApiResult<FeedPost>>('/feed', data)
@@ -60,9 +78,7 @@ export function createDiscoveryPost(data: {
   content: string
   images?: string
   videos?: string
-  linkUrl?: string
-  linkTitle?: string
-  linkImage?: string
+  inviteId?: number
   visibility?: string
 }) {
   return request.post<ApiResult<FeedPost>>('/feed/discovery', data)

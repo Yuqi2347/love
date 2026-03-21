@@ -412,6 +412,51 @@ public class InviteQueryService {
         return merged;
     }
 
+    /**
+     * 发帖引用邀约：分页列出可选项（我发起 / 我参与 / 一对一待处理等，排除已取消）
+     */
+    @Transactional(readOnly = true)
+    public IPage<InviteResponse> pageInvitesForFeed(Integer page, Integer size) {
+        int pageSize = size == null ? 20 : Math.min(Math.max(size, 1), 50);
+        int current = page == null ? 1 : Math.max(page, 1);
+        List<InviteResponse> all = getMyInvitesList("all").stream()
+                .filter(r -> r.getStatus() == null || !InviteStatusEnum.CANCELLED.name().equals(r.getStatus()))
+                .collect(Collectors.toList());
+        int total = all.size();
+        int from = (current - 1) * pageSize;
+        IPage<InviteResponse> result = new Page<>(current, pageSize, total);
+        if (from >= total) {
+            result.setRecords(Collections.emptyList());
+            return result;
+        }
+        int to = Math.min(from + pageSize, total);
+        result.setRecords(new ArrayList<>(all.subList(from, to)));
+        return result;
+    }
+
+    /**
+     * 校验当前用户是否可将该邀约引用到动态（发起者 / 被邀人 / 任意参与记录含已退出）
+     */
+    @Transactional(readOnly = true)
+    public void assertUserCanReferenceInviteInFeed(Long userId, Long inviteId) {
+        Invite inv = getInviteOrThrow(inviteId);
+        if (InviteStatusEnum.CANCELLED.name().equals(inv.getStatus())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "该邀约已取消，无法引用");
+        }
+        if (userId.equals(inv.getCreatorId())) {
+            return;
+        }
+        if (InviteModeEnum.PRIVATE.name().equals(inv.getInviteMode())
+                && inv.getTargetUserId() != null && userId.equals(inv.getTargetUserId())) {
+            return;
+        }
+        InviteParticipant p = findParticipant(inviteId, userId);
+        if (p != null) {
+            return;
+        }
+        throw new BusinessException(ResultCode.FORBIDDEN, "仅可引用自己发起或参与过的邀约");
+    }
+
     @Transactional(readOnly = true)
     public InviteResponse getInviteDetail(Long inviteId) {
         Invite invite = getInviteOrThrow(inviteId);

@@ -11,9 +11,16 @@ public class FeedPostRequest {
 
     private String images;
     private String videos;
+
+    /** @deprecated 已下线通用外链，服务端忽略 */
     private String linkUrl;
+    /** @deprecated 已下线通用外链，服务端忽略 */
     private String linkTitle;
+    /** @deprecated 已下线通用外链，服务端忽略 */
     private String linkImage;
+
+    /** 引用的邀约 ID（须为本人发起或参与过的有效邀约） */
+    private Long inviteId;
 
     /**
      * 帖子类型：TIMELINE(朋友圈) / DISCOVERY(发现模块)

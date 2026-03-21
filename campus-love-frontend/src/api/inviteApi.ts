@@ -125,7 +125,23 @@ export interface InviteRejoinRequestItem {
 
 export type HistoryRange = 'week' | 'month' | 'all'
 
+/** MyBatis-Plus 分页（动态发帖选邀约） */
+export interface InvitePage {
+  records: Invite[]
+  total: number
+  size: number
+  current: number
+  pages?: number
+}
+
 // ==================== API 方法 ====================
+
+/**
+ * 动态发帖：可选引用的邀约列表（我发起或参与，排除已取消，分页）
+ */
+export function getInvitesForFeed(page = 1, size = 20) {
+  return service.get<ApiResult<InvitePage>>('/invite/me/for-feed', { params: { page, size } })
+}
 
 /**
  * 发起邀约

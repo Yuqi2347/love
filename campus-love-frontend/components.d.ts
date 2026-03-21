@@ -39,9 +39,11 @@ declare module 'vue' {
     ElSwitch: typeof import('element-plus/es')['ElSwitch']
     ElTimePicker: typeof import('element-plus/es')['ElTimePicker']
     EmojiPicker: typeof import('./src/components/EmojiPicker.vue')['default']
+    FeedInviteCard: typeof import('./src/components/FeedInviteCard.vue')['default']
     ReportDialog: typeof import('./src/components/ReportDialog.vue')['default']
     RouterLink: typeof import('vue-router')['RouterLink']
     RouterView: typeof import('vue-router')['RouterView']
     ShareDialog: typeof import('./src/components/ShareDialog.vue')['default']
+    SiteAnnouncementLayer: typeof import('./src/components/SiteAnnouncementLayer.vue')['default']
   }
 }

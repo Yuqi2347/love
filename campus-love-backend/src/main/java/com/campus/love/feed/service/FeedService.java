@@ -10,6 +10,7 @@ import com.campus.love.feed.constants.PostTypeConstants;
 import com.campus.love.feed.constants.VisibilityConstants;
 import com.campus.love.feed.dto.FeedCommentRequest;
 import com.campus.love.feed.constants.FeedConstants;
+import com.campus.love.feed.dto.InviteFeedCard;
 import com.campus.love.feed.dto.FeedPostRequest;
 import com.campus.love.feed.dto.FeedPostResponse;
 import com.campus.love.feed.entity.FeedComment;
@@ -30,6 +31,9 @@ import com.campus.love.follow.service.FollowService;
 import com.campus.love.profile.entity.UserProfileVector;
 import com.campus.love.profile.mapper.UserProfileVectorMapper;
 import com.campus.love.notification.service.NotificationService;
+import com.campus.love.invite.entity.Invite;
+import com.campus.love.invite.mapper.InviteMapper;
+import com.campus.love.invite.service.InviteQueryService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
 import com.campus.love.user.service.ActivityService;
@@ -71,6 +75,8 @@ public class FeedService {
     private final FeedContentVectorMapper feedContentVectorMapper;
     private final EmbeddingService embeddingService;
     private final UserProfileVectorMapper userProfileVectorMapper;
+    private final InviteMapper inviteMapper;
+    private final InviteQueryService inviteQueryService;
 
     /**
      * 创建朋友圈帖子
@@ -93,9 +99,14 @@ public class FeedService {
         post.setContent(request.getContent());
         post.setImages(request.getImages());
         post.setVideos(request.getVideos());
-        post.setLinkUrl(request.getLinkUrl());
-        post.setLinkTitle(request.getLinkTitle());
-        post.setLinkImage(request.getLinkImage());
+        post.setLinkUrl(null);
+        post.setLinkTitle(null);
+        post.setLinkImage(null);
+        post.setInviteId(null);
+        if (request.getInviteId() != null) {
+            inviteQueryService.assertUserCanReferenceInviteInFeed(userId, request.getInviteId());
+            post.setInviteId(request.getInviteId());
+        }
         post.setPostType(postType);
         post.setVisibility(request.getVisibility() != null ? request.getVisibility() : VisibilityConstants.ALL);
         post.setRequiredLevel(UserLevelConstants.getMinLevel());
@@ -145,8 +156,9 @@ public class FeedService {
         }
 
         Map<Long, User> authorMap = batchLoadAuthors(posts);
+        Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(posts);
         return posts.stream().map(p -> {
-            FeedPostResponse response = toResponse(p, currentUserId, authorMap);
+            FeedPostResponse response = toResponse(p, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap);
             activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.VIEW, p.getId());
             behaviorTracker.trackFeedView(currentUserId, p.getId());
             return response;
@@ -316,7 +328,8 @@ public class FeedService {
                 .skip((long) page * size)
                 .limit(size)
                 .collect(Collectors.toList());
-        return filtered.stream().map(p -> toResponse(p, currentUserId, authorMap)).collect(Collectors.toList());
+        Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(filtered);
+        return filtered.stream().map(p -> toResponse(p, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap)).collect(Collectors.toList());
     }
 
     /** 按帖子 visibility 判断当前用户是否可见（以帖子字段为准，兼容旧数据无 visibility 时视为 ALL） */
@@ -380,11 +393,14 @@ public class FeedService {
                         .last("LIMIT " + ((page + 1) * size * FeedConstants.TIMELINE_FETCH_MULTIPLIER))
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
-        return posts.stream()
+        List<FeedPost> pagePosts = posts.stream()
                 .filter(p -> canSeePost(p, currentUserId, authorMap) && withinVisibilityTime(p, authorMap))
                 .skip((long) page * size)
                 .limit(size)
-                .map(p -> toResponse(p, currentUserId, authorMap))
+                .collect(Collectors.toList());
+        Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(pagePosts);
+        return pagePosts.stream()
+                .map(p -> toResponse(p, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap))
                 .collect(Collectors.toList());
     }
 
@@ -402,11 +418,14 @@ public class FeedService {
                         .last("LIMIT " + ((page + 1) * size * FeedConstants.TIMELINE_FETCH_MULTIPLIER))
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
-        return posts.stream()
+        List<FeedPost> pagePosts = posts.stream()
                 .filter(p -> canSeePost(p, currentUserId, authorMap) && withinVisibilityTime(p, authorMap))
                 .skip((long) page * size)
                 .limit(size)
-                .map(p -> toResponse(p, currentUserId, authorMap))
+                .collect(Collectors.toList());
+        Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(pagePosts);
+        return pagePosts.stream()
+                .map(p -> toResponse(p, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap))
                 .collect(Collectors.toList());
     }
 
@@ -424,11 +443,14 @@ public class FeedService {
                         .last("LIMIT " + ((page + 1) * size * FeedConstants.TIMELINE_FETCH_MULTIPLIER))
         );
         Map<Long, User> authorMap = batchLoadAuthors(posts);
-        return posts.stream()
+        List<FeedPost> pagePosts = posts.stream()
                 .filter(p -> canSeePost(p, currentUserId, authorMap) && withinVisibilityTime(p, authorMap))
                 .skip((long) page * size)
                 .limit(size)
-                .map(p -> toResponse(p, currentUserId, authorMap))
+                .collect(Collectors.toList());
+        Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(pagePosts);
+        return pagePosts.stream()
+                .map(p -> toResponse(p, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap))
                 .collect(Collectors.toList());
     }
 
@@ -585,7 +607,7 @@ public class FeedService {
             throw new BusinessException(ResultCode.FORBIDDEN);
         }
         behaviorTracker.trackFeedView(currentUserId, postId);
-        return toResponse(post, currentUserId, null, FeedConstants.DETAIL_COMMENT_LIMIT, commentSort);
+        return toResponse(post, currentUserId, null, FeedConstants.DETAIL_COMMENT_LIMIT, commentSort, null);
     }
 
     @Transactional
@@ -955,18 +977,18 @@ public class FeedService {
     }
 
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId) {
-        return toResponse(post, currentUserId, null, FeedConstants.LIST_COMMENT_LIMIT, null);
+        return toResponse(post, currentUserId, null, FeedConstants.LIST_COMMENT_LIMIT, null, null);
     }
 
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap) {
-        return toResponse(post, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null);
+        return toResponse(post, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, null);
     }
 
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap, int commentLimit) {
-        return toResponse(post, currentUserId, authorMap, commentLimit, null);
+        return toResponse(post, currentUserId, authorMap, commentLimit, null, null);
     }
 
-    private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap, int commentLimit, String commentSort) {
+    private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap, int commentLimit, String commentSort, Map<Long, InviteFeedCard> inviteCardMap) {
         User author = authorMap != null ? authorMap.get(post.getUserId()) : null;
         if (author == null) {
             author = userMapper.selectById(post.getUserId());
@@ -1023,6 +1045,16 @@ public class FeedService {
                     .build();
         }).collect(Collectors.toList());
 
+        InviteFeedCard inviteCard = null;
+        if (post.getInviteId() != null) {
+            if (inviteCardMap != null) {
+                inviteCard = inviteCardMap.get(post.getInviteId());
+            }
+            if (inviteCard == null) {
+                inviteCard = loadInviteFeedCard(post.getInviteId());
+            }
+        }
+
         return FeedPostResponse.builder()
                 .id(post.getId())
                 .userId(post.getUserId())
@@ -1031,9 +1063,11 @@ public class FeedService {
                 .content(post.getContent())
                 .images(post.getImages())
                 .videos(post.getVideos())
-                .linkUrl(post.getLinkUrl())
-                .linkTitle(post.getLinkTitle())
-                .linkImage(post.getLinkImage())
+                .linkUrl(null)
+                .linkTitle(null)
+                .linkImage(null)
+                .inviteId(post.getInviteId())
+                .inviteCard(inviteCard)
                 .likeCount(post.getLikeCount())
                 .commentCount(post.getCommentCount())
                 .liked(liked)
@@ -1137,8 +1171,70 @@ public class FeedService {
         }
 
         Map<Long, User> authorMap = batchLoadAuthors(orderedPosts);
+        Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(orderedPosts);
         return orderedPosts.stream()
-                .map(p -> toResponse(p, userId, authorMap))
+                .map(p -> toResponse(p, userId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap))
                 .collect(Collectors.toList());
+    }
+
+    private Map<Long, InviteFeedCard> batchInviteCards(List<FeedPost> posts) {
+        if (posts == null || posts.isEmpty()) {
+            return Map.of();
+        }
+        Set<Long> ids = posts.stream().map(FeedPost::getInviteId).filter(Objects::nonNull).collect(Collectors.toSet());
+        if (ids.isEmpty()) {
+            return Map.of();
+        }
+        List<Invite> invites = inviteMapper.selectList(
+                new LambdaQueryWrapper<Invite>().in(Invite::getId, ids));
+        if (invites.isEmpty()) {
+            return Map.of();
+        }
+        List<Long> creatorIds = invites.stream().map(Invite::getCreatorId).filter(Objects::nonNull).distinct().collect(Collectors.toList());
+        List<User> creators = creatorIds.isEmpty() ? List.of() : userMapper.selectBatchIds(creatorIds);
+        Map<Long, User> creatorMap = creators != null
+                ? creators.stream().filter(Objects::nonNull).collect(toMap(User::getId, u -> u, (a, b) -> a))
+                : Map.of();
+        Map<Long, InviteFeedCard> map = new HashMap<>();
+        for (Invite inv : invites) {
+            if (inv == null || Boolean.TRUE.equals(inv.getDeleted())) {
+                continue;
+            }
+            User c = creatorMap.get(inv.getCreatorId());
+            map.put(inv.getId(), toInviteFeedCard(inv, c));
+        }
+        return map;
+    }
+
+    private InviteFeedCard toInviteFeedCard(Invite inv, User creator) {
+        if (inv == null) {
+            return null;
+        }
+        return InviteFeedCard.builder()
+                .id(inv.getId())
+                .title(inv.getTitle())
+                .inviteType(inv.getInviteType())
+                .status(inv.getStatus())
+                .inviteTime(inv.getInviteTime() != null ? inv.getInviteTime().format(DateTimeConstants.DATETIME_FMT) : null)
+                .inviteEndTime(inv.getInviteEndTime() != null ? inv.getInviteEndTime().format(DateTimeConstants.DATETIME_FMT) : null)
+                .location(inv.getLocation())
+                .participantCount(inv.getParticipantCount())
+                .maxParticipants(inv.getMaxParticipants())
+                .creatorId(inv.getCreatorId())
+                .creatorNickname(creator != null ? creator.getNickname() : null)
+                .creatorAvatarUrl(creator != null ? creator.getAvatarUrl() : null)
+                .build();
+    }
+
+    private InviteFeedCard loadInviteFeedCard(Long inviteId) {
+        if (inviteId == null) {
+            return null;
+        }
+        Invite inv = inviteMapper.selectById(inviteId);
+        if (inv == null || Boolean.TRUE.equals(inv.getDeleted())) {
+            return null;
+        }
+        User creator = userMapper.selectById(inv.getCreatorId());
+        return toInviteFeedCard(inv, creator);
     }
 }

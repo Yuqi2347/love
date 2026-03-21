@@ -16,9 +16,17 @@ public class FeedPostResponse {
     private String content;
     private String images;
     private String videos;
+
+    /** @deprecated 不再用于展示 */
     private String linkUrl;
+    /** @deprecated 不再用于展示 */
     private String linkTitle;
+    /** @deprecated 不再用于展示 */
     private String linkImage;
+
+    private Long inviteId;
+    private InviteFeedCard inviteCard;
+
     private Integer likeCount;
     private Integer commentCount;
     private Boolean liked;

@@ -116,6 +116,16 @@ public class InviteService {
         return crudService.getMyInvitesList(range);
     }
 
+    /** 动态发帖：可选邀约列表（分页） */
+    @Transactional(readOnly = true)
+    public IPage<InviteResponse> pageInvitesForFeed(Integer page, Integer size) {
+        return crudService.pageInvitesForFeed(page, size);
+    }
+
+    public void assertUserCanReferenceInviteInFeed(Long userId, Long inviteId) {
+        crudService.assertUserCanReferenceInviteInFeed(userId, inviteId);
+    }
+
     @Transactional(readOnly = true)
     public InviteResponse getInviteDetail(Long inviteId) {
         crudService.ensureChatGroupForInvite(inviteId);

@@ -203,16 +203,7 @@
               controls
             />
           </div>
-          <!-- 链接预览 -->
-          <div v-if="item.post.linkUrl" class="feed-link" @click.stop>
-            <a :href="item.post.linkUrl" target="_blank" class="link-card">
-              <img v-if="item.post.linkImage" :src="getMediaUrl(item.post.linkImage)" class="link-image" />
-              <div class="link-content">
-                <div class="link-title">{{ item.post.linkTitle || item.post.linkUrl }}</div>
-                <div class="link-url">{{ getDomain(item.post.linkUrl) }}</div>
-              </div>
-            </a>
-          </div>
+          <FeedInviteCard v-if="item.post.inviteCard" :card="item.post.inviteCard" />
           <!-- AI 标签 -->
           <div v-if="item.post.aiTags" class="feed-ai-tags">
             <span
@@ -286,17 +277,6 @@
             </div>
           </div>
 
-          <!-- 链接预览 -->
-          <div v-if="linkPreview.url" class="link-preview-card">
-            <img v-if="linkPreview.image" :src="getMediaUrl(linkPreview.image)" class="link-preview-img" />
-            <div class="link-preview-content">
-              <div class="link-preview-title">{{ linkPreview.title || linkPreview.url }}</div>
-              <button type="button" class="link-preview-remove" @click="clearLink">
-                <el-icon><Close /></el-icon>
-              </button>
-            </div>
-          </div>
-
           <!-- 上传按钮：统一图片/视频选择 -->
           <div class="media-actions">
             <input ref="mediaInputRef" type="file" accept="image/*,video/*" multiple hidden @change="handleMediaSelect" />
@@ -304,19 +284,26 @@
               <el-icon><Picture /></el-icon>
               <span>图片/视频</span>
             </button>
-
-            <button type="button" class="media-btn" @click="showLinkInput = !showLinkInput">
-              <el-icon><Link /></el-icon>
-              <span>链接</span>
-            </button>
-          </div>
-
-          <!-- 链接输入 -->
-          <div v-if="showLinkInput" class="link-input-wrapper">
-            <el-input v-model="linkUrlInput" placeholder="粘贴链接 (https://...)" @keyup.enter="handleAddLink" />
-            <button type="button" class="btn-link-add" @click="handleAddLink">添加</button>
           </div>
         </div>
+
+        <el-form-item label="关联邀约（可选）">
+          <el-select
+            v-model="selectedInviteId"
+            clearable
+            filterable
+            placeholder="选择已发起或参与的邀约"
+            :loading="loadingInvitesForFeed"
+            style="width: 100%"
+          >
+            <el-option
+              v-for="inv in inviteOptionsForFeed"
+              :key="inv.id"
+              :label="inviteOptionLabel(inv)"
+              :value="inv.id"
+            />
+          </el-select>
+        </el-form-item>
 
         <!-- 可见范围 -->
         <el-form-item label="可见范围">
@@ -330,7 +317,11 @@
       </el-form>
       <template #footer>
         <el-button @click="closePostDialog">取消</el-button>
-        <el-button type="primary" :disabled="posting || (!postContent.trim() && !uploadedImages.length && !uploadedVideos.length && !linkPreview.url)" @click="handlePost">
+        <el-button
+          type="primary"
+          :disabled="posting || (!postContent.trim() && !uploadedImages.length && !uploadedVideos.length && selectedInviteId == null)"
+          @click="handlePost"
+        >
           {{ posting ? '发布中...' : '发布' }}
         </el-button>
       </template>
@@ -398,6 +389,7 @@ import {
 } from '@/api/feedApi'
 import { checkReported, getMyReport, getReportCountByPostIds, VIOLATION_TYPES } from '@/api/reportApi'
 import ReportDialog from '@/components/ReportDialog.vue'
+import FeedInviteCard from '@/components/FeedInviteCard.vue'
 import { useUserStore } from '@/store/userStore'
 import { useFollowStore } from '@/store/followStore'
 import { useInviteStore } from '@/store/inviteStore'
@@ -406,6 +398,8 @@ import { searchUsers, type UserSearchItem } from '@/api/userApi'
 import { ElMessage, ElMessageBox, ElImageViewer } from 'element-plus'
 import { Plus, Delete, Search, Flag, WarningFilled, Sort, Refresh, Loading, Operation } from '@element-plus/icons-vue'
 import type { Invite } from '@/api/inviteApi'
+import { getInvitesForFeed } from '@/api/inviteApi'
+import { INVITE_TYPE_LABELS, InviteType } from '@/constants/inviteConst'
 import ShareDialog from '@/components/ShareDialog.vue'
 import AppAvatar from '@/components/AppAvatar.vue'
 import { DEFAULT_AVATAR, getMediaUrl, formatRelativeTime } from '@/utils/shared'
@@ -533,12 +527,33 @@ const postContent = ref('')
 const postVisibility = ref('ALL')
 const posting = ref(false)
 
+watch(showPostDialog, (open) => {
+  if (open) void loadInvitesForFeedPicker()
+})
+
+function inviteOptionLabel(inv: Invite) {
+  const t = INVITE_TYPE_LABELS[inv.inviteType as InviteType] || inv.inviteType
+  return `${t} · ${inv.title}`
+}
+
+async function loadInvitesForFeedPicker() {
+  loadingInvitesForFeed.value = true
+  try {
+    const res = await getInvitesForFeed(1, 50)
+    inviteOptionsForFeed.value = res.data.data?.records ?? []
+  } catch {
+    inviteOptionsForFeed.value = []
+  } finally {
+    loadingInvitesForFeed.value = false
+  }
+}
+
 // 多媒体上传状态
 const uploadedImages = ref<string[]>([])
 const uploadedVideos = ref<string[]>([])
-const linkPreview = ref<{ url: string; title: string; image: string }>({ url: '', title: '', image: '' })
-const linkUrlInput = ref('')
-const showLinkInput = ref(false)
+const selectedInviteId = ref<number | undefined>(undefined)
+const inviteOptionsForFeed = ref<Invite[]>([])
+const loadingInvitesForFeed = ref(false)
 const mediaInputRef = ref<HTMLInputElement>()
 
 // 分享相关状态
@@ -828,8 +843,13 @@ function formatTime(timeStr: string): string {
 }
 
 async function handlePost() {
-  if (!postContent.value.trim() && !uploadedImages.value.length && !uploadedVideos.value.length && !linkPreview.value.url) {
-    ElMessage.warning('请输入内容或添加媒体')
+  if (
+    !postContent.value.trim()
+    && !uploadedImages.value.length
+    && !uploadedVideos.value.length
+    && selectedInviteId.value == null
+  ) {
+    ElMessage.warning('请输入内容、添加媒体或关联邀约')
     return
   }
 
@@ -839,10 +859,8 @@ async function handlePost() {
       content: postContent.value.trim(),
       images: uploadedImages.value.length ? uploadedImages.value.join(',') : undefined,
       videos: uploadedVideos.value.length ? uploadedVideos.value.join(',') : undefined,
-      linkUrl: linkPreview.value.url || undefined,
-      linkTitle: linkPreview.value.title || undefined,
-      linkImage: linkPreview.value.image || undefined,
-      visibility: postVisibility.value || 'ALL'
+      inviteId: selectedInviteId.value,
+      visibility: postVisibility.value || 'ALL',
     })
     posts.value.unshift(res.data.data)
     resetPostForm()
@@ -862,9 +880,7 @@ function resetPostForm() {
   postVisibility.value = 'ALL'
   uploadedImages.value = []
   uploadedVideos.value = []
-  linkPreview.value = { url: '', title: '', image: '' }
-  linkUrlInput.value = ''
-  showLinkInput.value = false
+  selectedInviteId.value = undefined
 }
 
 function closePostDialog() {
@@ -920,38 +936,6 @@ function removeImage(index: number) {
 
 function removeVideo(index: number) {
   uploadedVideos.value.splice(index, 1)
-}
-
-// 链接处理
-function handleAddLink() {
-  const url = linkUrlInput.value.trim()
-  if (!url) return
-
-  if (!url.startsWith('http://') && !url.startsWith('https://')) {
-    ElMessage.warning('请输入有效的链接（以 http:// 或 https:// 开头）')
-    return
-  }
-
-  linkPreview.value = {
-    url,
-    title: url,
-    image: ''
-  }
-  linkUrlInput.value = ''
-  showLinkInput.value = false
-}
-
-function clearLink() {
-  linkPreview.value = { url: '', title: '', image: '' }
-}
-
-function getDomain(url: string) {
-  try {
-    const domain = new URL(url).hostname
-    return domain.replace('www.', '')
-  } catch {
-    return url
-  }
 }
 
 // 检查帖子是否已展开
@@ -1756,54 +1740,6 @@ async function handlePinPost(post: FeedPost) {
   }
 }
 
-.link-preview-card {
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  background: $bg-tertiary;
-  border-radius: 8px;
-  margin-bottom: 12px;
-
-  .link-preview-img {
-    width: 50px;
-    height: 50px;
-    border-radius: 6px;
-    object-fit: cover;
-    flex-shrink: 0;
-  }
-
-  .link-preview-content {
-    flex: 1;
-    min-width: 0;
-    display: flex;
-    align-items: flex-start;
-    justify-content: space-between;
-    gap: 6px;
-  }
-
-  .link-preview-title {
-    flex: 1;
-    font-size: 13px;
-    font-weight: 500;
-    word-break: break-all;
-  }
-
-  .link-preview-remove {
-    flex-shrink: 0;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: rgba(0, 0, 0, 0.1);
-    border: none;
-    cursor: pointer;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-
-    &:hover { background: rgba(245, 34, 45, 0.2); }
-  }
-}
-
 .media-actions {
   display: flex;
   gap: 8px;
@@ -1830,27 +1766,7 @@ async function handlePinPost(post: FeedPost) {
   }
 }
 
-.link-input-wrapper {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-
-  .el-input { flex: 1; }
-}
-
-.btn-link-add {
-  padding: 6px 14px;
-  background: $primary;
-  color: white;
-  border: none;
-  border-radius: $radius-md;
-  font-size: 13px;
-  cursor: pointer;
-
-  &:hover { opacity: 0.9; }
-}
-
-// 动态列表中的视频和链接样式
+// 动态列表中的视频样式
 .feed-videos {
   margin: 8px 0;
 }
@@ -1861,10 +1777,6 @@ async function handlePinPost(post: FeedPost) {
   border-radius: $radius-md;
   object-fit: contain;
   background: #000;
-}
-
-.feed-link {
-  margin: 8px 0;
 }
 
 .feed-ai-tags {
@@ -1880,53 +1792,6 @@ async function handlePinPost(post: FeedPost) {
   background: rgba(var(--el-color-primary-rgb), 0.08);
   padding: 2px 8px;
   border-radius: 4px;
-}
-
-.link-card {
-  display: flex;
-  gap: 10px;
-  padding: 10px;
-  background: $bg-tertiary;
-  border-radius: $radius-md;
-  text-decoration: none;
-  transition: all 0.2s;
-
-  &:hover {
-    background: #e8eaed;
-  }
-}
-
-.link-image {
-  width: 60px;
-  height: 60px;
-  border-radius: $radius-sm;
-  object-fit: cover;
-  flex-shrink: 0;
-}
-
-.link-content {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-}
-
-.link-title {
-  font-size: 13px;
-  font-weight: 600;
-  color: $text-primary;
-  margin-bottom: 4px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-}
-
-.link-url {
-  font-size: 11px;
-  color: $text-muted;
 }
 
 .load-toolbar {
@@ -2124,15 +1989,6 @@ async function handlePinPost(post: FeedPost) {
 
   .feed-content {
     font-size: 14px;
-  }
-
-  .link-card {
-    gap: 8px;
-    padding: 9px;
-  }
-
-  .link-title {
-    font-size: 12px;
   }
 }
 </style>

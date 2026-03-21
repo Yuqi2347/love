@@ -75,6 +75,11 @@ const router = createRouter({
           name: 'Reports',
           component: () => import('@/views/ReportListView.vue'),
         },
+        {
+          path: 'announcements',
+          name: 'Announcements',
+          component: () => import('@/views/AnnouncementManageView.vue'),
+        },
       ],
     },
   ],

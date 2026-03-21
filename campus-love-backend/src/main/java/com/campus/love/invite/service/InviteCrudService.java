@@ -76,6 +76,15 @@ public class InviteCrudService {
         return queryService.getMyInvitesList(range);
     }
 
+    @Transactional(readOnly = true)
+    public IPage<InviteResponse> pageInvitesForFeed(Integer page, Integer size) {
+        return queryService.pageInvitesForFeed(page, size);
+    }
+
+    public void assertUserCanReferenceInviteInFeed(Long userId, Long inviteId) {
+        queryService.assertUserCanReferenceInviteInFeed(userId, inviteId);
+    }
+
     public void ensureChatGroupForInvite(Long inviteId) {
         commandService.ensureChatGroupForInvite(inviteId);
     }

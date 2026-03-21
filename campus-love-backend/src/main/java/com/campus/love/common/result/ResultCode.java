@@ -64,6 +64,10 @@ public enum ResultCode {
     YUANFEN_START_BURST(7005, "短时间内发起缘分分析次数过多，请稍后再试"),
     /** 全站当前小时缘分「真实调 AI」次数达配置上限（上海时区整点小时，Redis 计数） */
     YUANFEN_AI_GLOBAL_BUSY(7006, "缘分分析使用火热，请稍后再试"),
+    /** AI 头像工作室免费次数已用完 */
+    AVATAR_STUDIO_QUOTA_EXCEEDED(7007, "免费生成次数已用完"),
+    /** 图生图服务未配置或不可用 */
+    AVATAR_STUDIO_IMAGE_UNAVAILABLE(7008, "头像风格生成服务暂不可用，请稍后重试"),
 
     // 心动时刻模块 8xxx
     MOMENT_ALREADY_ENROLLED(8001, "本周已报名，无需重复报名"),

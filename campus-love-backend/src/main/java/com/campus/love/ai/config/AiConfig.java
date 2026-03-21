@@ -64,6 +64,29 @@ public class AiConfig {
      */
     private int yuanfenGlobalAiHourlyMax = 0;
 
+    // ---------- 火山方舟图生图（与 DeepSeek 文本 AI 分离，见 ARK_* 环境变量）----------
+
+    /** 火山方舟 API Key，用于 {@code /images/generations} */
+    private String arkApiKey;
+
+    /** 如 https://ark.cn-beijing.volces.com/api/v3 */
+    private String arkBaseUrl = "https://ark.cn-beijing.volces.com/api/v3";
+
+    /** 图生图模型，如 doubao-seedream-5-0-260128 */
+    private String arkImageModel = "doubao-seedream-5-0-260128";
+
+    /**
+     * AI 头像工作室每人免费生成次数（成功调用图生图后计一次）。
+     * 配置项：ai.avatar-studio-free-quota / AVATAR_STUDIO_FREE_QUOTA
+     */
+    private int avatarStudioFreeQuota = 2;
+
+    /**
+     * 图生图 HTTP 超时（秒，含下载结果图）。
+     * 配置项：ai.avatar-studio-timeout-seconds / AVATAR_STUDIO_TIMEOUT_SECONDS
+     */
+    private int avatarStudioTimeoutSeconds = 180;
+
     public String requiredApiKey() {
         if (!StringUtils.hasText(apiKey)) {
             throw new IllegalStateException("AI_API_KEY 未配置");

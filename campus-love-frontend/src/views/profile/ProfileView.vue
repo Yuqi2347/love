@@ -52,8 +52,13 @@
             preview-teleported
             fit="cover"
           />
-          <input ref="avatarInput" type="file" accept="image/*" style="display: none" @change="handleAvatarChange" />
-          <button v-if="isMe" class="avatar-upload-btn" @click.stop="avatarInput?.click()">
+          <button
+            v-if="isMe"
+            type="button"
+            class="avatar-upload-btn"
+            title="AI 头像工作室"
+            @click.stop="$router.push({ name: 'AvatarStudio' })"
+          >
             <el-icon><Camera /></el-icon>
           </button>
         </div>
@@ -502,12 +507,12 @@ import { ElMessage } from 'element-plus'
 import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton, InfoFilled, ArrowLeft, Picture, DataAnalysis } from '@element-plus/icons-vue'
 import { MATCH_DIMENSION_LABELS, INTEREST_CODE_TO_NAME } from '@/constants/matchConst'
 import { FOLLOW_STATUS_LABELS, FollowStatus } from '@/constants/followConst'
-import { uploadAvatar, uploadCover, clearCover as clearCoverApi, sendPasswordCode, resetPassword as resetPasswordApi } from '@/api/userApi'
+import { uploadCover, clearCover as clearCoverApi, sendPasswordCode, resetPassword as resetPasswordApi } from '@/api/userApi'
 import { getYuanFenCooldown } from '@/api/aiApi'
 import YuanFenAnalysisSheet from './components/YuanFenAnalysisSheet.vue'
 import IceBreakPrivacySheet from './components/IceBreakPrivacySheet.vue'
 import { DEFAULT_AVATAR, getMediaUrl } from '@/utils/shared'
-import { compressAvatarFile, compressCoverFile } from '@/utils/mediaCompress'
+import { compressCoverFile } from '@/utils/mediaCompress'
 import BaseModalShell from '@/components/BaseModalShell.vue'
 
 const defaultAvatar = DEFAULT_AVATAR
@@ -635,8 +640,6 @@ function startCooldownTimer(seconds: number) {
 const followingList = ref<FollowUser[]>([])
 const followerList = ref<FollowUser[]>([])
 const mutualList = ref<FollowUser[]>([])
-const avatarInput = ref<HTMLInputElement | null>(null)
-
 // 背景设置
 const showCoverSettings = ref(false)
 const coverInput = ref<HTMLInputElement | null>(null)
@@ -1212,36 +1215,6 @@ function getLevelByScore(score: number): number {
   return 1
 }
 
-async function handleAvatarChange(event: Event) {
-  const target = event.target as HTMLInputElement
-  const file = target.files?.[0]
-  if (!file) return
-
-  // 验证文件类型和大小
-  if (!file.type.startsWith('image/')) {
-    ElMessage.error('请选择图片文件')
-    return
-  }
-  if (file.size > 8 * 1024 * 1024) {
-    ElMessage.warning('头像图片不能超过 8MB，请压缩后重试')
-    return
-  }
-
-  try {
-    ElMessage.info('上传中...')
-    const toSend = await compressAvatarFile(file)
-    const res = await uploadAvatar(toSend)
-    if (profile.value) {
-      profile.value.avatarUrl = res.data.data
-    }
-    await userStore.fetchProfile()
-    ElMessage.success('头像上传成功')
-  } catch {
-    ElMessage.error('头像上传失败')
-  } finally {
-    if (target) target.value = ''
-  }
-}
 </script>
 
 <style lang="scss" scoped>

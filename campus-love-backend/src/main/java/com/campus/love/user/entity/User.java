@@ -90,6 +90,10 @@ public class User {
     /** V30：注销原因枚举 */
     private Integer deleteReason;
 
+    /** AI 头像工作室已用免费次数（成功生成后递增） */
+    @TableField("avatar_studio_used_count")
+    private Integer avatarStudioUsedCount;
+
     /** 信用分默认值 100，用于邀约等模块 */
     public static final int DEFAULT_CREDIT_SCORE = 100;
 

@@ -310,6 +310,17 @@ public class UserService {
         return userAvatarMapper.selectById(userId);
     }
 
+    /**
+     * 仅查询头像元数据（不含二进制），用于 ETag 条件请求，避免 304 时读大字段。
+     */
+    public UserAvatar getAvatarMeta(Long userId) {
+        return userAvatarMapper.selectOne(
+                new LambdaQueryWrapper<UserAvatar>()
+                        .select(UserAvatar::getUserId, UserAvatar::getUpdatedAt,
+                                UserAvatar::getFileSize, UserAvatar::getContentType)
+                        .eq(UserAvatar::getUserId, userId));
+    }
+
     public String uploadCover(MultipartFile file) throws IOException {
         Long userId = CurrentUser.getId();
         String coverUrl = fileUploadService.uploadImage(file, "cover_" + userId + "_", 25L * 1024 * 1024);

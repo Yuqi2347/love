@@ -63,14 +63,7 @@
             controls
           />
         </div>
-        <div v-if="post.linkUrl" class="feed-link" @click.stop>
-          <a :href="post.linkUrl" target="_blank" class="link-card">
-            <img v-if="post.linkImage" :src="getMediaUrl(post.linkImage)" class="link-image" />
-            <div class="link-content">
-              <div class="link-title">{{ post.linkTitle || post.linkUrl }}</div>
-            </div>
-          </a>
-        </div>
+        <FeedInviteCard v-if="post.inviteCard" :card="post.inviteCard" />
         <!-- AI 标签 -->
         <div v-if="post.aiTags" class="feed-ai-tags">
           <span
@@ -128,6 +121,7 @@ import {
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Delete } from '@element-plus/icons-vue'
 import ShareDialog from '@/components/ShareDialog.vue'
+import FeedInviteCard from '@/components/FeedInviteCard.vue'
 import { DEFAULT_AVATAR, getMediaUrl, formatRelativeTime } from '@/utils/shared'
 
 const defaultAvatar = DEFAULT_AVATAR
@@ -392,10 +386,6 @@ onMounted(async () => {
   border-radius: 8px;
 }
 
-.feed-link {
-  margin-bottom: 12px;
-}
-
 .feed-ai-tags {
   display: flex;
   flex-wrap: wrap;
@@ -409,33 +399,6 @@ onMounted(async () => {
   background: rgba(var(--el-color-primary-rgb), 0.08);
   padding: 2px 8px;
   border-radius: 4px;
-}
-
-.link-card {
-  display: flex;
-  gap: 12px;
-  padding: 12px;
-  background: var(--el-fill-color-light);
-  border-radius: 8px;
-  text-decoration: none;
-  color: inherit;
-}
-
-.link-image {
-  width: 80px;
-  height: 80px;
-  object-fit: cover;
-  border-radius: 4px;
-}
-
-.link-content {
-  flex: 1;
-  min-width: 0;
-}
-
-.link-title {
-  font-size: 14px;
-  font-weight: 500;
 }
 
 .feed-actions {

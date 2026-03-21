@@ -92,6 +92,8 @@
           />
         </div>
 
+        <FeedInviteCard v-if="post.inviteCard" :card="post.inviteCard" />
+
         <div class="post-actions">
           <button
             :class="['action-btn', { active: post.liked }]"
@@ -345,6 +347,7 @@ import { ArrowLeft, Delete, Flag, Picture, Close, Star, StarFilled } from '@elem
 import ShareDialog from '@/components/ShareDialog.vue'
 import EmojiPicker from '@/components/EmojiPicker.vue'
 import FeedTagConfirmBar from './components/FeedTagConfirmBar.vue'
+import FeedInviteCard from '@/components/FeedInviteCard.vue'
 import { uploadImage } from '@/api/feedApi'
 import { DEFAULT_AVATAR, formatRelativeTime } from '@/utils/shared'
 import { compressImageFile } from '@/utils/mediaCompress'

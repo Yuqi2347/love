@@ -47,6 +47,10 @@
           <el-icon><Flag /></el-icon>
           <span>举报管理</span>
         </el-menu-item>
+        <el-menu-item index="/announcements">
+          <el-icon><Bell /></el-icon>
+          <span>全站公告</span>
+        </el-menu-item>
       </el-menu>
     </el-aside>
     <el-container>
@@ -68,7 +72,7 @@
 import { computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/store/userStore'
-import { DataAnalysis, User, Calendar, Document, MagicStick, TrendCharts, Flag } from '@element-plus/icons-vue'
+import { DataAnalysis, User, Calendar, Document, MagicStick, TrendCharts, Flag, Bell } from '@element-plus/icons-vue'
 
 const route = useRoute()
 const router = useRouter()
@@ -88,6 +92,7 @@ const currentTitle = computed(() => {
     '/moment/config': '心动时刻匹配配置',
     '/ai-token-stats': 'AI Token 统计',
     '/reports': '举报管理',
+    '/announcements': '全站公告',
   }
   return map[route.path] || '管理后台'
 })

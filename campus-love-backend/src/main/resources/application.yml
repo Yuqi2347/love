@@ -14,6 +14,13 @@ spring:
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
+  flyway:
+    enabled: ${SPRING_FLYWAY_ENABLED:true}
+    locations: classpath:db/migration
+    table: flyway_schema_history
+    baseline-on-migrate: false
+    validate-on-migrate: true
+
   data:
     redis:
       host: ${REDIS_HOST:localhost}
@@ -88,6 +95,12 @@ ai:
   yuanfen-start-burst-window-seconds: ${YUANFEN_START_BURST_WINDOW:900}
   # 全站当前小时「真实调 AI」缘分次数上限（上海时区整点小时，Redis）；0=不限制
   yuanfen-global-ai-hourly-max: ${YUANFEN_GLOBAL_AI_HOURLY_MAX:0}
+  # ---------- 火山方舟图生图（AI 头像工作室，与 ARK_* 环境变量对应）----------
+  ark-api-key: ${ARK_API_KEY:}
+  ark-base-url: ${ARK_BASE_URL:https://ark.cn-beijing.volces.com/api/v3}
+  ark-image-model: ${ARK_IMAGE_MODEL:doubao-seedream-5-0-260128}
+  avatar-studio-free-quota: ${AVATAR_STUDIO_FREE_QUOTA:2}
+  avatar-studio-timeout-seconds: ${AVATAR_STUDIO_TIMEOUT_SECONDS:180}
 
 springdoc:
   api-docs:

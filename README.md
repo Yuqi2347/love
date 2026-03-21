@@ -8,7 +8,7 @@
 |------|------|
 | 前端 | Vue 3 + Vite 5 + TypeScript + Element Plus + Pinia |
 | 后端 | Spring Boot 3.2 + MyBatis-Plus + Spring Security + JWT |
-| 数据库 | MySQL 8.0 + Redis 7 |
+| 数据库 | MySQL 8.0 + Redis 7 + Flyway（版本化迁移） |
 | 向量存储 | MySQL JSON（1536 维，应用层相似度计算；可扩展 pgvector/专用向量库） |
 | 实时通信 | WebSocket |
 | API文档 | Swagger 3 / OpenAPI 3.0 |
@@ -18,37 +18,22 @@
 1. **Java 21** — [Eclipse Temurin 21](https://adoptium.net/)，配置 `JAVA_HOME` 和 `PATH`
 2. **Maven 3.9+** — [下载](https://maven.apache.org/download.cgi)，配置 `PATH`
 3. **Node.js 18+** — [下载](https://nodejs.org/)
-4. **MySQL 8.0**
-   - **全新环境初始化（本地第一次搭建）**：
+4. **MySQL 8.0** + **Flyway 迁移（推荐）**
+   - **新环境 / 本地第一次搭建**：只建**空库**（不要手工执行 `schema.sql` 作为初始化主路径，避免与 Flyway 重复）：
      ```sql
      CREATE DATABASE campus_love DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
      ```
-     然后在项目根目录执行（或进入 `db` 目录后执行）：
-     - 在 CMD 中：`mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/schema.sql`
-     - 或在 MySQL 客户端中：`SOURCE campus-love-backend/src/main/resources/db/schema.sql;`
-     完成后会一次性创建所有表（含 V1～V41 全部结构）及兴趣标签、问卷元数据等种子数据，与测试环境一致。
-
-   - **已有数据库升级到最新版本（V1.1.2）**：
-     在 `campus-love-backend/src/main/resources/db/` 目录下，按顺序执行尚未执行过的增量脚本：
-     ```bash
-     # ---- 从 V1.1.0 以前版本升级 ----
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V30__user_portrait_refactor.sql
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V31__interest_tag_meta_seed.sql
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V32__ocean_confidence_and_updates.sql
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V33__match_weights_v3.sql
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V34__moment_match_full_plan.sql
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V35__moment_result_rework.sql
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V36__schema_sync_v30_tables.sql
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V37__invite_campus.sql
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V38__moment_admin_upgrade.sql
-     # ---- V1.1.2 新增（从 V1.1.1 升级只需执行以下三条）----
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V39__comment_like_and_feed_pin.sql
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V40__user_avatar_blob.sql
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V41__feed_content_vector_enhance.sql
-     mysql -uroot -p campus_love < campus-love-backend/src/main/resources/db/V42__noop_feed_like_behavior_log.sql
-     ```
-     增量脚本只负责在已有结构上做"补充/升级"，不会重复创建基础表。**登录/注册 500**：若提示表缺失（如 t_user_portrait），执行 `V36__schema_sync_v30_tables.sql` 补齐。向量存储说明见 `docs/architecture/VECTOR_STORAGE.md`。
+   - 在 `campus-love-backend/.env`（或环境变量）中配置 `DB_URL` / `DB_USERNAME` / `DB_PASSWORD`，使应用指向上述库。
+   - **启动后端**：Spring Boot 会自动运行 Flyway，按 `classpath:db/migration` 下 **`V1__baseline_core.sql` → `V46__…`** 顺序执行，并写入表 `flyway_schema_history`。
+   - **版本化脚本位置**：`campus-love-backend/src/main/resources/db/migration/`（唯一真相；`db/schema.sql` 为结构快照，仅供对照，勿与 Flyway 重复执行同一 DDL）。
+   - **关闭 Flyway**（仅调试，不推荐生产）：环境变量 `SPRING_FLYWAY_ENABLED=false`。
+   - **清空库并重新跑迁移（未上线/可丢数据时）**：自行在 MySQL 中 `DROP DATABASE campus_love;` 再 `CREATE DATABASE …`，然后重新启动后端即可（Flyway 会在空库上从 V1 重跑）。**有数据务必先备份。** 更细步骤见 [`docs/DATABASE_FLYWAY_OPERATIONS.md`](docs/DATABASE_FLYWAY_OPERATIONS.md)。
 5. **Redis** — Windows: [下载](https://github.com/tporadowski/redis/releases)，默认端口 6379
+
+### AI 头像工作室（图生图）
+
+- 后端 `.env` 需配置 **火山方舟**（与文本 AI 分离）：`ARK_API_KEY`、`ARK_BASE_URL`、`ARK_IMAGE_MODEL`（可选）、`AVATAR_STUDIO_FREE_QUOTA`、`AVATAR_STUDIO_TIMEOUT_SECONDS`。详见 `campus-love-backend/.env.example`。
+- `t_user.avatar_studio_used_count` 等结构由 Flyway **V44** 等迁移自动添加，无需再手工执行单文件 SQL。
 
 ## 数据库与邮件配置
 

@@ -457,3 +457,50 @@ export function getMomentAdminLogs(params: {
 }) {
   return request.get<ApiResult<PageResult<MomentOperationLogItem>>>('/moment/admin/logs', { params })
 }
+
+// ==================== 全站公告 ====================
+
+export interface SiteAnnouncementAdminItem {
+  id: number
+  title: string
+  content: string
+  status: string
+  validFrom: string
+  validUntil: string
+  publishedAt: string | null
+  createdAt: string
+  updatedAt: string
+}
+
+export function getAdminAnnouncements(params: { page?: number; size?: number }) {
+  return request.get<ApiResult<PageResult<SiteAnnouncementAdminItem>>>('/admin/announcements', { params })
+}
+
+export function createAdminAnnouncement(data: {
+  title: string
+  content: string
+  validFrom: string
+  validUntil: string
+  publish: boolean
+}) {
+  return request.post<ApiResult<SiteAnnouncementAdminItem>>('/admin/announcements', data)
+}
+
+export function updateAdminAnnouncement(
+  id: number,
+  data: { title: string; content: string; validFrom: string; validUntil: string },
+) {
+  return request.put<ApiResult<SiteAnnouncementAdminItem>>(`/admin/announcements/${id}`, data)
+}
+
+export function publishAdminAnnouncement(id: number) {
+  return request.post<ApiResult<void>>(`/admin/announcements/${id}/publish`)
+}
+
+export function unpublishAdminAnnouncement(id: number) {
+  return request.post<ApiResult<void>>(`/admin/announcements/${id}/unpublish`)
+}
+
+export function deleteAdminAnnouncement(id: number) {
+  return request.delete<ApiResult<void>>(`/admin/announcements/${id}`)
+}

@@ -112,6 +112,11 @@ const router = createRouter({
           component: () => import('@/views/profile/ProfileInsightView.vue'),
         },
         {
+          path: 'profile/avatar-studio',
+          name: 'AvatarStudio',
+          component: () => import('@/views/profile/AvatarStudioView.vue'),
+        },
+        {
           path: 'profile/:userId',
           name: 'UserProfile',
           component: () => import('@/views/profile/ProfileView.vue'),
