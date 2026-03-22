@@ -45,6 +45,11 @@ public class Notification {
     private Long commentId;
 
     /**
+     * 泛型业务关联 ID（如心动协商 t_pair_date_negotiation.id）
+     */
+    private Long relatedId;
+
+    /**
      * 通知类型
      */
     private String type;

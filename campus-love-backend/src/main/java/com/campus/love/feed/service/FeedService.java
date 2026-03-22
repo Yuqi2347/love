@@ -778,38 +778,45 @@ public class FeedService {
 
         List<FeedPost> myPosts = feedPostMapper.selectList(
                 new LambdaQueryWrapper<FeedPost>().eq(FeedPost::getUserId, userId));
-        if (myPosts.isEmpty()) return result;
+        List<Long> myPostIds = myPosts.isEmpty()
+                ? new ArrayList<>()
+                : myPosts.stream().map(FeedPost::getId).collect(Collectors.toList());
 
-        List<Long> myPostIds = myPosts.stream().map(FeedPost::getId).collect(Collectors.toList());
-
-        // 点赞通知
-        List<FeedLike> likes = feedLikeMapper.selectList(
-                new LambdaQueryWrapper<FeedLike>()
-                        .in(FeedLike::getPostId, myPostIds)
-                        .ne(FeedLike::getUserId, userId)
-                        .orderByDesc(FeedLike::getCreatedAt)
-                        .last("LIMIT " + FeedConstants.SOCIAL_NOTIFICATION_LIMIT));
-        for (FeedLike like : likes) {
-            User sender = userMapper.selectById(like.getUserId());
-            if (sender == null) continue;
-            Map<String, Object> item = new HashMap<>();
-            item.put("id", like.getId());
-            item.put("senderId", sender.getId());
-            item.put("senderNickname", sender.getNickname());
-            item.put("senderAvatarUrl", sender.getAvatarUrl());
-            item.put("type", "LIKE");
-            item.put("content", "赞了你的动态");
-            item.put("postId", like.getPostId());
-            item.put("createdAt", like.getCreatedAt() != null ? like.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "");
-            result.add(item);
+        // 点赞通知（仅当有本人发布的动态时）
+        if (!myPostIds.isEmpty()) {
+            List<FeedLike> likes = feedLikeMapper.selectList(
+                    new LambdaQueryWrapper<FeedLike>()
+                            .in(FeedLike::getPostId, myPostIds)
+                            .ne(FeedLike::getUserId, userId)
+                            .orderByDesc(FeedLike::getCreatedAt)
+                            .last("LIMIT " + FeedConstants.SOCIAL_NOTIFICATION_LIMIT));
+            for (FeedLike like : likes) {
+                User sender = userMapper.selectById(like.getUserId());
+                if (sender == null) continue;
+                Map<String, Object> item = new HashMap<>();
+                item.put("id", like.getId());
+                item.put("senderId", sender.getId());
+                item.put("senderNickname", sender.getNickname());
+                item.put("senderAvatarUrl", sender.getAvatarUrl());
+                item.put("type", "LIKE");
+                item.put("content", "赞了你的动态");
+                item.put("postId", like.getPostId());
+                item.put("createdAt", like.getCreatedAt() != null ? like.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "");
+                result.add(item);
+            }
         }
 
-        // 评论通知（包括@回复，排除已删除）
+        // 评论通知（包括@回复，排除已删除）；无动态时仍可拉「@我」相关评论
+        LambdaQueryWrapper<FeedComment> commentWrapper = new LambdaQueryWrapper<FeedComment>()
+                .ne(FeedComment::getUserId, userId)
+                .and(w -> w.isNull(FeedComment::getEraseFlag).or().ne(FeedComment::getEraseFlag, FeedComment.DELETED));
+        if (!myPostIds.isEmpty()) {
+            commentWrapper.and(w -> w.in(FeedComment::getPostId, myPostIds).or().eq(FeedComment::getRepliedUserId, userId));
+        } else {
+            commentWrapper.eq(FeedComment::getRepliedUserId, userId);
+        }
         List<FeedComment> comments = feedCommentMapper.selectList(
-                new LambdaQueryWrapper<FeedComment>()
-                        .and(w -> w.in(FeedComment::getPostId, myPostIds).or().eq(FeedComment::getRepliedUserId, userId))
-                        .ne(FeedComment::getUserId, userId)
-                        .and(w -> w.isNull(FeedComment::getEraseFlag).or().ne(FeedComment::getEraseFlag, FeedComment.DELETED))
+                commentWrapper
                         .orderByDesc(FeedComment::getCreatedAt)
                         .last("LIMIT " + FeedConstants.SOCIAL_NOTIFICATION_LIMIT));
         for (FeedComment comment : comments) {
@@ -830,7 +837,7 @@ public class FeedService {
             result.add(item);
         }
 
-        // 评论点赞通知（V39：从 t_notification 查询 COMMENT_LIKE 类型）
+        // 评论点赞通知（V39：从 t_notification 查询 COMMENT_LIKE 类型；与红点统计一致，无动态也可能有）
         List<com.campus.love.notification.entity.Notification> commentLikeNotifs =
                 notificationService.getCommentLikeNotifications(userId, FeedConstants.SOCIAL_NOTIFICATION_LIMIT);
         for (com.campus.love.notification.entity.Notification n : commentLikeNotifs) {

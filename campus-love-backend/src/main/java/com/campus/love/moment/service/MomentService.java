@@ -284,9 +284,12 @@ public class MomentService {
 
         ConfirmView confirmView = resolveConfirmView(matchResult, userId);
 
+        Integer matchScorePercent = resolveMatchScorePercent(matchResult);
+
         return MomentResultResponse.builder()
                 .matched(true)
                 .weekTag(weekTag)
+                .matchResultId(matchResult.getId())
                 .yuanfenTitle(matchResult.getYuanfenTitle())
                 .matchedUserId(matchedUserId)
                 .nickname(matchedUser.getNickname())
@@ -307,6 +310,7 @@ public class MomentService {
                 .confirmStatus(confirmView.status())
                 .myChoice(confirmView.myChoice())
                 .datePrepUnlocked(confirmView.datePrepUnlocked())
+                .matchScorePercent(matchScorePercent)
                 .build();
     }
 
@@ -528,6 +532,32 @@ public class MomentService {
                 matchResult, userA, userB, profileA, profileB, portraitA, portraitB, scoreDetail
         );
         matchResultMapper.updateById(matchResult);
+    }
+
+    /**
+     * 综合匹配度：优先读 score_detail.finalScore；缺失时回退 t_moment_match_result.total_score
+     * （避免 JSON 未写入、旧数据或解析失败导致前端无数字）
+     */
+    private Integer resolveMatchScorePercent(MomentMatchResult matchResult) {
+        Map<String, Object> scoreDetail = parseScoreDetail(matchResult.getScoreDetail());
+        Object fs = scoreDetail.get("finalScore");
+        if (fs instanceof Number) {
+            int p = (int) Math.round(((Number) fs).doubleValue());
+            return Math.max(0, Math.min(100, p));
+        }
+        if (fs instanceof String s && !s.isBlank()) {
+            try {
+                int p = (int) Math.round(Double.parseDouble(s.trim()));
+                return Math.max(0, Math.min(100, p));
+            } catch (NumberFormatException ignored) {
+                // fall through to totalScore
+            }
+        }
+        if (matchResult.getTotalScore() != null) {
+            int p = (int) Math.round(matchResult.getTotalScore().doubleValue());
+            return Math.max(0, Math.min(100, p));
+        }
+        return null;
     }
 
     private Map<String, Object> parseScoreDetail(String json) {

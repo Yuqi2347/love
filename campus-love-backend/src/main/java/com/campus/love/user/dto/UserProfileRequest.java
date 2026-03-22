@@ -2,12 +2,14 @@ package com.campus.love.user.dto;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 import lombok.Data;
 
 @Data
 public class UserProfileRequest {
 
     @NotBlank(message = "昵称不能为空")
+    @Size(min = 1, max = 10, message = "昵称长度需在1-10个字符之间")
     private String nickname;
 
     @NotNull(message = "性别不能为空")

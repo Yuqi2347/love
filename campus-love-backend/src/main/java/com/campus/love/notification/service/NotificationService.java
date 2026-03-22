@@ -93,6 +93,16 @@ public class NotificationService {
     @Transactional
     public void createNotification(Long userId, Long senderId, Long inviteId, Long postId, Long commentId,
                                    NotificationTypeEnum type, String title, String content) {
+        createNotification(userId, senderId, inviteId, postId, commentId, null, type, title, content);
+    }
+
+    /**
+     * 创建通知（支持 relatedId，如心动协商 ID）
+     */
+    @Transactional
+    public void createNotification(Long userId, Long senderId, Long inviteId, Long postId, Long commentId,
+                                   Long relatedId,
+                                   NotificationTypeEnum type, String title, String content) {
         if (userId == null || type == null) {
             throw new IllegalArgumentException("userId and type are required");
         }
@@ -102,6 +112,7 @@ public class NotificationService {
         notification.setInviteId(inviteId);
         notification.setPostId(postId);
         notification.setCommentId(commentId);
+        notification.setRelatedId(relatedId);
         notification.setType(type.name());
         notification.setTitle(title);
         notification.setContent(content);
@@ -391,6 +402,7 @@ public class NotificationService {
                 .senderId(notification.getSenderId())
                 .inviteId(notification.getInviteId())
                 .postId(notification.getPostId())
+                .relatedId(notification.getRelatedId())
                 .type(notification.getType())
                 .title(notification.getTitle())
                 .content(notification.getContent())

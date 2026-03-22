@@ -22,6 +22,10 @@ import com.campus.love.moment.mapper.MomentMatchConfirmMapper;
 import com.campus.love.moment.mapper.MomentMatchResultMapper;
 import com.campus.love.moment.mapper.MomentPairScoreMapper;
 import com.campus.love.moment.mapper.MomentProfileMapper;
+import com.campus.love.pairdate.entity.MomentYueIntent;
+import com.campus.love.pairdate.entity.PairDateNegotiation;
+import com.campus.love.pairdate.mapper.MomentYueIntentMapper;
+import com.campus.love.pairdate.mapper.PairDateNegotiationMapper;
 import com.campus.love.profile.entity.UserPortrait;
 import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.entity.User;
@@ -85,6 +89,8 @@ public class MomentAdminService {
     private final MomentActivityWeekService activityWeekService;
     private final MomentAdminLogService momentAdminLogService;
     private final MomentAdminLogMapper adminLogMapper;
+    private final PairDateNegotiationMapper pairDateNegotiationMapper;
+    private final MomentYueIntentMapper momentYueIntentMapper;
 
     public MomentAdminOverviewResponse getOverview(String weekTag, String currentWeekTag) {
         String resolvedWeekTag = resolveWeekTag(weekTag, currentWeekTag);
@@ -207,7 +213,12 @@ public class MomentAdminService {
         if (!matchResultIds.isEmpty()) {
             matchConfirmMapper.delete(new LambdaQueryWrapper<MomentMatchConfirm>()
                     .in(MomentMatchConfirm::getMatchResultId, matchResultIds));
+            momentYueIntentMapper.delete(new LambdaQueryWrapper<MomentYueIntent>()
+                    .in(MomentYueIntent::getMatchResultId, matchResultIds));
         }
+        int pairDateDeleted = pairDateNegotiationMapper.delete(
+                new LambdaQueryWrapper<PairDateNegotiation>()
+                        .eq(PairDateNegotiation::getWeekTag, resolvedWeekTag));
         int resultDeleted = matchResultMapper.delete(
                 new LambdaQueryWrapper<MomentMatchResult>()
                         .eq(MomentMatchResult::getWeekTag, resolvedWeekTag)
@@ -234,12 +245,16 @@ public class MomentAdminService {
                         "deletedEnrollments", enrollmentDeleted,
                         "deletedResults", resultDeleted,
                         "deletedPairScores", pairScoreDeleted,
+                        "deletedPairDateNegotiations", pairDateDeleted,
                         "status", week.getStatus()
                 ))
         );
 
         log.info("管理员重置本周活动: weekTag={}", resolvedWeekTag);
-        return Map.of("weekTag", resolvedWeekTag, "message", "本周活动已重置，所有数据已清除，报名已重新开放");
+        return Map.of(
+                "weekTag", resolvedWeekTag,
+                "message", "本周活动已重置（含匹配结果、确认记录、约会三步协商与约一下意向），报名已重新开放",
+                "deletedPairDateNegotiations", pairDateDeleted);
     }
 
     @Transactional
