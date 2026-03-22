@@ -54,18 +54,20 @@
         class="source-select"
         @change="handleSourceChange"
       >
+        <el-option label="与我相关（含心动一对一）" value="related" />
         <el-option label="公共邀约" value="public" />
         <el-option label="我发起的" value="created" />
         <el-option label="我加入的" value="joined" />
       </el-select>
     </div>
 
-    <!-- 公共邀约列表工具栏 -->
-    <div v-if="activeTab === 'list' && inviteSource === 'public'" class="list-toolbar">
-      <div class="sort-pills">
+    <!-- 列表工具栏：公共邀约可切换推荐/时间；与我相关仅刷新 -->
+    <div v-if="activeTab === 'list' && (inviteSource === 'public' || inviteSource === 'related')" class="list-toolbar">
+      <div v-if="inviteSource === 'public'" class="sort-pills">
         <button :class="['pill', { active: inviteSort === 'recommend' }]" @click="setInviteSort('recommend')">推荐</button>
         <button :class="['pill', { active: inviteSort === 'time' }]" @click="setInviteSort('time')">最新</button>
       </div>
+      <p v-else class="list-toolbar-hint">含你发起、你加入及待处理的私密一对一（如心动协商生成）</p>
       <button class="btn-refresh-sm" :disabled="inviteStore.loading" @click="handleInviteRefresh">
         <el-icon :class="{ spinning: inviteStore.loading }"><Refresh /></el-icon>
         {{ inviteStore.loading ? '刷新中...' : '刷新' }}
@@ -338,7 +340,7 @@ const inviteStore = useInviteStore()
 const badgeStore = useBadgeStore()
 
 const activeTab = ref<string>('list')
-const inviteSource = ref<'public' | 'created' | 'joined'>('public')
+const inviteSource = ref<'related' | 'public' | 'created' | 'joined'>('related')
 const inviteSort = ref<'recommend' | 'time'>('recommend')
 const filterType = ref<string>()
 const filterStatus = ref<string>()
@@ -379,6 +381,7 @@ const statusOptions = [
 
 // 当前来源对应的原始列表
 const currentList = computed(() => {
+  if (inviteSource.value === 'related') return inviteStore.myListInvites
   if (inviteSource.value === 'public') return inviteStore.invites
   if (inviteSource.value === 'created') return inviteStore.createdInvites
   return inviteStore.joinedInvites
@@ -528,6 +531,9 @@ function handleSourceChange() {
 async function loadInvitesBySource() {
   if (inviteSource.value === 'public') {
     await inviteStore.fetchInvites(filterType.value, filterStatus.value, filterTimeRange.value, undefined, true, inviteSort.value)
+  } else if (inviteSource.value === 'related') {
+    const range = filterTimeRange.value === 'year' ? 'all' : filterTimeRange.value || 'week'
+    await inviteStore.fetchMyInvitesList(range)
   } else if (inviteSource.value === 'created') {
     await inviteStore.fetchCreatedInvites(filterTimeRange.value)
   } else {
@@ -572,8 +578,8 @@ function initFromRouteQuery() {
   const type = route.query.type as string | undefined
   const source = route.query.source as string | undefined
   if (type) filterType.value = type
-  if (source && (source === 'public' || source === 'created' || source === 'joined')) {
-    inviteSource.value = source
+  if (source && (source === 'related' || source === 'public' || source === 'created' || source === 'joined')) {
+    inviteSource.value = source as 'related' | 'public' | 'created' | 'joined'
   }
 }
 
@@ -637,6 +643,14 @@ watch(() => [route.query.type, route.query.source], () => {
   justify-content: space-between;
   margin-bottom: 12px;
   gap: 12px;
+}
+
+.list-toolbar-hint {
+  flex: 1;
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  color: #64748b;
 }
 
 .sort-pills {
@@ -819,8 +833,10 @@ watch(() => [route.query.type, route.query.source], () => {
 .invite-content {
   font-size: 14px;
   color: $text-secondary;
-  line-height: 1.5;
+  line-height: 1.55;
   margin-bottom: 12px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .invite-meta {

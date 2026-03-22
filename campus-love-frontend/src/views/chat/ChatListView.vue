@@ -114,7 +114,7 @@
           >
             {{ followStore.isFollowed(item.senderId) ? '已关注' : '回关' }}
           </button>
-          <button class="notify-delete-btn" title="从列表移除" @click.stop.prevent="dismissFollower(item.senderId)">
+          <button class="notify-delete-btn" title="标记已读" @click.stop.prevent="dismissFollower(item.senderId)">
             <el-icon :size="16"><Delete /></el-icon>
           </button>
         </div>
@@ -214,6 +214,9 @@ const { conversations } = storeToRefs(chatStore)
 
 const activeTab = ref('chat')
 
+/** 与赞/评论等正整数 id 错开，用于「新增关注」已读状态（稳定，不随粉丝列表排序变化） */
+const FOLLOWER_NOTIFY_ID_BASE = 2_000_000_000
+
 // 已读通知 ID 追踪（持久化到 localStorage，刷新/重进不丢失）
 const NOTIFY_READ_KEY = 'campus_love_notify_read_ids'
 
@@ -247,6 +250,7 @@ interface SocialNotification {
 interface InviteNotification {
   id: number
   inviteId: number | null
+  relatedId?: number | null
   type: string
   title: string
   content: string
@@ -276,8 +280,8 @@ const dismissedInviteIds = ref<Set<number>>(loadDismissedInviteIds())
 
 const likeNotifications = computed(() => socialNotifications.value.filter(n => n.type === 'LIKE' || n.type === 'COMMENT_LIKE'))
 const followerNotifications = computed(() => {
-  return followerUsers.value.map((u, i) => ({
-    id: -i - 1,
+  return followerUsers.value.map((u) => ({
+    id: FOLLOWER_NOTIFY_ID_BASE + u.userId,
     senderId: u.userId,
     senderNickname: u.nickname,
     senderAvatarUrl: u.avatarUrl,
@@ -294,9 +298,8 @@ const displayedConversations = computed(() =>
 const displayedLikes = computed(() =>
   likeNotifications.value.filter(n => !notifyDismissStore.raw.likes.includes(n.id))
 )
-const displayedFollowers = computed(() =>
-  followerNotifications.value.filter(n => !notifyDismissStore.raw.followers.includes(n.senderId))
-)
+// 不再按 dismiss 永久隐藏粉丝（旧版「清空」会把所有人写入 dismiss 导致有红点、列表却为空）
+const displayedFollowers = computed(() => followerNotifications.value)
 const displayedComments = computed(() =>
   commentNotifications.value.filter(n => !notifyDismissStore.raw.comments.includes(n.id))
 )
@@ -309,7 +312,9 @@ function dismissLike(id: number) {
 }
 
 function dismissFollower(senderId: number) {
-  if (notifyDismissStore.dismissFollower(senderId)) ElMessage.success('已移除')
+  readIds.value.add(FOLLOWER_NOTIFY_ID_BASE + senderId)
+  saveReadIds()
+  ElMessage.success('已标记已读')
 }
 
 function dismissComment(id: number) {
@@ -332,7 +337,9 @@ function clearTab(tab: 'chat' | 'likes' | 'followers' | 'comments' | 'invites') 
   } else if (tab === 'likes') {
     notifyDismissStore.clearLikes(likeNotifications.value.map(n => n.id))
   } else if (tab === 'followers') {
-    notifyDismissStore.clearFollowers(followerNotifications.value.map(n => n.senderId))
+    followerNotifications.value.forEach(n => readIds.value.add(n.id))
+    saveReadIds()
+    void badgeStore.markFollowersViewed()
   } else if (tab === 'invites') {
     inviteNotifications.value.forEach(n => dismissedInviteIds.value.add(n.id))
     saveDismissedInviteIds()
@@ -347,7 +354,7 @@ const unreadLikeCount = computed(() =>
   displayedLikes.value.filter(n => !readIds.value.has(n.id)).length
 )
 const unreadFollowerCount = computed(() =>
-  displayedFollowers.value.filter(n => !readIds.value.has(n.id)).length
+  followerNotifications.value.filter(n => !readIds.value.has(n.id)).length
 )
 const unreadCommentCount = computed(() =>
   displayedComments.value.filter(n => !readIds.value.has(n.id)).length
@@ -361,7 +368,12 @@ const notifyTabs = computed(() => {
     { key: 'chat', label: '私信', icon: 'ChatDotRound', count: displayedConversations.value.reduce((s, c) => s + (c.unreadCount || 0), 0) },
     { key: 'invites', label: '邀约', icon: 'Calendar', count: unreadInviteCount.value },
     { key: 'likes', label: '赞', icon: 'StarFilled', count: unreadLikeCount.value },
-    { key: 'followers', label: '新增关注', icon: 'UserFilled', count: unreadFollowerCount.value },
+    {
+      key: 'followers',
+      label: '新增关注',
+      icon: 'UserFilled',
+      count: Math.max(badgeStore.badges.newFollowerCount || 0, unreadFollowerCount.value),
+    },
     { key: 'comments', label: '评论@', icon: 'ChatDotRound', count: unreadCommentCount.value },
   ]
 })
@@ -400,6 +412,7 @@ async function loadInviteNotifications() {
     const res = await request.get<ApiResult<Array<{
       id: number
       inviteId: number | null
+      relatedId?: number | null
       type: string
       title: string
       content: string
@@ -407,12 +420,16 @@ async function loadInviteNotifications() {
       createdAt: string
     }>>>('/notification?unreadOnly=false')
     const all = res.data.data || []
-    // 只保留邀约相关通知
+    // 约局模块 + 心动协商类通知（PAIR_DATE_* 此前被误过滤导致有红点无列表）
     inviteNotifications.value = all
-      .filter(n => n.type && n.type.startsWith('INVITE_'))
-      .map(n => ({
+      .filter((n) => {
+        const t = n.type || ''
+        return t.startsWith('INVITE_') || t.startsWith('PAIR_DATE_')
+      })
+      .map((n) => ({
         id: n.id,
         inviteId: n.inviteId,
+        relatedId: n.relatedId,
         type: n.type,
         title: n.title,
         content: n.content,
@@ -441,6 +458,16 @@ async function handleInviteNotifyClick(item: InviteNotification) {
       await request.post(`/notification/${item.id}/read`)
       item.isRead = true
     } catch { /* ignore */ }
+  }
+  const t = item.type || ''
+  if (t.startsWith('PAIR_DATE_')) {
+    const rid = item.relatedId != null ? Number(item.relatedId) : NaN
+    if (Number.isFinite(rid) && rid > 0) {
+      router.push(`/moment/pair-date/${rid}`)
+      return
+    }
+    router.push('/moment/result')
+    return
   }
   if (item.inviteId) {
     router.push({ path: `/invite/${item.inviteId}`, query: { from: 'notify' } })
@@ -564,6 +591,7 @@ function getShareContent(content: string | undefined): string {
 }
 
 onMounted(() => {
+  void badgeStore.fetchBadges()
   chatStore.fetchConversations()
   loadSocialNotifications()
   loadFollowers()

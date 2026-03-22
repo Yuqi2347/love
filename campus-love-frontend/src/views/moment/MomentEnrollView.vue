@@ -384,7 +384,7 @@ const canSubmit = computed(() => {
 
 function jumpToStep(step: number) {
   if (step === currentStep.value) return
-  if (step < currentStep.value || (step === 2 && canProceed.value) || (step === 3 && canSubmit.value)) {
+  if (step >= 1 && step <= totalSteps) {
     currentStep.value = step
     window.scrollTo({ top: 0, behavior: 'smooth' })
   }

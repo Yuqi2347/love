@@ -4,14 +4,18 @@ import type { UserProfile } from '@/api/userApi'
 import { getMyProfile } from '@/api/userApi'
 import type { AuthResponse } from '@/api/authApi'
 import { useFollowStore } from './followStore'
+import { useChatStore } from './chatStore'
 
 export const useUserStore = defineStore('user', () => {
   const user = ref<UserProfile | null>(null)
   const isLoggedIn = ref(!!localStorage.getItem('access_token'))
 
   async function setAuth(auth: AuthResponse) {
+    const chatStore = useChatStore()
+    chatStore.disconnect()
     localStorage.setItem('access_token', auth.accessToken)
     localStorage.setItem('refresh_token', auth.refreshToken)
+    localStorage.setItem('userId', String(auth.userId))
     isLoggedIn.value = true
     user.value = {
       id: auth.userId,
@@ -22,12 +26,16 @@ export const useUserStore = defineStore('user', () => {
     } as UserProfile
     // 立即获取完整用户信息（包含isAdmin和userLevel）
     await fetchProfile()
+    chatStore.connectWebSocket()
   }
 
   async function fetchProfile() {
     try {
       const res = await getMyProfile()
       user.value = res.data.data
+      if (user.value?.id != null) {
+        localStorage.setItem('userId', String(user.value.id))
+      }
     } catch (error: any) {
       const status = error?.response?.status
       if (status === 401 || status === 403) {
@@ -40,8 +48,10 @@ export const useUserStore = defineStore('user', () => {
   }
 
   function logout() {
+    useChatStore().disconnect()
     localStorage.removeItem('access_token')
     localStorage.removeItem('refresh_token')
+    localStorage.removeItem('userId')
     isLoggedIn.value = false
     user.value = null
     useFollowStore().clear()

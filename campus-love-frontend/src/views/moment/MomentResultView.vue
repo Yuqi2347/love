@@ -62,10 +62,14 @@
               <span class="match-card__spark spark-a" />
               <span class="match-card__spark spark-b" />
               <div class="match-card__main">
-                <img :src="avatarSrc" class="match-avatar" alt="" />
+                <div class="match-avatar-wrap">
+                  <img :src="avatarSrc" class="match-avatar" alt="" />
+                </div>
                 <div class="match-info">
                   <p class="match-card__label">心动对象</p>
-                  <h3>{{ result.nickname || '这位同学' }}</h3>
+                  <div class="match-title-row">
+                    <h3>{{ result.nickname || '这位同学' }}</h3>
+                  </div>
                   <div class="match-meta">
                     <span v-if="result.age">{{ result.age }}岁</span>
                     <span v-if="result.school">{{ result.school }}</span>
@@ -74,6 +78,12 @@
                   </div>
                 </div>
                 <span class="match-card__arrow">›</span>
+              </div>
+              <div v-if="showMatchScore" class="match-score-block" aria-label="综合匹配度">
+                <div class="match-score-block__row">
+                  <span class="match-score-block__label">综合匹配度：</span>
+                  <span class="match-score-block__value">{{ result.matchScorePercent }}%</span>
+                </div>
               </div>
               <div v-if="result.bio" class="match-bio">{{ result.bio }}</div>
               <div v-if="(result.mbti || result.zodiac || (result.complementaryModes?.length))" class="match-tags">
@@ -164,6 +174,9 @@
                 <button class="text-action" @click="goProfile">查看 TA 的主页</button>
                 <button class="text-action" @click="goChat">去打招呼</button>
               </div>
+              <p v-if="result.confirmStatus === 'BOTH_YUE' && result.datePrepUnlocked" class="decision-card__four-hint">
+                第四屏已解锁：除约会准备外，还可与 TA 完成「三步约会协商」；点「开始三步协商」时会自动互关，无需先手动关注。
+              </p>
             </article>
           </div>
 
@@ -179,20 +192,20 @@
           <header class="sheet-header">
             <span class="sheet-badge">第四屏</span>
             <h2>去见 TA</h2>
-            <p>把这份心动往现实里推一步，让第一次见面更轻松一点。</p>
+            <p>AI 约会方式推荐生成后，可进行三步协商；你可先独立完成选项，无需等对方点击开始。</p>
           </header>
 
           <div v-if="!result.datePrepUnlocked" class="locked-card">
             <p class="locked-card__title">第四屏尚未解锁</p>
-            <p>双方都选择“心动，约起来”后，这里会出现你们的约会准备内容。</p>
+            <p>双方都选择“心动，约起来”后，这里会出现三步协商与约会准备内容。</p>
           </div>
 
-          <div v-else-if="prepLoading" class="prep-loading">
+          <div v-if="result.datePrepUnlocked && prepLoading" class="prep-loading">
             <div class="prep-loading__spinner" />
             <p>正在为你准备第一次见面的细节...</p>
           </div>
 
-          <div v-else-if="datePrep" class="content-stack">
+          <div v-else-if="result.datePrepUnlocked && datePrep" class="content-stack">
             <article class="lux-card">
               <h3 class="lux-card__title">约会方式推荐</h3>
               <h3>{{ datePrep.dateSceneType }}</h3>
@@ -235,6 +248,14 @@
                 </div>
               </div>
             </article>
+
+            <PairDateNegotiationCore
+              v-if="pairNegotiationEmbedVisible"
+              embed
+              auto-start-yue
+              :match-result-id="result.matchResultId!"
+              :target-user-id="result.matchedUserId!"
+            />
           </div>
 
           <div class="sheet-actions">
@@ -258,6 +279,7 @@ import {
   type MomentDatePrepResponse,
   type MomentResultResponse,
 } from '@/api/momentApi'
+import PairDateNegotiationCore from '@/views/moment/components/PairDateNegotiationCore.vue'
 import { DEFAULT_AVATAR, getMediaUrl } from '@/utils/shared'
 
 const router = useRouter()
@@ -274,6 +296,12 @@ const insightTitles = ['是什么让你们靠近', '在一起大概是什么感�
 
 const avatarSrc = computed(() => getMediaUrl(result.value?.avatarUrl || null) || DEFAULT_AVATAR)
 
+/** 第一屏卡片内展示综合匹配度（与后端 matchScorePercent 一致） */
+const showMatchScore = computed(() => {
+  const p = result.value?.matchScorePercent
+  return p != null && p >= 0
+})
+
 const insightCards = computed(() => {
   const cards = result.value?.insightCards || []
   return [cards[0], cards[1], cards[2]].filter((item): item is string => !!item)
@@ -285,6 +313,15 @@ const choiceLocked = computed(() => {
     || result.value.confirmStatus === 'BOTH_YUE'
     || result.value.confirmStatus === 'ANY_GUANZHU'
     || result.value.confirmStatus === 'TIMEOUT_GUANZHU'
+})
+
+/** 第四屏嵌入「三步协商」：双方已选约起来；点「开始」时后端会自动互关 */
+const pairNegotiationEmbedVisible = computed(() => {
+  const r = result.value
+  if (!r?.datePrepUnlocked) return false
+  if (r.confirmStatus !== 'BOTH_YUE') return false
+  if (!r.matchResultId || !r.matchedUserId) return false
+  return true
 })
 
 const decisionHint = computed(() => {
@@ -697,18 +734,71 @@ $max-width: 560px;
   z-index: 1;
 }
 
+.match-avatar-wrap {
+  flex-shrink: 0;
+}
+
 .match-avatar {
+  display: block;
   width: 78px;
   height: 78px;
   border-radius: 50%;
   object-fit: cover;
   border: 3px solid rgba(255, 255, 255, 0.92);
   box-shadow: 0 18px 30px rgba(215, 127, 162, 0.18);
-  flex-shrink: 0;
+}
+
+/* 全宽显式说明，手机无需长按即可理解含义 */
+.match-score-block {
+  margin-top: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(255, 247, 250, 0.98), rgba(255, 236, 242, 0.92));
+  border: 1px solid rgba(215, 127, 162, 0.22);
+  text-align: left;
+  position: relative;
+  z-index: 1;
+}
+
+.match-score-block__row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 6px 10px;
+}
+
+.match-score-block__label {
+  font-size: 14px;
+  font-weight: 700;
+  color: #8b4060;
+}
+
+.match-score-block__value {
+  font-size: clamp(22px, 5.2vw, 28px);
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  color: #b84f7a;
+  letter-spacing: -0.02em;
+  line-height: 1;
 }
 
 .match-card__label {
   margin-bottom: 6px;
+}
+
+.match-title-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+}
+
+.match-title-row h3 {
+  margin: 0;
+  color: $text-main;
+  font-size: 24px;
+  font-weight: 700;
 }
 
 .match-info h2,
@@ -973,6 +1063,14 @@ $max-width: 560px;
   margin-top: 16px;
 }
 
+.decision-card__four-hint {
+  margin-top: 14px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: $text-soft;
+  text-align: center;
+}
+
 .text-action {
   color: #b76587;
   font-size: 14px;
@@ -1143,6 +1241,24 @@ $max-width: 560px;
   .lux-card h3,
   .insight-card__body h3 {
     font-size: 20px;
+  }
+
+  .match-score-block {
+    padding: 10px 12px;
+    border-radius: 12px;
+  }
+
+  .match-score-block__label {
+    font-size: 13px;
+  }
+
+  .match-card__main {
+    align-items: flex-start;
+  }
+
+  .match-avatar {
+    width: 72px;
+    height: 72px;
   }
 
   .decision-card__buttons,

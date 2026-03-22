@@ -10,6 +10,8 @@ export const useChatStore = defineStore('chat', () => {
   /** 单聊按对方 userId 存待确认消息（乐观消息），用 ref 保证响应式，邀约内嵌聊天等依赖后会正确更新 */
   const pendingByUser = ref<Record<number, ChatMessage[]>>({})
   const ws = ref<WebSocket | null>(null)
+  /** 当前 WebSocket 建立时使用的 access_token，换号登录后必须重连否则会沿用旧身份发消息 */
+  const lastWsToken = ref<string | null>(null)
   const connected = ref(false)
 
   // 心跳与重连控制
@@ -57,12 +59,21 @@ export const useChatStore = defineStore('chat', () => {
 
   function connectWebSocket() {
     const token = localStorage.getItem('access_token')
-    if (!token) return
+    if (!token) {
+      disconnect()
+      return
+    }
 
-    // 若已有一个 OPEN 连接则不重复建立
-    if (ws.value && ws.value.readyState === WebSocket.OPEN) return
+    // 已连接且 token 未变：复用；否则关闭旧连接（同浏览器换账号时否则会串身份）
+    if (ws.value && ws.value.readyState === WebSocket.OPEN) {
+      if (lastWsToken.value === token) return
+      const old = ws.value
+      ws.value = null
+      old.close()
+    }
 
     stopHeartbeat()
+    lastWsToken.value = token
 
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
     // 后端开启了 context-path=/api，WebSocket 实际路径为 /api/ws/chat
@@ -186,6 +197,7 @@ export const useChatStore = defineStore('chat', () => {
       reconnectTimer = null
     }
     isReconnecting = false
+    lastWsToken.value = null
     const cur = ws.value
     ws.value = null  // 先置 null，阻止 onclose 触发重连
     cur?.close()

@@ -82,6 +82,11 @@ const router = createRouter({
           component: () => import('@/views/moment/MomentResultView.vue'),
         },
         {
+          path: 'moment/pair-date/:negotiationId',
+          name: 'PairDateNegotiation',
+          component: () => import('@/views/moment/PairDateNegotiationView.vue'),
+        },
+        {
           path: 'invite/create',
           name: 'InviteCreate',
           component: () => import('@/views/invite/InviteCreateView.vue'),
