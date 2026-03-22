@@ -1172,9 +1172,11 @@ onMounted(loadInvite)
 
 .invite-content {
   font-size: 15px;
-  line-height: 1.6;
+  line-height: 1.65;
   color: $text-primary;
   margin-bottom: 16px;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .tags-display {

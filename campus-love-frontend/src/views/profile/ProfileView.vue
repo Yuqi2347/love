@@ -327,11 +327,11 @@
     <div v-else class="empty-hint">{{ relationEmptyText }}</div>
   </BaseModalShell>
 
-  <BaseModalShell v-model="showRemarkEditor" title="设置备注" width="360px" max-body-height="260px">
+    <BaseModalShell v-model="showRemarkEditor" title="设置备注" width="360px" max-body-height="260px">
     <el-input
       v-model="remarkInput"
-      placeholder="输入备注名（留空清除备注）"
-      maxlength="20"
+      placeholder="输入备注名（留空清除备注，最多10字）"
+      maxlength="10"
       show-word-limit
       clearable
     />
@@ -1112,6 +1112,10 @@ function openRemarkEditor(user: FollowUser) {
 async function saveRemark() {
   try {
     const remark = remarkInput.value.trim()
+    if (remark.length > 10) {
+      ElMessage.warning('备注最多10个字符')
+      return
+    }
     await setUserRemark(remarkTargetUserId.value, remark)
     followStore.setRemark(remarkTargetUserId.value, remark)
     ElMessage.success(remark ? '备注已设置' : '备注已清除')

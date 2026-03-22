@@ -725,25 +725,17 @@ async function submitComment() {
 
     await addComment({ postId: post.value.id, content: text || '', images: imagesStr || undefined, parentId, repliedUserId })
 
-    const newComment: FeedComment = {
-      id: Date.now(),
-      userId: userStore.user!.id,
-      nickname: userStore.user!.nickname,
-      avatarUrl: userStore.user!.avatarUrl,
-      content: text,
-      images: imagesStr || null,
-      parentId: parentId ?? null,
-      repliedToName: replyingTo.value?.nickname || null,
-      createdAt: new Date().toISOString(),
-      likeCount: 0,
-      liked: false,
-    }
-    if (!post.value.comments) post.value.comments = []
-    post.value.comments.push(newComment)
-    post.value.commentCount = (post.value.commentCount || 0) + 1
     commentText.value = ''
     commentImages.value = []
     replyingTo.value = null
+    try {
+      const refresh = await getPostDetail(postId.value, commentSort.value)
+      if (refresh.data.data) {
+        post.value = refresh.data.data
+      }
+    } catch {
+      /* 忽略刷新失败，避免本地临时 id 导致点赞报「资源不存在」 */
+    }
     ElMessage.success('评论成功')
   } catch {
     ElMessage.error('评论失败')

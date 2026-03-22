@@ -101,6 +101,8 @@ export interface MomentResultResponse {
   matched: boolean
   weekTag: string
   yuanfenTitle?: string | null
+  /** 后端 t_moment_match_result.id，用于「约一下」协商 */
+  matchResultId?: number | null
   matchedUserId?: number
   nickname?: string
   avatarUrl?: string | null
@@ -120,6 +122,8 @@ export interface MomentResultResponse {
   confirmStatus?: 'PENDING' | 'BOTH_YUE' | 'ANY_GUANZHU' | 'TIMEOUT_GUANZHU'
   myChoice?: 'YUE' | 'GUANZHU' | null
   datePrepUnlocked?: boolean
+  /** 综合匹配度 0–100 */
+  matchScorePercent?: number | null
 }
 
 export interface MomentDatePrepTopic {

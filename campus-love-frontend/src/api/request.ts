@@ -17,6 +17,7 @@ const service: AxiosInstance = axios.create({
 function clearAuthAndRedirectToLogin() {
   localStorage.removeItem('access_token')
   localStorage.removeItem('refresh_token')
+  localStorage.removeItem('userId')
   window.location.href = '/login'
 }
 

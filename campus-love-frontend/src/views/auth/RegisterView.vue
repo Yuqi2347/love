@@ -42,7 +42,7 @@
         <p class="auth-desc">使用邮箱注册，不限制后缀</p>
         <el-form ref="formRef" :model="form" :rules="rules" size="large" @submit.prevent="handleRegister">
           <el-form-item prop="nickname">
-            <el-input v-model="form.nickname" placeholder="昵称" prefix-icon="User" />
+            <el-input v-model="form.nickname" placeholder="昵称（最多10字）" prefix-icon="User" maxlength="10" show-word-limit />
           </el-form-item>
 
           <el-form-item prop="school" label="学校">
@@ -301,7 +301,10 @@ const validateEmail = (
 }
 
 const rules = {
-  nickname: [{ required: true, message: '请输入昵称', trigger: 'blur' }],
+  nickname: [
+    { required: true, message: '请输入昵称', trigger: 'blur' },
+    { max: 10, message: '昵称最多10个字符', trigger: 'blur' },
+  ],
   email: [
     { required: true, message: '请输入邮箱', trigger: 'blur' },
     { validator: validateEmail, trigger: ['blur', 'change'] },

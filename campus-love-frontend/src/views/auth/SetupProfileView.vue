@@ -18,7 +18,7 @@
       <div v-if="step === 1" class="step-content">
         <el-form :model="form" size="large" label-position="top">
           <el-form-item label="昵称">
-            <el-input v-model="form.nickname" placeholder="设置你的昵称" maxlength="20" show-word-limit />
+            <el-input v-model="form.nickname" placeholder="设置你的昵称（最多10字）" maxlength="10" show-word-limit />
           </el-form-item>
           <el-form-item label="性别">
             <div class="gender-select">
@@ -276,6 +276,10 @@ async function handleSkipAll() {
     ElMessage.warning('请填写昵称')
     return
   }
+  if (form.nickname.trim().length > 10) {
+    ElMessage.warning('昵称最多10个字符')
+    return
+  }
   if (!form.gender) {
     ElMessage.warning('请选择性别')
     return
@@ -316,10 +320,15 @@ async function handleSkipAll() {
 }
 
 async function doSave(interestTags: Record<string, { code: string; sharing: number; intensity: number }[]>) {
+  const nick = (form.nickname.trim() || userStore.user?.nickname || '').trim()
+  if (nick.length > 10) {
+    ElMessage.warning('昵称最多10个字符')
+    return
+  }
   saving.value = true
   try {
     await updateProfile({
-      nickname: form.nickname.trim() || userStore.user?.nickname || '',
+      nickname: nick,
       gender: form.gender,
       birthDate: form.birthDate,
       birthTime: form.baziUnknown ? undefined : form.birthTime,
