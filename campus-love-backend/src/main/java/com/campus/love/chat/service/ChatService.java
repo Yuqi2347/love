@@ -174,9 +174,14 @@ public class ChatService {
         Map<Long, Integer> unreadCounts = new HashMap<>();
 
         for (Message msg : allMessages) {
-            Long otherUserId = msg.getSenderId().equals(currentUserId) ? msg.getReceiverId() : msg.getSenderId();
+            Long sid = msg.getSenderId();
+            Long rid = msg.getReceiverId();
+            if (sid == null || rid == null) {
+                continue;
+            }
+            Long otherUserId = sid.equals(currentUserId) ? rid : sid;
             latestByUser.putIfAbsent(otherUserId, msg);
-            if (msg.getReceiverId().equals(currentUserId) && !Boolean.TRUE.equals(msg.getIsRead())) {
+            if (rid.equals(currentUserId) && !Boolean.TRUE.equals(msg.getIsRead())) {
                 unreadCounts.merge(otherUserId, 1, Integer::sum);
             }
         }

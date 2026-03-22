@@ -89,7 +89,8 @@ public class FollowService {
                         .eq(Follow::getFollowerId, currentUserId)
                         .eq(Follow::getFollowingId, targetUserId));
         if (follow == null) return FollowStatusEnum.NONE;
-        return Boolean.TRUE.equals(follow.getIsMutual()) ? FollowStatusEnum.MUTUAL : FollowStatusEnum.ONE_WAY;
+        // 与私聊/破冰一致：以「双向关注」为准，避免单行 is_mutual 脏数据误判为互关
+        return isMutual(currentUserId, targetUserId) ? FollowStatusEnum.MUTUAL : FollowStatusEnum.ONE_WAY;
     }
 
     /** 判断 followerId 是否关注了 followingId */
@@ -102,13 +103,14 @@ public class FollowService {
         return count != null && count > 0;
     }
 
+    /**
+     * 互关 = 双方都存在关注关系（不依赖单行 is_mutual，避免数据不一致导致私聊条数限制失效或误判）
+     */
     public boolean isMutual(Long userId1, Long userId2) {
-        Follow follow = followMapper.selectOne(
-                new LambdaQueryWrapper<Follow>()
-                        .eq(Follow::getFollowerId, userId1)
-                        .eq(Follow::getFollowingId, userId2)
-                        .eq(Follow::getIsMutual, true));
-        return follow != null;
+        if (userId1 == null || userId2 == null || userId1.equals(userId2)) {
+            return false;
+        }
+        return isFollowed(userId2, userId1) && isFollowed(userId1, userId2);
     }
 
     public List<FollowResponse> getFollowingList(Long userId) {

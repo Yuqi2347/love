@@ -76,7 +76,17 @@ public enum NotificationTypeEnum {
     /**
      * 有人赞了你的评论（发送给评论作者）
      */
-    COMMENT_LIKE("赞了你的评论");
+    COMMENT_LIKE("赞了你的评论"),
+
+    /**
+     * 心动匹配对象点了「约一下」（单方意向，提醒对方）
+     */
+    PAIR_DATE_YUE_INTENT("心动约一下"),
+
+    /**
+     * 双方协商已有结果（COMPLETED / TIME_MISMATCH）
+     */
+    PAIR_DATE_RESULT_READY("心动约会协商结果");
 
     private final String description;
 

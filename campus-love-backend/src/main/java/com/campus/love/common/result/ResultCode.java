@@ -77,6 +77,16 @@ public enum ResultCode {
     MOMENT_PROFILE_INCOMPLETE(8005, "请先完成心动时刻问卷"),
     MOMENT_ENROLLMENT_CLOSED(8006, "本周报名已截止，匹配已触发"),
 
+    /** 心动「约一下」协商 */
+    PAIR_DATE_MATCH_NOT_FOUND(8010, "匹配结果不存在或无权访问"),
+    PAIR_DATE_NOT_MUTUAL(8011, "需要双方互相关注后才能约一下"),
+    PAIR_DATE_NEGOTIATION_NOT_FOUND(8012, "协商记录不存在"),
+    PAIR_DATE_FORBIDDEN(8013, "无权操作该协商"),
+    PAIR_DATE_CLOSED(8014, "该协商已结束或不可再修改"),
+    PAIR_DATE_BAD_STEP(8015, "步骤或参数不合法"),
+    PAIR_DATE_SUBMIT_BUSY(8016, "请勿重复提交，请稍候再试"),
+    PAIR_DATE_CALCULATING(8017, "结果计算中，请稍候刷新"),
+
     // 系统错误 9xxx
     INTERNAL_ERROR(9999, "系统内部错误");
 

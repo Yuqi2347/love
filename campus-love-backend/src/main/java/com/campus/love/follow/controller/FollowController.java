@@ -7,8 +7,10 @@ import com.campus.love.follow.dto.FollowResponse;
 import com.campus.love.follow.service.FollowService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -18,6 +20,7 @@ import java.util.List;
 @RestController
 @RequestMapping("/follow")
 @RequiredArgsConstructor
+@Validated
 public class FollowController {
 
     private final FollowService followService;
@@ -83,7 +86,7 @@ public class FollowController {
     @PutMapping("/{targetUserId}/remark")
     public Result<Void> setRemark(
         @PathVariable Long targetUserId,
-        @RequestParam String remark
+        @RequestParam(required = false, defaultValue = "") @Size(max = 10, message = "备注最多10个字符") String remark
     ) {
         followService.setRemark(targetUserId, remark);
         return Result.success();

@@ -22,6 +22,8 @@ public class NotificationResponse {
 
     private Long postId;
 
+    private Long relatedId;
+
     private String type;
 
     private String title;

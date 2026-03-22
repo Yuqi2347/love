@@ -46,4 +46,10 @@ public final class RedisKeyConstants {
     public static String feedTimeline(Long userId) {
         return FEED_TIMELINE_PREFIX + userId;
     }
+
+    private static final String PAIR_DATE_SUBMIT_PREFIX = "pairdate:submit:";
+
+    public static String pairDateSubmit(Long userId, Long negotiationId) {
+        return PAIR_DATE_SUBMIT_PREFIX + userId + ":" + negotiationId;
+    }
 }

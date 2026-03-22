@@ -14,6 +14,8 @@ import com.campus.love.user.service.UserService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Size;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.CacheControl;
@@ -21,6 +23,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.context.request.WebRequest;
 
@@ -34,6 +37,7 @@ import java.time.ZoneId;
 @RestController
 @RequestMapping("/user")
 @RequiredArgsConstructor
+@Validated
 public class UserController {
 
     private final UserService userService;
@@ -73,7 +77,8 @@ public class UserController {
 
     @Operation(summary = "更新昵称")
     @PatchMapping("/nickname")
-    public Result<UserProfileResponse> updateNickname(@RequestParam @jakarta.validation.constraints.NotBlank(message = "昵称不能为空") String nickname) {
+    public Result<UserProfileResponse> updateNickname(
+            @RequestParam @NotBlank(message = "昵称不能为空") @Size(max = 10, message = "昵称最多10个字符") String nickname) {
         return Result.success(userService.updateNickname(nickname));
     }
 
