@@ -1,31 +1,32 @@
 package com.campus.love.moment.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
-import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.moment.dto.MomentDatePrepResponse;
 import com.campus.love.moment.entity.MomentActivityWeek;
+import com.campus.love.moment.entity.MomentAiAnalysisTask;
 import com.campus.love.moment.entity.MomentAdminLog;
 import com.campus.love.moment.entity.MomentEnrollment;
 import com.campus.love.moment.entity.MomentMatchConfig;
 import com.campus.love.moment.entity.MomentMatchConfirm;
 import com.campus.love.moment.entity.MomentMatchResult;
+import com.campus.love.moment.entity.MomentMatchResultContent;
 import com.campus.love.moment.entity.MomentPairScore;
 import com.campus.love.moment.entity.MomentProfile;
 import com.campus.love.moment.enums.MomentPool;
+import com.campus.love.moment.mapper.MomentAiAnalysisTaskMapper;
 import com.campus.love.moment.mapper.MomentAdminLogMapper;
 import com.campus.love.moment.mapper.MomentEnrollmentMapper;
 import com.campus.love.moment.mapper.MomentMatchConfirmMapper;
+import com.campus.love.moment.mapper.MomentMatchResultContentMapper;
 import com.campus.love.moment.mapper.MomentMatchResultMapper;
 import com.campus.love.moment.mapper.MomentPairScoreMapper;
 import com.campus.love.moment.mapper.MomentProfileMapper;
-import com.campus.love.pairdate.entity.MomentYueIntent;
-import com.campus.love.pairdate.entity.PairDateNegotiation;
-import com.campus.love.pairdate.mapper.MomentYueIntentMapper;
-import com.campus.love.pairdate.mapper.PairDateNegotiationMapper;
+import com.campus.love.pairdate.util.PairDateTimeUtils;
 import com.campus.love.profile.entity.UserPortrait;
 import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.entity.User;
@@ -42,6 +43,7 @@ import java.math.RoundingMode;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Comparator;
@@ -52,6 +54,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -62,6 +65,8 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class MomentAdminService {
+
+    private static final ZoneId ZONE_SHANGHAI = ZoneId.of("Asia/Shanghai");
 
     private static final String ACTION_MANUAL_CLOSE = "MANUAL_CLOSE";
     private static final String ACTION_AUTO_CLOSE = "AUTO_CLOSE";
@@ -77,11 +82,17 @@ public class MomentAdminService {
 
     private final MomentEnrollmentMapper enrollmentMapper;
     private final MomentMatchResultMapper matchResultMapper;
+    private final MomentMatchResultContentMapper matchResultContentMapper;
     private final MomentMatchConfirmMapper matchConfirmMapper;
     private final MomentPairScoreMapper pairScoreMapper;
     private final MomentProfileMapper profileMapper;
     private final UserMapper userMapper;
     private final MomentMatcher matcher;
+    private final MomentMatchPipelineService momentMatchPipelineService;
+    private final MomentWeekDataService momentWeekDataService;
+    private final MomentMatchResetArchiveService momentMatchResetArchiveService;
+    private final MomentMatchProgressRegistry momentMatchProgressRegistry;
+    private final MomentAiAnalysisTaskMapper aiAnalysisTaskMapper;
     private final MomentMatchConfigService matchConfigService;
     private final UserPortraitService userPortraitService;
     private final MomentResultContentService momentResultContentService;
@@ -89,56 +100,26 @@ public class MomentAdminService {
     private final MomentActivityWeekService activityWeekService;
     private final MomentAdminLogService momentAdminLogService;
     private final MomentAdminLogMapper adminLogMapper;
-    private final PairDateNegotiationMapper pairDateNegotiationMapper;
-    private final MomentYueIntentMapper momentYueIntentMapper;
-
     public MomentAdminOverviewResponse getOverview(String weekTag, String currentWeekTag) {
         String resolvedWeekTag = resolveWeekTag(weekTag, currentWeekTag);
         MomentMatchConfig config = matchConfigService.getConfig();
         MomentActivityWeek week = activityWeekService.getOrCreateWeek(resolvedWeekTag);
-        List<MomentEnrollment> enrollments = enrollmentMapper.selectList(
-                new LambdaQueryWrapper<MomentEnrollment>()
-                        .eq(MomentEnrollment::getWeekTag, resolvedWeekTag)
-        );
-        List<MomentMatchResult> results = matchResultMapper.selectList(
-                new LambdaQueryWrapper<MomentMatchResult>()
-                        .eq(MomentMatchResult::getWeekTag, resolvedWeekTag)
-        );
-
-        Set<Long> participantIds = enrollments.stream()
-                .map(MomentEnrollment::getUserId)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        Set<Long> waitingUserIds = enrollments.stream()
-                .filter(enrollment -> MomentEnrollment.STATUS_WAITING.equals(enrollment.getStatus()))
-                .map(MomentEnrollment::getUserId)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        Set<Long> matchedUserIds = new LinkedHashSet<>();
-        for (MomentMatchResult result : results) {
-            matchedUserIds.add(result.getUserIdA());
-            matchedUserIds.add(result.getUserIdB());
-        }
-
-        Set<Long> unmatchedUserIds = new LinkedHashSet<>(participantIds);
-        unmatchedUserIds.removeAll(waitingUserIds);
-        unmatchedUserIds.removeAll(matchedUserIds);
+        long participantCount = nzLong(enrollmentMapper.countDistinctUsersByWeekTag(resolvedWeekTag));
+        long waitingUsers = nzLong(enrollmentMapper.countDistinctWaitingByWeekTag(resolvedWeekTag));
+        long matchedPairs = nzLong(matchResultMapper.countRowsByWeekTag(resolvedWeekTag));
+        long matchedUsers = nzLong(matchResultMapper.countDistinctMatchedUsersByWeekTag(resolvedWeekTag));
+        long unmatchedUsers = nzLong(enrollmentMapper.countDistinctUnmatchedByWeekTag(resolvedWeekTag));
 
         boolean enrollmentOpen = Boolean.TRUE.equals(week.getEnrollmentOpen());
-        long participantCount = participantIds.size();
-        long matchedPairs = results.size();
-        long matchedUsers = matchedUserIds.size();
-        long waitingUsers = waitingUserIds.size();
-        long unmatchedUsers = unmatchedUserIds.size();
         double successRate = participantCount == 0
                 ? 0d
                 : BigDecimal.valueOf(matchedUsers * 100d / participantCount).setScale(1, RoundingMode.HALF_UP).doubleValue();
 
         LocalDateTime lastMatchAt = week.getMatchedAt() != null
                 ? week.getMatchedAt()
-                : results.stream()
-                .map(MomentMatchResult::getCreatedAt)
-                .filter(Objects::nonNull)
-                .max(LocalDateTime::compareTo)
-                .orElse(null);
+                : matchResultMapper.maxCreatedAtByWeekTag(resolvedWeekTag);
+
+        LocalDateTime shNow = LocalDateTime.now(ZONE_SHANGHAI);
 
         return new MomentAdminOverviewResponse(
                 resolvedWeekTag,
@@ -154,13 +135,20 @@ public class MomentAdminService {
                 config.getAutoMatchEnabled(),
                 config.getAutoMatchDayOfWeek(),
                 config.getAutoMatchTime(),
-                resolveNextAutoMatchAt(config, LocalDateTime.now()),
+                resolveNextAutoMatchAt(config, shNow),
                 lastMatchAt,
-                buildPoolStats(enrollments, results),
-                waitingUsers > 0 && !MomentActivityWeek.STATUS_RESULT_READY.equals(week.getStatus()),
+                buildPoolStatsAggregated(resolvedWeekTag),
+                waitingUsers > 0 && !MomentWeekStatusPolicy.weekHasCompletedMatchingWork(week.getStatus()),
                 enrollmentOpen,
-                !enrollmentOpen && !MomentActivityWeek.STATUS_RESULT_READY.equals(week.getStatus()),
-                participantCount > 0 || matchedPairs > 0
+                !enrollmentOpen && !MomentWeekStatusPolicy.blocksReopenEnrollment(week.getStatus()),
+                participantCount > 0
+                        || matchedPairs > 0
+                        || !MomentActivityWeek.STATUS_ENROLLING.equals(week.getStatus()),
+                MomentActivityWeek.STATUS_RESULT_READY.equals(week.getStatus()),
+                config.getAutoPublishEnabled(),
+                config.getAutoPublishDayOfWeek(),
+                config.getAutoPublishTime(),
+                resolveNextAutoPublishAt(config, shNow, resolvedWeekTag, week.getStatus())
         );
     }
 
@@ -170,6 +158,91 @@ public class MomentAdminService {
 
     public Map<String, Object> closeEnrollmentBySystem(String weekTag, String currentWeekTag) {
         return closeEnrollmentInternal(weekTag, currentWeekTag, null, true);
+    }
+
+    public Map<String, Object> publishResult(String weekTag, String currentWeekTag, Long operatorId) {
+        String resolvedWeekTag = resolveWeekTag(weekTag, currentWeekTag);
+        MomentActivityWeek week = activityWeekService.getOrCreateWeek(resolvedWeekTag);
+        if (!MomentActivityWeek.STATUS_RESULT_READY.equals(week.getStatus())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "仅当状态为 RESULT_READY（管理员已可预览）时可公布");
+        }
+        activityWeekService.markPublished(resolvedWeekTag);
+        logAction(
+                resolvedWeekTag,
+                operatorId,
+                "MANUAL_PUBLISH",
+                TARGET_WEEK,
+                null,
+                "已公布本周匹配结果",
+                detailJson(Map.of("weekTag", resolvedWeekTag, "status", MomentActivityWeek.STATUS_PUBLISHED))
+        );
+        return Map.of("weekTag", resolvedWeekTag, "status", MomentActivityWeek.STATUS_PUBLISHED);
+    }
+
+    /**
+     * 系统自动公布（定时任务）；状态不符时静默跳过，不抛业务异常。
+     */
+    @Transactional
+    public Map<String, Object> publishResultBySystem(String weekTag, String currentWeekTag) {
+        String resolvedWeekTag = resolveWeekTag(weekTag, currentWeekTag);
+        MomentActivityWeek week = activityWeekService.getOrCreateWeek(resolvedWeekTag);
+        if (!MomentActivityWeek.STATUS_RESULT_READY.equals(week.getStatus())) {
+            return Map.of("skipped", true, "reason", "not_result_ready", "weekTag", resolvedWeekTag);
+        }
+        activityWeekService.markPublished(resolvedWeekTag);
+        logAction(
+                resolvedWeekTag,
+                null,
+                "AUTO_PUBLISH",
+                TARGET_WEEK,
+                null,
+                "系统自动公布本周匹配结果",
+                detailJson(Map.of("weekTag", resolvedWeekTag, "status", MomentActivityWeek.STATUS_PUBLISHED))
+        );
+        return Map.of("weekTag", resolvedWeekTag, "status", MomentActivityWeek.STATUS_PUBLISHED);
+    }
+
+    public Map<String, Object> getMatchProgress(String weekTag, String currentWeekTag) {
+        String resolvedWeekTag = resolveWeekTag(weekTag, currentWeekTag);
+        MomentActivityWeek week = activityWeekService.getOrCreateWeek(resolvedWeekTag);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("status", week.getStatus());
+        // 仅 FAILED 时展示 error_message；成功流水线会切换状态但旧错误可能未清库，避免进度区误报历史异常
+        body.put(
+                "errorMessage",
+                MomentActivityWeek.STATUS_FAILED.equals(week.getStatus()) ? week.getErrorMessage() : null);
+
+        MomentMatchProgressRegistry.Snapshot snap = momentMatchProgressRegistry.getSnapshot();
+        Map<String, Object> matchProgress = new LinkedHashMap<>();
+        if (snap != null && resolvedWeekTag.equals(snap.weekTag())) {
+            matchProgress.put("currentPool", snap.currentPool());
+            matchProgress.put("processedPairs", snap.progressContext().getProcessedPairs());
+            matchProgress.put("totalEstimatedPairs", snap.totalEstimatedPairs());
+            matchProgress.put("matchedPairs", snap.matchedPairsSoFar());
+        } else {
+            matchProgress.put("currentPool", "");
+            matchProgress.put("processedPairs", 0L);
+            matchProgress.put("totalEstimatedPairs", 0L);
+            matchProgress.put("matchedPairs", 0);
+        }
+        body.put("matchProgress", matchProgress);
+
+        long aiTotal = aiAnalysisTaskMapper.selectCount(
+                new LambdaQueryWrapper<MomentAiAnalysisTask>().eq(MomentAiAnalysisTask::getWeekTag, resolvedWeekTag));
+        long aiDone = aiAnalysisTaskMapper.selectCount(
+                new LambdaQueryWrapper<MomentAiAnalysisTask>()
+                        .eq(MomentAiAnalysisTask::getWeekTag, resolvedWeekTag)
+                        .eq(MomentAiAnalysisTask::getStatus, MomentAiAnalysisTask.STATUS_DONE));
+        long aiFailed = aiAnalysisTaskMapper.selectCount(
+                new LambdaQueryWrapper<MomentAiAnalysisTask>()
+                        .eq(MomentAiAnalysisTask::getWeekTag, resolvedWeekTag)
+                        .eq(MomentAiAnalysisTask::getStatus, MomentAiAnalysisTask.STATUS_FAILED));
+        Map<String, Object> ai = new LinkedHashMap<>();
+        ai.put("total", aiTotal);
+        ai.put("done", aiDone);
+        ai.put("failed", aiFailed);
+        body.put("aiProgress", ai);
+        return body;
     }
 
     public Map<String, Object> reopenEnrollment(String weekTag, String currentWeekTag, Long operatorId) {
@@ -203,58 +276,40 @@ public class MomentAdminService {
     @Transactional
     public Map<String, Object> resetWeek(String weekTag, String currentWeekTag, Long operatorId) {
         String resolvedWeekTag = resolveWeekTag(weekTag, currentWeekTag);
-        List<Long> matchResultIds = matchResultMapper.selectList(
-                        new LambdaQueryWrapper<MomentMatchResult>()
-                                .eq(MomentMatchResult::getWeekTag, resolvedWeekTag))
-                .stream()
-                .map(MomentMatchResult::getId)
-                .toList();
+        Optional<String> archiveBatch =
+                momentMatchResetArchiveService.archiveWeekMatchResultsBeforeDelete(resolvedWeekTag, operatorId);
 
-        if (!matchResultIds.isEmpty()) {
-            matchConfirmMapper.delete(new LambdaQueryWrapper<MomentMatchConfirm>()
-                    .in(MomentMatchConfirm::getMatchResultId, matchResultIds));
-            momentYueIntentMapper.delete(new LambdaQueryWrapper<MomentYueIntent>()
-                    .in(MomentYueIntent::getMatchResultId, matchResultIds));
-        }
-        int pairDateDeleted = pairDateNegotiationMapper.delete(
-                new LambdaQueryWrapper<PairDateNegotiation>()
-                        .eq(PairDateNegotiation::getWeekTag, resolvedWeekTag));
-        int resultDeleted = matchResultMapper.delete(
-                new LambdaQueryWrapper<MomentMatchResult>()
-                        .eq(MomentMatchResult::getWeekTag, resolvedWeekTag)
-        );
-        int pairScoreDeleted = pairScoreMapper.delete(
-                new LambdaQueryWrapper<MomentPairScore>()
-                        .eq(MomentPairScore::getWeekTag, resolvedWeekTag)
-        );
-        int enrollmentDeleted = enrollmentMapper.delete(
+        momentWeekDataService.deletePipelineDataForWeek(resolvedWeekTag);
+
+        // 删除本周报名记录：若仅把状态改回 WAITING，用户端仍会显示「正在为你寻找」
+        int enrollmentsDeleted = enrollmentMapper.delete(
                 new LambdaQueryWrapper<MomentEnrollment>()
                         .eq(MomentEnrollment::getWeekTag, resolvedWeekTag)
         );
 
-        MomentActivityWeek week = activityWeekService.resetWeek(resolvedWeekTag);
+        MomentActivityWeek week = activityWeekService.resetWeekToWaitingMatch(resolvedWeekTag);
+        Map<String, Object> logDetail = new LinkedHashMap<>();
+        logDetail.put("weekTag", resolvedWeekTag);
+        logDetail.put("enrollmentRowsDeleted", enrollmentsDeleted);
+        logDetail.put("status", week.getStatus());
+        archiveBatch.ifPresent(b -> logDetail.put("archiveSnapshotBatchId", b));
         logAction(
                 resolvedWeekTag,
                 operatorId,
                 ACTION_RESET_WEEK,
                 TARGET_WEEK,
                 null,
-                "已重置本周活动并恢复报名",
-                detailJson(Map.of(
-                        "weekTag", resolvedWeekTag,
-                        "deletedEnrollments", enrollmentDeleted,
-                        "deletedResults", resultDeleted,
-                        "deletedPairScores", pairScoreDeleted,
-                        "deletedPairDateNegotiations", pairDateDeleted,
-                        "status", week.getStatus()
-                ))
+                "已重置本周匹配数据，本周报名记录已清空（用户需重新报名）",
+                detailJson(logDetail)
         );
 
-        log.info("管理员重置本周活动: weekTag={}", resolvedWeekTag);
-        return Map.of(
-                "weekTag", resolvedWeekTag,
-                "message", "本周活动已重置（含匹配结果、确认记录、约会三步协商与约一下意向），报名已重新开放",
-                "deletedPairDateNegotiations", pairDateDeleted);
+        log.info("管理员重置本周心动时刻: weekTag={}", resolvedWeekTag);
+        Map<String, Object> body = new LinkedHashMap<>();
+        body.put("weekTag", resolvedWeekTag);
+        body.put("message", "本周匹配数据已清空，用户需重新报名参加本周活动");
+        body.put("enrollmentRowsDeleted", enrollmentsDeleted);
+        archiveBatch.ifPresent(b -> body.put("archiveSnapshotBatchId", b));
+        return body;
     }
 
     @Transactional
@@ -300,72 +355,60 @@ public class MomentAdminService {
                                                             int size,
                                                             String weekTag,
                                                             String pool,
+                                                            Integer gender,
                                                             String status,
                                                             String keyword) {
-        LambdaQueryWrapper<MomentEnrollment> wrapper = new LambdaQueryWrapper<>();
-        if (StringUtils.hasText(weekTag)) {
-            wrapper.eq(MomentEnrollment::getWeekTag, weekTag.trim());
-        }
-        if (StringUtils.hasText(pool)) {
-            wrapper.eq(MomentEnrollment::getPool, pool.trim());
-        }
-        if (StringUtils.hasText(status)) {
-            wrapper.eq(MomentEnrollment::getStatus, status.trim());
-        }
-        wrapper.orderByDesc(MomentEnrollment::getCreatedAt);
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.max(size, 1);
+        long offset = (long) (safePage - 1) * safeSize;
+        String keywordLike = keywordLike(keyword);
+        String weekTagFilter = normalizeFilter(weekTag);
+        String poolFilter = normalizeFilter(pool);
+        Integer genderFilter = (gender != null && (gender == 1 || gender == 2)) ? gender : null;
+        String statusFilter = normalizeFilter(status);
 
-        List<MomentEnrollment> enrollments = enrollmentMapper.selectList(wrapper);
-        if (enrollments.isEmpty()) {
-            return emptyPage(page, size);
-        }
-
-        Map<String, List<MomentEnrollment>> grouped = new LinkedHashMap<>();
-        for (MomentEnrollment enrollment : enrollments) {
-            String groupKey = enrollment.getWeekTag() + "_" + enrollment.getUserId();
-            grouped.computeIfAbsent(groupKey, key -> new ArrayList<>()).add(enrollment);
+        long total = nzLong(enrollmentMapper.countAdminEnrollmentGroups(
+                weekTagFilter, poolFilter, genderFilter, statusFilter, keywordLike
+        ));
+        if (total == 0) {
+            return emptyPage(safePage, safeSize);
         }
 
-        Set<Long> userIds = grouped.values().stream()
-                .map(items -> items.get(0).getUserId())
+        List<Map<String, Object>> rows = enrollmentMapper.selectAdminEnrollmentGroups(
+                weekTagFilter, poolFilter, genderFilter, statusFilter, keywordLike, offset, safeSize
+        );
+        if (rows.isEmpty()) {
+            return emptyPage(safePage, safeSize);
+        }
+
+        Set<Long> userIds = rows.stream()
+                .map(row -> toLong(row.get("userId")))
+                .filter(Objects::nonNull)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
-        Map<Long, User> userMap = loadUserMap(userIds);
         Map<Long, MomentProfile> profileMap = loadProfileMap(userIds);
 
-        List<MomentEnrollmentAdminItem> items = grouped.values().stream()
-                .map(group -> {
-                    MomentEnrollment first = group.get(0);
-                    Long userId = first.getUserId();
-                    User user = userMap.get(userId);
-                    MomentProfile profile = profileMap.get(userId);
-                    LocalDateTime createdAt = group.stream()
-                            .map(MomentEnrollment::getCreatedAt)
-                            .filter(Objects::nonNull)
-                            .max(LocalDateTime::compareTo)
-                            .orElse(first.getCreatedAt());
-                    List<String> pools = group.stream()
-                            .map(MomentEnrollment::getPool)
-                            .filter(StringUtils::hasText)
-                            .distinct()
-                            .sorted(Comparator.comparingInt(this::poolOrder))
-                            .toList();
-                    return new MomentEnrollmentAdminItem(
-                            first.getWeekTag(),
-                            userId,
-                            displayName(user, userId),
-                            user != null ? user.getSchool() : null,
-                            user != null ? user.getMajor() : null,
-                            user != null ? user.getGrade() : null,
-                            pools,
-                            first.getStatus(),
-                            profile != null && Boolean.TRUE.equals(profile.getPrioritizeMatching()),
-                            user != null ? user.getMomentPriorityCountOrDefault() : 0,
-                            createdAt
-                    );
-                })
-                .filter(item -> matchesEnrollmentKeyword(item, keyword))
-                .toList();
+        List<MomentEnrollmentAdminItem> items = rows.stream().map(row -> {
+            Long userId = toLong(row.get("userId"));
+            MomentProfile profile = userId != null ? profileMap.get(userId) : null;
+            return new MomentEnrollmentAdminItem(
+                    stringValue(row.get("weekTag")),
+                    userId,
+                    stringValue(row.get("nickname")),
+                    toNullableInt(row.get("gender")),
+                    stringValue(row.get("school")),
+                    stringValue(row.get("major")),
+                    stringValue(row.get("grade")),
+                    parsePools(row.get("pools")),
+                    stringValue(row.get("status")),
+                    profile != null && Boolean.TRUE.equals(profile.getPrioritizeMatching()),
+                    toInt(row.get("priorityCount")),
+                    toLocalDateTime(row.get("createdAt"))
+            );
+        }).toList();
 
-        return paginateList(items, page, size);
+        Page<MomentEnrollmentAdminItem> result = new Page<>(safePage, safeSize, total);
+        result.setRecords(items);
+        return result;
     }
 
     public IPage<MomentMatchResultItem> listResults(int page,
@@ -380,13 +423,48 @@ public class MomentAdminService {
         if (StringUtils.hasText(pool)) {
             wrapper.eq(MomentMatchResult::getPool, pool.trim());
         }
-        wrapper.orderByDesc(MomentMatchResult::getCreatedAt);
+        wrapper.orderByDesc(MomentMatchResult::getTotalScore)
+                .orderByDesc(MomentMatchResult::getCreatedAt);
 
-        List<MomentMatchResult> results = matchResultMapper.selectList(wrapper);
-        if (results.isEmpty()) {
-            return emptyPage(page, size);
+        if (!StringUtils.hasText(keyword)) {
+            Page<MomentMatchResult> pageReq = new Page<>(Math.max(page, 1), Math.max(size, 1));
+            IPage<MomentMatchResult> resultPage = matchResultMapper.selectPage(pageReq, wrapper);
+            List<MomentMatchResult> results = resultPage.getRecords();
+            if (results.isEmpty()) {
+                Page<MomentMatchResultItem> empty = new Page<>(resultPage.getCurrent(), resultPage.getSize(), resultPage.getTotal());
+                empty.setRecords(List.of());
+                return empty;
+            }
+            return buildMatchResultItemPage(results, resultPage.getCurrent(), resultPage.getSize(), resultPage.getTotal());
+        }
+        int safePage = Math.max(page, 1);
+        int safeSize = Math.max(size, 1);
+        long offset = (long) (safePage - 1) * safeSize;
+        String keywordLike = keywordLike(keyword);
+        String weekTagFilter = normalizeFilter(weekTag);
+        String poolFilter = normalizeFilter(pool);
+
+        long total = nzLong(matchResultMapper.countAdminResultIdsFiltered(weekTagFilter, poolFilter, keywordLike));
+        if (total == 0) {
+            return emptyPage(safePage, safeSize);
         }
 
+        List<Long> ids = matchResultMapper.selectAdminResultIdsFiltered(
+                weekTagFilter, poolFilter, keywordLike, offset, safeSize
+        );
+        if (ids.isEmpty()) {
+            return emptyPage(safePage, safeSize);
+        }
+        List<MomentMatchResult> results = matchResultMapper.selectList(
+                new LambdaQueryWrapper<MomentMatchResult>()
+                        .in(MomentMatchResult::getId, ids)
+                        .orderByDesc(MomentMatchResult::getTotalScore)
+                        .orderByDesc(MomentMatchResult::getCreatedAt)
+        );
+        return buildMatchResultItemPage(results, safePage, safeSize, total);
+    }
+
+    private List<MomentMatchResultItem> buildMatchResultItems(List<MomentMatchResult> results) {
         Set<Long> userIds = new LinkedHashSet<>();
         List<Long> resultIds = new ArrayList<>();
         for (MomentMatchResult result : results) {
@@ -394,14 +472,20 @@ public class MomentAdminService {
             userIds.add(result.getUserIdB());
             resultIds.add(result.getId());
         }
+        Map<Long, MomentMatchResultContent> contentByResultId = matchResultContentMapper.selectList(
+                        new LambdaQueryWrapper<MomentMatchResultContent>()
+                                .in(MomentMatchResultContent::getMatchResultId, resultIds))
+                .stream()
+                .collect(Collectors.toMap(MomentMatchResultContent::getMatchResultId, c -> c, (a, b) -> a));
         Map<Long, User> userMap = loadUserMap(userIds);
         Map<Long, MomentMatchConfirm> confirmMap = loadConfirmMap(resultIds);
 
-        List<MomentMatchResultItem> items = results.stream()
+        return results.stream()
                 .map(result -> {
                     User userA = userMap.get(result.getUserIdA());
                     User userB = userMap.get(result.getUserIdB());
                     MomentMatchConfirm confirm = confirmMap.get(result.getId());
+                    MomentMatchResultContent content = contentByResultId.get(result.getId());
                     return new MomentMatchResultItem(
                             result.getId(),
                             result.getWeekTag(),
@@ -411,17 +495,22 @@ public class MomentAdminService {
                             result.getUserIdB(),
                             displayName(userB, result.getUserIdB()),
                             result.getTotalScore(),
-                            result.getYuanfenTitle(),
+                            content != null ? content.getYuanfenTitle() : null,
                             confirm != null ? confirm.getChoiceA() : null,
                             confirm != null ? confirm.getChoiceB() : null,
                             resolveConfirmStatus(confirm),
                             result.getCreatedAt()
                     );
                 })
-                .filter(item -> matchesResultKeyword(item, keyword))
                 .toList();
+    }
 
-        return paginateList(items, page, size);
+    private IPage<MomentMatchResultItem> buildMatchResultItemPage(
+            List<MomentMatchResult> results, long current, long pageSize, long total) {
+        List<MomentMatchResultItem> items = buildMatchResultItems(results);
+        Page<MomentMatchResultItem> out = new Page<>(current, pageSize, total);
+        out.setRecords(items);
+        return out;
     }
 
     public MomentMatchResultDetailResponse getResultDetail(Long id) {
@@ -429,8 +518,16 @@ public class MomentAdminService {
         if (result == null) {
             throw new BusinessException(ResultCode.NOT_FOUND, "匹配结果不存在");
         }
+        MomentMatchResultContent content = matchResultContentMapper.selectOne(
+                new LambdaQueryWrapper<MomentMatchResultContent>()
+                        .eq(MomentMatchResultContent::getMatchResultId, id)
+                        .last("limit 1")
+        );
+        if (content == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "匹配结果内容不存在");
+        }
 
-        String rawDatePrepJson = result.getDatePrepJson();
+        String rawDatePrepJson = content.getDatePrepJson();
         User userA = userMapper.selectById(result.getUserIdA());
         User userB = userMapper.selectById(result.getUserIdB());
         Map<Long, MomentProfile> profileMap = loadProfileMap(List.of(result.getUserIdA(), result.getUserIdB()));
@@ -445,24 +542,24 @@ public class MomentAdminService {
         );
 
         List<String> insightCards = new ArrayList<>();
-        if (StringUtils.hasText(result.getInsightCard1())) {
-            insightCards.add(result.getInsightCard1());
+        if (StringUtils.hasText(content.getInsightCard1())) {
+            insightCards.add(content.getInsightCard1());
         }
-        if (StringUtils.hasText(result.getInsightCard2())) {
-            insightCards.add(result.getInsightCard2());
+        if (StringUtils.hasText(content.getInsightCard2())) {
+            insightCards.add(content.getInsightCard2());
         }
-        if (StringUtils.hasText(result.getInsightCard3())) {
-            insightCards.add(result.getInsightCard3());
+        if (StringUtils.hasText(content.getInsightCard3())) {
+            insightCards.add(content.getInsightCard3());
         }
 
         MomentDatePrepResponse datePrepA = momentResultContentService.getOrGenerateDatePrep(
-                result, result.getUserIdA(), userA, userB, profileA, profileB, portraitA, portraitB
+                result, content, result.getUserIdA(), userA, userB, profileA, profileB, portraitA, portraitB
         );
         MomentDatePrepResponse datePrepB = momentResultContentService.getOrGenerateDatePrep(
-                result, result.getUserIdB(), userB, userA, profileB, profileA, portraitB, portraitA
+                result, content, result.getUserIdB(), userB, userA, profileB, profileA, portraitB, portraitA
         );
-        if (!Objects.equals(rawDatePrepJson, result.getDatePrepJson()) && result.getId() != null) {
-            matchResultMapper.updateById(result);
+        if (!Objects.equals(rawDatePrepJson, content.getDatePrepJson()) && content.getId() != null) {
+            matchResultContentMapper.updateById(content);
         }
 
         return new MomentMatchResultDetailResponse(
@@ -470,19 +567,19 @@ public class MomentAdminService {
                 result.getWeekTag(),
                 result.getPool(),
                 result.getTotalScore(),
-                result.getScoreDetail(),
-                result.getYuanfenTitle(),
-                result.getComplementaryModes(),
-                result.getSoftPenaltyReasons(),
-                result.getDateSceneType(),
+                content.getScoreDetail(),
+                content.getYuanfenTitle(),
+                content.getComplementaryModes(),
+                content.getSoftPenaltyReasons(),
+                content.getDateSceneType(),
                 insightCards,
-                result.getGoldenSentence(),
-                result.getDimensionLabels(),
-                result.getAboutUserA(),
-                result.getAboutUserB(),
+                content.getGoldenSentence(),
+                content.getDimensionLabels(),
+                content.getAboutUserA(),
+                content.getAboutUserB(),
                 datePrepA,
                 datePrepB,
-                result.getDatePrepJson(),
+                content.getDatePrepJson(),
                 buildMatchedUserCard(userA),
                 buildMatchedUserCard(userB),
                 confirm != null ? confirm.getChoiceA() : null,
@@ -580,21 +677,20 @@ public class MomentAdminService {
         );
     }
 
-    @Transactional
     protected Map<String, Object> triggerMatchingInternal(String weekTag,
                                                           String currentWeekTag,
                                                           Long operatorId,
                                                           boolean autoTriggered) {
         String resolvedWeekTag = resolveWeekTag(weekTag, currentWeekTag);
         MomentActivityWeek week = activityWeekService.getOrCreateWeek(resolvedWeekTag);
-        if (MomentActivityWeek.STATUS_RESULT_READY.equals(week.getStatus())) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "本周匹配结果已生成，如需重新执行请先重置本周活动");
+        if (MomentWeekStatusPolicy.blocksTriggerMatching(week.getStatus())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "本周匹配进行中或已有结果，请先重置后再试");
         }
         if (autoTriggered) {
             activityWeekService.markAutoProcessed(resolvedWeekTag);
         }
         activityWeekService.closeEnrollment(resolvedWeekTag);
-        log.info("开始触发心动时刻匹配（报名已截止）: weekTag={}, autoTriggered={}", resolvedWeekTag, autoTriggered);
+        log.info("触发心动时刻异步匹配: weekTag={}, autoTriggered={}", resolvedWeekTag, autoTriggered);
 
         List<MomentEnrollment> enrollments = enrollmentMapper.selectList(
                 new LambdaQueryWrapper<MomentEnrollment>()
@@ -620,155 +716,8 @@ public class MomentAdminService {
             return Map.of("message", "本周无待匹配用户", "weekTag", resolvedWeekTag);
         }
 
-        deleteExistingResults(resolvedWeekTag);
-        pairScoreMapper.delete(new LambdaQueryWrapper<MomentPairScore>()
-                .eq(MomentPairScore::getWeekTag, resolvedWeekTag));
-
-        Map<Long, User> userCache = new HashMap<>();
-        Map<Long, MomentProfile> profileCache = new HashMap<>();
-        Map<Long, UserPortrait> portraitCache = new HashMap<>();
-        Map<String, List<MomentMatcher.Candidate>> poolCandidates = new HashMap<>();
-
-        for (MomentEnrollment enrollment : enrollments) {
-            Long userId = enrollment.getUserId();
-            User user = userCache.computeIfAbsent(userId, userMapper::selectById);
-            MomentProfile profile = profileCache.computeIfAbsent(userId, id -> profileMapper.selectOne(
-                    new LambdaQueryWrapper<MomentProfile>().eq(MomentProfile::getUserId, id).last("limit 1")
-            ));
-            UserPortrait portrait = portraitCache.computeIfAbsent(userId, userPortraitService::getPortrait);
-            if (user == null || profile == null) {
-                continue;
-            }
-            poolCandidates.computeIfAbsent(enrollment.getPool(), key -> new ArrayList<>())
-                    .add(new MomentMatcher.Candidate(user, profile, portrait));
-        }
-
-        MomentMatchConfig config = matchConfigService.getConfig();
-        int totalMatchedPairs = 0;
-        Set<Long> globalMatchedUserIds = new HashSet<>();
-        Map<String, Map<String, Object>> poolSummary = new LinkedHashMap<>();
-
-        for (String pool : matcher.poolOrder()) {
-            List<MomentMatcher.Candidate> candidates = poolCandidates.getOrDefault(pool, List.of()).stream()
-                    .filter(candidate -> !globalMatchedUserIds.contains(candidate.user().getId()))
-                    .toList();
-            if (candidates.isEmpty()) {
-                continue;
-            }
-
-            MomentMatcher.PoolMatchResult poolResult = matcher.match(candidates, pool, config);
-            List<MomentMatcher.MatchPair> pairs = poolResult.matches();
-            Set<Long> matchedUserIds = new HashSet<>();
-            Set<String> matchedPairKeys = new HashSet<>();
-            for (MomentMatcher.MatchPair pair : pairs) {
-                long userIdA = Math.min(pair.userIdA(), pair.userIdB());
-                long userIdB = Math.max(pair.userIdA(), pair.userIdB());
-                User userA = userCache.get(userIdA);
-                User userB = userCache.get(userIdB);
-                MomentProfile profileA = profileCache.get(userIdA);
-                MomentProfile profileB = profileCache.get(userIdB);
-                UserPortrait portraitA = portraitCache.get(userIdA);
-                UserPortrait portraitB = portraitCache.get(userIdB);
-
-                MomentMatchResult result = new MomentMatchResult();
-                result.setWeekTag(resolvedWeekTag);
-                result.setPool(pool);
-                result.setUserIdA(userIdA);
-                result.setUserIdB(userIdB);
-                result.setTotalScore(BigDecimal.valueOf(pair.totalScore()));
-                try {
-                    result.setScoreDetail(objectMapper.writeValueAsString(pair.scoreDetail()));
-                } catch (Exception ex) {
-                    log.warn("序列化分数明细失败", ex);
-                }
-                momentResultContentService.fillPrecomputedContent(
-                        result, userA, userB, profileA, profileB, portraitA, portraitB, pair.scoreDetail()
-                );
-                matchResultMapper.insert(result);
-
-                MomentMatchConfirm confirm = new MomentMatchConfirm();
-                confirm.setMatchResultId(result.getId());
-                confirm.setUserIdA(userIdA);
-                confirm.setUserIdB(userIdB);
-                matchConfirmMapper.insert(confirm);
-
-                matchedUserIds.add(userIdA);
-                matchedUserIds.add(userIdB);
-                matchedPairKeys.add(pairKey(userIdA, userIdB));
-            }
-
-            for (MomentMatcher.PairEvaluation evaluation : poolResult.evaluations()) {
-                long userIdA = Math.min(evaluation.userIdA(), evaluation.userIdB());
-                long userIdB = Math.max(evaluation.userIdA(), evaluation.userIdB());
-                MomentPairScore pairScore = new MomentPairScore();
-                pairScore.setWeekTag(resolvedWeekTag);
-                pairScore.setPool(pool);
-                pairScore.setUserIdA(userIdA);
-                pairScore.setUserIdB(userIdB);
-                pairScore.setScore(BigDecimal.valueOf(evaluation.totalScore()));
-                try {
-                    pairScore.setScoreDetail(objectMapper.writeValueAsString(evaluation.scoreDetail()));
-                } catch (Exception ex) {
-                    log.warn("序列化候选对分数明细失败", ex);
-                }
-                pairScore.setHardFilterPassed(evaluation.hardFilterPassed());
-                pairScore.setHardFilterReason(evaluation.hardFilterReason());
-                pairScore.setSoftPenalty(evaluation.softPenalty());
-                pairScore.setSoftPenaltyReason(evaluation.softPenaltyReason());
-                pairScore.setThresholdOffsetA(evaluation.thresholdOffsetA());
-                pairScore.setThresholdOffsetB(evaluation.thresholdOffsetB());
-                pairScore.setEffectiveThresholdA(evaluation.effectiveThresholdA());
-                pairScore.setEffectiveThresholdB(evaluation.effectiveThresholdB());
-                pairScore.setThresholdRequired(evaluation.thresholdRequired());
-                pairScore.setIncludedByThreshold(evaluation.includedByThreshold());
-                pairScore.setMatched(matchedPairKeys.contains(pairKey(userIdA, userIdB)));
-                pairScoreMapper.insert(pairScore);
-            }
-
-            globalMatchedUserIds.addAll(matchedUserIds);
-            totalMatchedPairs += pairs.size();
-            poolSummary.put(pool, Map.of(
-                    "participants", candidates.size(),
-                    "matchedPairs", pairs.size(),
-                    "unmatchedUsers", Math.max(0, candidates.size() - pairs.size() * 2)
-            ));
-            log.info("池子 {} 匹配完成: {}人参与, {}对成功", pool, candidates.size(), pairs.size());
-        }
-
-        Set<Long> uniqueUserIds = enrollments.stream()
-                .map(MomentEnrollment::getUserId)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-        int unmatchedUsers = 0;
-        int maxStack = config.getPriorityMaxStack() != null ? config.getPriorityMaxStack() : MomentMatchConfig.DEFAULT_PRIORITY_MAX_STACK;
-        for (Long userId : uniqueUserIds) {
-            boolean matched = globalMatchedUserIds.contains(userId);
-            enrollmentMapper.update(null, new LambdaUpdateWrapper<MomentEnrollment>()
-                    .eq(MomentEnrollment::getUserId, userId)
-                    .eq(MomentEnrollment::getWeekTag, resolvedWeekTag)
-                    .set(MomentEnrollment::getStatus, matched ? MomentEnrollment.STATUS_MATCHED : MomentEnrollment.STATUS_UNMATCHED)
-            );
-
-            User user = userCache.get(userId);
-            if (user != null) {
-                user.setMomentPriorityCount(matched
-                        ? 0
-                        : Math.min(user.getMomentPriorityCountOrDefault() + 1, maxStack));
-                userMapper.updateById(user);
-            }
-            if (!matched) {
-                unmatchedUsers++;
-            }
-        }
-
-        activityWeekService.markMatched(resolvedWeekTag);
-        Map<String, Object> response = new LinkedHashMap<>();
-        response.put("weekTag", resolvedWeekTag);
-        response.put("totalParticipants", uniqueUserIds.size());
-        response.put("matchedPairs", totalMatchedPairs);
-        response.put("matchedUsers", globalMatchedUserIds.size());
-        response.put("unmatchedUsers", unmatchedUsers);
-        response.put("baseThreshold", config.getBaseThreshold());
-        response.put("poolSummary", poolSummary);
+        activityWeekService.setMatching(resolvedWeekTag);
+        momentMatchPipelineService.submitMatchJob(resolvedWeekTag, operatorId, autoTriggered);
 
         logAction(
                 resolvedWeekTag,
@@ -776,25 +725,15 @@ public class MomentAdminService {
                 autoTriggered ? ACTION_AUTO_TRIGGER_MATCH : ACTION_MANUAL_TRIGGER_MATCH,
                 TARGET_WEEK,
                 null,
-                "匹配完成，生成 " + totalMatchedPairs + " 对结果",
-                detailJson(response)
+                "匹配任务已启动（异步执行）",
+                detailJson(Map.of("weekTag", resolvedWeekTag, "async", true))
         );
-        return response;
-    }
 
-    private void deleteExistingResults(String weekTag) {
-        List<Long> resultIds = matchResultMapper.selectList(
-                        new LambdaQueryWrapper<MomentMatchResult>()
-                                .eq(MomentMatchResult::getWeekTag, weekTag))
-                .stream()
-                .map(MomentMatchResult::getId)
-                .toList();
-        if (!resultIds.isEmpty()) {
-            matchConfirmMapper.delete(new LambdaQueryWrapper<MomentMatchConfirm>()
-                    .in(MomentMatchConfirm::getMatchResultId, resultIds));
-        }
-        matchResultMapper.delete(new LambdaQueryWrapper<MomentMatchResult>()
-                .eq(MomentMatchResult::getWeekTag, weekTag));
+        Map<String, Object> response = new LinkedHashMap<>();
+        response.put("weekTag", resolvedWeekTag);
+        response.put("message", "匹配任务已启动");
+        response.put("async", true);
+        return response;
     }
 
     private Map<Long, User> loadUserMap(Collection<Long> userIds) {
@@ -907,13 +846,154 @@ public class MomentAdminService {
         return StringUtils.hasText(weekTag) ? weekTag.trim() : currentWeekTag;
     }
 
+    private String normalizeFilter(String value) {
+        return StringUtils.hasText(value) ? value.trim() : null;
+    }
+
+    private String keywordLike(String keyword) {
+        if (!StringUtils.hasText(keyword)) {
+            return null;
+        }
+        String normalized = keyword.trim().replace("\\", "\\\\")
+                .replace("%", "\\%")
+                .replace("_", "\\_");
+        return "%" + normalized + "%";
+    }
+
+    private String stringValue(Object value) {
+        return value == null ? null : String.valueOf(value);
+    }
+
+    private Long toLong(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        try {
+            return Long.parseLong(String.valueOf(value));
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private int toInt(Object value) {
+        if (value == null) {
+            return 0;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (Exception ignored) {
+            return 0;
+        }
+    }
+
+    private Integer toNullableInt(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof Number number) {
+            return number.intValue();
+        }
+        try {
+            return Integer.parseInt(String.valueOf(value));
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private LocalDateTime toLocalDateTime(Object value) {
+        if (value == null) {
+            return null;
+        }
+        if (value instanceof LocalDateTime time) {
+            return time;
+        }
+        if (value instanceof java.sql.Timestamp ts) {
+            return ts.toLocalDateTime();
+        }
+        try {
+            return LocalDateTime.parse(String.valueOf(value).replace(" ", "T"));
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private List<String> parsePools(Object value) {
+        if (value == null) {
+            return List.of();
+        }
+        return List.of(String.valueOf(value).split(",")).stream()
+                .map(String::trim)
+                .filter(StringUtils::hasText)
+                .distinct()
+                .sorted(Comparator.comparingInt(this::poolOrder))
+                .toList();
+    }
+
     private int poolOrder(String pool) {
-        return switch (pool) {
+        if (pool == null || pool.isBlank()) {
+            return 99;
+        }
+        return switch (pool.trim()) {
             case "MF" -> 1;
             case "FF" -> 2;
             case "MM" -> 3;
             default -> 99;
         };
+    }
+
+    private static long nzLong(Long value) {
+        return value == null ? 0L : value;
+    }
+
+    /**
+     * 按周聚合各池人数/对数，避免大数据量下全表载入 enrollment/result。
+     */
+    private List<OverviewPoolStat> buildPoolStatsAggregated(String weekTag) {
+        Map<String, Long> participants = new LinkedHashMap<>();
+        QueryWrapper<MomentEnrollment> we = new QueryWrapper<>();
+        we.select("pool", "COUNT(DISTINCT user_id) AS cnt");
+        we.eq("week_tag", weekTag);
+        we.groupBy("pool");
+        for (Map<String, Object> row : enrollmentMapper.selectMaps(we)) {
+            Object poolObj = row.get("pool");
+            Object cntObj = row.get("cnt");
+            String poolKey = poolObj != null ? String.valueOf(poolObj) : "UNKNOWN";
+            long cnt = cntObj instanceof Number ? ((Number) cntObj).longValue() : 0L;
+            participants.merge(poolKey, cnt, Long::sum);
+        }
+
+        Map<String, Long> pairCountByPool = new LinkedHashMap<>();
+        QueryWrapper<MomentMatchResult> wr = new QueryWrapper<>();
+        wr.select("pool", "COUNT(*) AS cnt");
+        wr.eq("week_tag", weekTag);
+        wr.groupBy("pool");
+        for (Map<String, Object> row : matchResultMapper.selectMaps(wr)) {
+            Object poolObj = row.get("pool");
+            Object cntObj = row.get("cnt");
+            String poolKey = poolObj != null ? String.valueOf(poolObj) : "UNKNOWN";
+            long cnt = cntObj instanceof Number ? ((Number) cntObj).longValue() : 0L;
+            pairCountByPool.merge(poolKey, cnt, Long::sum);
+        }
+
+        List<OverviewPoolStat> stats = new ArrayList<>();
+        for (String pool : matcher.poolOrder()) {
+            long pCount = participants.getOrDefault(pool, 0L);
+            long pairs = pairCountByPool.getOrDefault(pool, 0L);
+            stats.add(new OverviewPoolStat(pool, pCount, pairs, Math.max(0L, pCount - pairs * 2)));
+        }
+        for (MomentPool pool : MomentPool.values()) {
+            if (stats.stream().noneMatch(item -> item.pool().equals(pool.getCode()))) {
+                stats.add(new OverviewPoolStat(pool.getCode(), 0L, 0L, 0L));
+            }
+        }
+        stats.sort(Comparator.comparingInt(item -> poolOrder(item.pool())));
+        return stats;
     }
 
     private String displayName(User user, Long fallbackId) {
@@ -972,7 +1052,17 @@ public class MomentAdminService {
         if (config == null || !Boolean.TRUE.equals(config.getAutoMatchEnabled())) {
             return null;
         }
-        LocalTime triggerTime = LocalTime.parse(config.getAutoMatchTime());
+        String timeStr = config.getAutoMatchTime();
+        if (timeStr == null || timeStr.isBlank()) {
+            return null;
+        }
+        LocalTime triggerTime;
+        try {
+            triggerTime = LocalTime.parse(timeStr.trim());
+        } catch (Exception e) {
+            log.warn("自动匹配时间解析失败 autoMatchTime={}，总览不展示下次执行时间", timeStr);
+            return null;
+        }
         int targetDay = config.getAutoMatchDayOfWeek();
         LocalDate nextDate = now.toLocalDate();
         int diff = targetDay - now.getDayOfWeek().getValue();
@@ -982,32 +1072,39 @@ public class MomentAdminService {
         return LocalDateTime.of(nextDate.plusDays(diff), triggerTime);
     }
 
-    private List<OverviewPoolStat> buildPoolStats(List<MomentEnrollment> enrollments, List<MomentMatchResult> results) {
-        Map<String, Long> participants = enrollments.stream()
-                .collect(Collectors.groupingBy(
-                        MomentEnrollment::getPool,
-                        LinkedHashMap::new,
-                        Collectors.mapping(
-                                MomentEnrollment::getUserId,
-                                Collectors.collectingAndThen(Collectors.toSet(), values -> (long) values.size())
-                        )
-                ));
-        Map<String, Long> matchedPairs = results.stream()
-                .collect(Collectors.groupingBy(MomentMatchResult::getPool, LinkedHashMap::new, Collectors.counting()));
-
-        List<OverviewPoolStat> stats = new ArrayList<>();
-        for (String pool : matcher.poolOrder()) {
-            long participantCount = participants.getOrDefault(pool, 0L);
-            long pairCount = matchedPairs.getOrDefault(pool, 0L);
-            stats.add(new OverviewPoolStat(pool, participantCount, pairCount, Math.max(0L, participantCount - pairCount * 2)));
+    /** 仍为 RESULT_READY 且未到配置的自动公布时刻时，返回下一次公布时刻（北京时间）；已过期则返回 null（将由调度立即公布） */
+    private LocalDateTime resolveNextAutoPublishAt(
+            MomentMatchConfig config,
+            LocalDateTime shNow,
+            String weekTag,
+            String weekStatus) {
+        if (config == null || !Boolean.TRUE.equals(config.getAutoPublishEnabled())) {
+            return null;
         }
-        for (MomentPool pool : MomentPool.values()) {
-            if (stats.stream().noneMatch(item -> item.pool().equals(pool.getCode()))) {
-                stats.add(new OverviewPoolStat(pool.getCode(), 0L, 0L, 0L));
+        if (!MomentActivityWeek.STATUS_RESULT_READY.equals(weekStatus)) {
+            return null;
+        }
+        try {
+            String timeStr = config.getAutoPublishTime();
+            if (timeStr == null || timeStr.isBlank()) {
+                return null;
             }
+            LocalTime tt = LocalTime.parse(timeStr.trim());
+            Integer dow = config.getAutoPublishDayOfWeek();
+            if (dow == null || dow < 1 || dow > 7) {
+                return null;
+            }
+            LocalDate monday = PairDateTimeUtils.mondayOfIsoWeek(weekTag);
+            LocalDate day = monday.plusDays(dow - 1L);
+            LocalDateTime slot = LocalDateTime.of(day, tt);
+            if (shNow.isBefore(slot)) {
+                return slot;
+            }
+            return null;
+        } catch (Exception e) {
+            log.warn("解析下次自动公布时间失败 weekTag={}", weekTag, e);
+            return null;
         }
-        stats.sort(Comparator.comparingInt(item -> poolOrder(item.pool())));
-        return stats;
     }
 
     public record MomentAdminOverviewResponse(
@@ -1030,7 +1127,12 @@ public class MomentAdminService {
             boolean canTriggerMatching,
             boolean canCloseEnrollment,
             boolean canReopenEnrollment,
-            boolean canResetWeek
+            boolean canResetWeek,
+            boolean canPublishResult,
+            Boolean autoPublishEnabled,
+            Integer autoPublishDayOfWeek,
+            String autoPublishTime,
+            LocalDateTime nextAutoPublishAt
     ) {
     }
 
@@ -1046,6 +1148,7 @@ public class MomentAdminService {
             String weekTag,
             Long userId,
             String nickname,
+            Integer gender,
             String school,
             String major,
             String grade,

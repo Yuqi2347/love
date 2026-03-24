@@ -6,29 +6,42 @@ import com.campus.love.moment.entity.MomentMatchConfig;
 import com.campus.love.moment.entity.MomentMatchResult;
 import com.campus.love.moment.entity.MomentPairScore;
 import com.campus.love.moment.entity.MomentProfile;
+import com.campus.love.moment.entity.MomentRejectSummary;
+import com.campus.love.moment.entity.MomentUserPoolBest;
 import com.campus.love.moment.mapper.MomentEnrollmentMapper;
 import com.campus.love.moment.mapper.MomentMatchResultMapper;
 import com.campus.love.moment.mapper.MomentPairScoreMapper;
 import com.campus.love.moment.mapper.MomentProfileMapper;
+import com.campus.love.moment.mapper.MomentRejectSummaryMapper;
+import com.campus.love.moment.mapper.MomentUserPoolBestMapper;
+import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.github.benmanes.caffeine.cache.Cache;
 import lombok.RequiredArgsConstructor;
-import org.jgrapht.alg.interfaces.MatchingAlgorithm;
-import org.jgrapht.alg.matching.MaximumWeightBipartiteMatching;
-import org.jgrapht.alg.matching.blossom.v5.KolmogorovWeightedMatching;
-import org.jgrapht.alg.matching.blossom.v5.ObjectiveSense;
-import org.jgrapht.graph.DefaultWeightedEdge;
-import org.jgrapht.graph.SimpleWeightedGraph;
+import org.springframework.beans.BeanUtils;
 import org.springframework.stereotype.Service;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class MomentDashboardService {
+
+    private static final String STRUCTURAL_POOL_GENDER_REASON = "匹配池性别不满足";
 
     private final MomentEnrollmentMapper enrollmentMapper;
     private final MomentMatchResultMapper matchResultMapper;
@@ -37,6 +50,11 @@ public class MomentDashboardService {
     private final UserMapper userMapper;
     private final MomentMatchConfigService matchConfigService;
     private final MomentMatcher matcher;
+    private final UserPortraitService userPortraitService;
+    private final Cache<String, SimulationResponse> momentSimulateCache;
+    private final MomentRejectSummaryMapper rejectSummaryMapper;
+    private final MomentUserPoolBestMapper userPoolBestMapper;
+    private final ObjectMapper objectMapper;
 
     public MomentDashboardResponse getDashboard(String weekTag) {
         MomentMatchConfig config = matchConfigService.getConfig();
@@ -45,8 +63,14 @@ public class MomentDashboardService {
                 .map(MomentEnrollment::getUserId)
                 .collect(Collectors.toCollection(LinkedHashSet::new));
         List<MomentMatchResult> results = listMatchResults(weekTag);
-        List<MomentPairScore> pairScores = listPairScores(weekTag);
-        List<UnmatchedUserResponse> unmatchedUsers = getUnmatchedUsers(weekTag);
+        List<MomentRejectSummary> summaries = listRejectSummaries(weekTag);
+        Map<String, MomentUserPoolBest> poolBestByKey = listPoolBest(weekTag).stream()
+                .collect(Collectors.toMap(
+                        row -> row.getPool() + ":" + row.getUserId(),
+                        row -> row,
+                        (a, b) -> a
+                ));
+        UnmatchedMetrics unmatchedMetrics = buildUnmatchedMetrics(enrollments, results, poolBestByKey);
 
         Set<Long> matchedUserIds = matchedUserIds(results);
         long participantCount = participantIds.size();
@@ -61,52 +85,36 @@ public class MomentDashboardService {
                         .map(BigDecimal::doubleValue)
                         .toList()
         );
-        List<HistogramBucket> unmatchedBestHistogram = bucketScores(
-                unmatchedUsers.stream()
-                        .map(UnmatchedUserResponse::highestAvailableScore)
-                        .filter(Objects::nonNull)
-                        .toList()
-        );
+        List<HistogramBucket> unmatchedBestHistogram = bucketScores(unmatchedMetrics.unmatchedBestScores());
 
-        long filteredPairCount = pairScores.stream()
-                .filter(score -> Boolean.TRUE.equals(score.getHardFilterPassed()))
-                .filter(score -> !Boolean.TRUE.equals(score.getIncludedByThreshold()))
-                .count();
+        List<ReasonStat> hardFilterStats = List.of();
+        List<ReasonStat> softPenaltyStats = List.of();
+        long filteredPairCount = 0L;
+        long structuralPoolGenderFiltered = 0L;
+        if (!summaries.isEmpty()) {
+            filteredPairCount = summaries.stream()
+                    .mapToLong(s -> s.getBelowThresholdCount() != null ? s.getBelowThresholdCount() : 0L)
+                    .sum();
+            structuralPoolGenderFiltered = sumReasonCountFromJson(summaries, MomentRejectSummary::getHardFilterReasonDist, STRUCTURAL_POOL_GENDER_REASON);
+            hardFilterStats = mergeReasonsFromJson(summaries, MomentRejectSummary::getHardFilterReasonDist).stream()
+                    .filter(item -> !STRUCTURAL_POOL_GENDER_REASON.equals(item.reason()))
+                    .toList();
+            softPenaltyStats = mergeReasonsFromJson(summaries, MomentRejectSummary::getSoftPenaltyReasonDist);
+        }
 
         List<PoolStat> poolStats = buildPoolStats(enrollments, results);
-        List<ReasonStat> hardFilterStats = groupReasons(
-                pairScores.stream()
-                        .filter(score -> !Boolean.TRUE.equals(score.getHardFilterPassed()))
-                        .map(MomentPairScore::getHardFilterReason)
-                        .filter(Objects::nonNull)
-                        .toList()
-        );
-        List<ReasonStat> softPenaltyStats = groupReasons(
-                pairScores.stream()
-                        .filter(score -> score.getSoftPenalty() != null && score.getSoftPenalty() > 0)
-                        .map(MomentPairScore::getSoftPenaltyReason)
-                        .filter(Objects::nonNull)
-                        .toList()
-        );
-        List<ReasonStat> unmatchedReasonStats = groupReasons(
-                unmatchedUsers.stream()
-                        .map(UnmatchedUserResponse::reason)
-                        .filter(Objects::nonNull)
-                        .toList()
-        );
-        List<FilteredPairSample> filteredPairSamples = pairScores.stream()
-                .filter(score -> Boolean.TRUE.equals(score.getHardFilterPassed()))
-                .filter(score -> !Boolean.TRUE.equals(score.getIncludedByThreshold()))
-                .sorted(Comparator.comparing(MomentPairScore::getScore, Comparator.nullsLast(Comparator.reverseOrder())))
-                .limit(20)
-                .map(score -> new FilteredPairSample(
-                        score.getPool(),
-                        score.getUserIdA(),
-                        score.getUserIdB(),
-                        score.getScore() != null ? score.getScore().doubleValue() : 0d,
-                        score.getThresholdRequired()
-                ))
-                .toList();
+        List<ReasonStat> unmatchedReasonStats = groupReasons(unmatchedMetrics.unmatchedReasons());
+        List<FilteredPairSample> filteredPairSamples = List.of();
+
+        int topK = config.getEligibleTopK() != null ? config.getEligibleTopK() : MomentMatchConfig.DEFAULT_ELIGIBLE_TOP_K;
+        String statsNote = summaries.isEmpty()
+                ? "当前周尚未生成硬筛/阈值聚合快照，已返回轻量统计结果。建议先触发匹配流水线后再查看细分。"
+                : "当前看板以最终匹配结果 + reject_summary 聚合 + user_pool_best 为主；Top-K=" + topK
+                + " 仅影响图匹配候选边截断，不再阻塞正式匹配流水线。"
+                + (structuralPoolGenderFiltered > 0
+                ? " 已将“匹配池性别不满足”视为结构性过滤（非问卷冲突）从硬筛榜中剔除："
+                + structuralPoolGenderFiltered + " 对。"
+                : "");
 
         return new MomentDashboardResponse(
                 weekTag,
@@ -122,7 +130,9 @@ public class MomentDashboardService {
                 hardFilterStats,
                 softPenaltyStats,
                 unmatchedReasonStats,
-                filteredPairSamples
+                filteredPairSamples,
+                topK,
+                statsNote
         );
     }
 
@@ -132,7 +142,13 @@ public class MomentDashboardService {
             return List.of();
         }
         Set<Long> matchedUsers = matchedUserIds(listMatchResults(weekTag));
-        List<MomentPairScore> pairScores = listPairScores(weekTag);
+        Map<String, MomentUserPoolBest> poolBestByKey = listPoolBest(weekTag).stream()
+                .collect(Collectors.toMap(
+                        row -> row.getPool() + ":" + row.getUserId(),
+                        row -> row,
+                        (a, b) -> a,
+                        HashMap::new
+                ));
 
         Map<Long, User> users = loadUsers(enrollments.stream().map(MomentEnrollment::getUserId).collect(Collectors.toSet()));
         Map<Long, MomentProfile> profiles = loadProfiles(enrollments.stream().map(MomentEnrollment::getUserId).collect(Collectors.toSet()));
@@ -146,28 +162,21 @@ public class MomentDashboardService {
             if (matchedUsers.contains(userId)) {
                 continue;
             }
-            List<MomentPairScore> userPoolScores = pairScores.stream()
-                    .filter(score -> Objects.equals(score.getPool(), enrollment.getPool()))
-                    .filter(score -> Objects.equals(score.getUserIdA(), userId) || Objects.equals(score.getUserIdB(), userId))
-                    .toList();
-            Double highestAvailableScore = userPoolScores.stream()
-                    .filter(score -> Boolean.TRUE.equals(score.getHardFilterPassed()))
-                    .map(MomentPairScore::getScore)
-                    .filter(Objects::nonNull)
-                    .map(BigDecimal::doubleValue)
-                    .max(Double::compareTo)
-                    .map(this::round)
-                    .orElse(null);
 
+            MomentUserPoolBest pb = poolBestByKey.get(enrollment.getPool() + ":" + userId);
+            Double highestAvailableScore;
             String reason;
-            if (userPoolScores.isEmpty()) {
-                reason = poolParticipants.getOrDefault(enrollment.getPool(), 0L) <= 1 ? "池内人数不足" : "无候选对";
-            } else if (userPoolScores.stream().noneMatch(score -> Boolean.TRUE.equals(score.getHardFilterPassed()))) {
-                reason = "无通过硬筛选候选";
-            } else if (userPoolScores.stream().noneMatch(score -> Boolean.TRUE.equals(score.getIncludedByThreshold()))) {
-                reason = "全部被阈值过滤";
+
+            if (pb != null) {
+                highestAvailableScore = pb.getMaxEligibleScore() != null
+                        ? round(pb.getMaxEligibleScore().doubleValue())
+                        : null;
+                reason = reasonFromPoolBest(pb);
             } else {
-                reason = "全局最优未选中";
+                highestAvailableScore = null;
+                reason = poolParticipants.getOrDefault(enrollment.getPool(), 0L) <= 1
+                        ? "池内人数不足"
+                        : "等待匹配聚合结果";
             }
 
             User user = users.get(userId);
@@ -187,58 +196,201 @@ public class MomentDashboardService {
         return rows;
     }
 
-    public SimulationResponse simulate(String weekTag, int threshold) {
-        List<MomentEnrollment> enrollments = listEnrollments(weekTag);
-        if (enrollments.isEmpty()) {
-            return new SimulationResponse(weekTag, threshold, 0, 0, 0, 0d, 0);
+    private UnmatchedMetrics buildUnmatchedMetrics(
+            List<MomentEnrollment> enrollments,
+            List<MomentMatchResult> results,
+            Map<String, MomentUserPoolBest> poolBestByKey
+    ) {
+        if (enrollments == null || enrollments.isEmpty()) {
+            return new UnmatchedMetrics(List.of(), List.of());
         }
-
-        Map<String, Set<Long>> poolUsers = enrollments.stream()
+        Set<Long> matchedUsers = matchedUserIds(results);
+        Map<String, Long> poolParticipants = enrollments.stream()
                 .collect(Collectors.groupingBy(MomentEnrollment::getPool, LinkedHashMap::new,
-                        Collectors.mapping(MomentEnrollment::getUserId, Collectors.toCollection(LinkedHashSet::new))));
-        Map<String, List<MomentPairScore>> poolScores = listPairScores(weekTag).stream()
-                .collect(Collectors.groupingBy(MomentPairScore::getPool, LinkedHashMap::new, Collectors.toList()));
-        Map<Long, User> users = loadUsers(enrollments.stream().map(MomentEnrollment::getUserId).collect(Collectors.toSet()));
+                        Collectors.mapping(MomentEnrollment::getUserId, Collectors.collectingAndThen(Collectors.toSet(), v -> (long) v.size()))));
 
-        Set<Long> globallyMatched = new HashSet<>();
-        int matchedPairs = 0;
-        for (String pool : matcher.poolOrder()) {
-            Set<Long> activeUsers = new LinkedHashSet<>(poolUsers.getOrDefault(pool, Set.of()));
-            activeUsers.removeAll(globallyMatched);
-            if (activeUsers.size() < 2) {
+        List<Double> unmatchedBestScores = new ArrayList<>();
+        List<String> unmatchedReasons = new ArrayList<>();
+        for (MomentEnrollment enrollment : enrollments) {
+            Long userId = enrollment.getUserId();
+            if (matchedUsers.contains(userId)) {
                 continue;
             }
-            List<MomentPairScore> eligible = poolScores.getOrDefault(pool, List.of()).stream()
-                    .filter(score -> Boolean.TRUE.equals(score.getHardFilterPassed()))
-                    .filter(score -> activeUsers.contains(score.getUserIdA()) && activeUsers.contains(score.getUserIdB()))
-                    .filter(score -> score.getScore() != null && score.getScore().doubleValue() >= requiredThreshold(score, threshold))
+            MomentUserPoolBest pb = poolBestByKey.get(enrollment.getPool() + ":" + userId);
+            if (pb != null && pb.getMaxEligibleScore() != null) {
+                unmatchedBestScores.add(pb.getMaxEligibleScore().doubleValue());
+            }
+            String reason = pb != null
+                    ? reasonFromPoolBest(pb)
+                    : (poolParticipants.getOrDefault(enrollment.getPool(), 0L) <= 1 ? "池内人数不足" : "等待匹配聚合结果");
+            unmatchedReasons.add(reason);
+        }
+        return new UnmatchedMetrics(unmatchedBestScores, unmatchedReasons);
+    }
+
+    private static String reasonFromPoolBest(MomentUserPoolBest pb) {
+        if (!Boolean.TRUE.equals(pb.getHasAnyEligible())) {
+            return "无通过硬筛选候选";
+        }
+        if (Boolean.TRUE.equals(pb.getTier2Truncated())) {
+            return "全局最优未选中（候选截断）";
+        }
+        return "全局最优未选中";
+    }
+
+    private String reasonFromPairScores(
+            List<MomentPairScore> userPoolScores,
+            Map<String, Long> poolParticipants,
+            String pool
+    ) {
+        if (userPoolScores.isEmpty()) {
+            return poolParticipants.getOrDefault(pool, 0L) <= 1 ? "池内人数不足" : "无候选对";
+        }
+        if (userPoolScores.stream().noneMatch(score -> Boolean.TRUE.equals(score.getHardFilterPassed()))) {
+            return "无通过硬筛选候选";
+        }
+        if (userPoolScores.stream().noneMatch(score -> Boolean.TRUE.equals(score.getIncludedByThreshold()))) {
+            return "全部被阈值过滤";
+        }
+        return "全局最优未选中";
+    }
+
+    public SimulationResponse simulate(String weekTag, int threshold) {
+        int normalized = Math.min(100, Math.max(0, threshold));
+        String cacheKey = "simulate:" + weekTag + ":" + normalized;
+        SimulationResponse hit = momentSimulateCache.getIfPresent(cacheKey);
+        if (hit != null) {
+            return hit;
+        }
+
+        List<MomentEnrollment> enrollments = listEnrollments(weekTag);
+        if (enrollments.isEmpty()) {
+            SimulationResponse empty = new SimulationResponse(weekTag, normalized, 0, 0, 0, 0d, 0);
+            momentSimulateCache.put(cacheKey, empty);
+            return empty;
+        }
+
+        MomentMatchConfig base = matchConfigService.getConfig();
+        MomentMatchConfig simConfig = new MomentMatchConfig();
+        BeanUtils.copyProperties(base, simConfig);
+        simConfig.setBaseThreshold(normalized);
+
+        Map<Long, User> userCache = new HashMap<>();
+        Map<Long, MomentProfile> profileCache = new HashMap<>();
+        Map<String, List<MomentMatcher.Candidate>> poolCandidates = new LinkedHashMap<>();
+        for (MomentEnrollment enrollment : enrollments) {
+            Long userId = enrollment.getUserId();
+            User user = userCache.computeIfAbsent(userId, userMapper::selectById);
+            MomentProfile profile = profileCache.computeIfAbsent(userId, id -> profileMapper.selectOne(
+                    new LambdaQueryWrapper<MomentProfile>().eq(MomentProfile::getUserId, id).last("limit 1")
+            ));
+            if (user == null || profile == null) {
+                continue;
+            }
+            poolCandidates.computeIfAbsent(enrollment.getPool(), k -> new ArrayList<>())
+                    .add(new MomentMatcher.Candidate(user, profile, userPortraitService.getPortrait(userId)));
+        }
+
+        Set<Long> globalMatchedUserIds = new HashSet<>();
+        int matchedPairs = 0;
+        MomentMatcher.MatchProgressContext ctx = new MomentMatcher.MatchProgressContext();
+        for (String pool : matcher.poolOrder()) {
+            List<MomentMatcher.Candidate> candidates = poolCandidates.getOrDefault(pool, List.of()).stream()
+                    .filter(c -> !globalMatchedUserIds.contains(c.user().getId()))
                     .toList();
-            Set<String> matchedPairsInPool = "MF".equals(pool)
-                    ? solveBipartite(eligible, users)
-                    : solveGeneralGraph(eligible);
-            matchedPairs += matchedPairsInPool.size();
-            for (String key : matchedPairsInPool) {
-                String[] parts = key.split("_");
-                globallyMatched.add(Long.parseLong(parts[0]));
-                globallyMatched.add(Long.parseLong(parts[1]));
+            if (candidates.size() < 2) {
+                continue;
+            }
+            MomentMatcher.PoolMatchResult poolResult = matcher.match(candidates, pool, simConfig, ctx, null);
+            matchedPairs += poolResult.matches().size();
+            for (MomentMatcher.MatchPair p : poolResult.matches()) {
+                globalMatchedUserIds.add(p.userIdA());
+                globalMatchedUserIds.add(p.userIdB());
             }
         }
 
         int participantCount = (int) enrollments.stream().map(MomentEnrollment::getUserId).distinct().count();
-        int matchedUsers = globallyMatched.size();
+        int matchedUsers = globalMatchedUserIds.size();
         int unmatchedUsers = Math.max(0, participantCount - matchedUsers);
         int currentPairs = listMatchResults(weekTag).size();
         double successRate = participantCount == 0 ? 0d : round(matchedUsers * 100d / participantCount);
 
-        return new SimulationResponse(
+        SimulationResponse response = new SimulationResponse(
                 weekTag,
-                threshold,
+                normalized,
                 matchedPairs,
                 matchedUsers,
                 unmatchedUsers,
                 successRate,
                 matchedPairs - currentPairs
         );
+        momentSimulateCache.put(cacheKey, response);
+        return response;
+    }
+
+    private List<MomentRejectSummary> listRejectSummaries(String weekTag) {
+        return rejectSummaryMapper.selectList(
+                new LambdaQueryWrapper<MomentRejectSummary>().eq(MomentRejectSummary::getWeekTag, weekTag));
+    }
+
+    private List<ReasonStat> mergeReasonsFromJson(
+            List<MomentRejectSummary> summaries,
+            java.util.function.Function<MomentRejectSummary, String> jsonGetter
+    ) {
+        Map<String, Long> agg = new LinkedHashMap<>();
+        for (MomentRejectSummary s : summaries) {
+            mergeJsonCounts(agg, jsonGetter.apply(s));
+        }
+        return agg.entrySet().stream()
+                .sorted(Map.Entry.<String, Long>comparingByValue().reversed())
+                .map(e -> new ReasonStat(e.getKey(), e.getValue()))
+                .toList();
+    }
+
+    @SuppressWarnings("unchecked")
+    private void mergeJsonCounts(Map<String, Long> agg, String json) {
+        if (json == null || json.isBlank()) {
+            return;
+        }
+        try {
+            Map<String, Object> raw = objectMapper.readValue(json, Map.class);
+            for (Map.Entry<String, Object> e : raw.entrySet()) {
+                Object v = e.getValue();
+                long n = v instanceof Number ? ((Number) v).longValue() : Long.parseLong(String.valueOf(v));
+                agg.merge(e.getKey(), n, Long::sum);
+            }
+        } catch (Exception ignored) {
+            // 忽略损坏 JSON
+        }
+    }
+
+    private long sumReasonCountFromJson(
+            List<MomentRejectSummary> summaries,
+            java.util.function.Function<MomentRejectSummary, String> jsonGetter,
+            String reason
+    ) {
+        if (reason == null || reason.isBlank() || summaries == null || summaries.isEmpty()) {
+            return 0L;
+        }
+        long total = 0L;
+        for (MomentRejectSummary s : summaries) {
+            String json = jsonGetter.apply(s);
+            if (json == null || json.isBlank()) {
+                continue;
+            }
+            try {
+                Map<String, Object> raw = objectMapper.readValue(json, Map.class);
+                Object v = raw.get(reason);
+                if (v instanceof Number n) {
+                    total += n.longValue();
+                } else if (v != null) {
+                    total += Long.parseLong(String.valueOf(v));
+                }
+            } catch (Exception ignored) {
+                // ignore broken json
+            }
+        }
+        return total;
     }
 
     private List<PoolStat> buildPoolStats(List<MomentEnrollment> enrollments, List<MomentMatchResult> results) {
@@ -270,25 +422,17 @@ public class MomentDashboardService {
         if (scores == null || scores.isEmpty()) {
             return List.of();
         }
-        int[] boundaries = {0, 40, 50, 60, 70, 80, 90, 101};
         Map<String, Long> buckets = new LinkedHashMap<>();
-        for (int i = 0; i < boundaries.length - 1; i++) {
-            int start = boundaries[i];
-            int end = boundaries[i + 1] - 1;
-            buckets.put(start + "-" + end, 0L);
+        for (int score = 0; score <= 100; score++) {
+            buckets.put(String.valueOf(score), 0L);
         }
         for (Double score : scores) {
             if (score == null) {
                 continue;
             }
             int rounded = Math.max(0, Math.min(100, (int) Math.floor(score)));
-            for (int i = 0; i < boundaries.length - 1; i++) {
-                if (rounded >= boundaries[i] && rounded < boundaries[i + 1]) {
-                    String label = boundaries[i] + "-" + (boundaries[i + 1] - 1);
-                    buckets.computeIfPresent(label, (k, value) -> value + 1);
-                    break;
-                }
-            }
+            String label = String.valueOf(rounded);
+            buckets.computeIfPresent(label, (k, value) -> value + 1);
         }
         return buckets.entrySet().stream()
                 .map(entry -> new HistogramBucket(entry.getKey(), entry.getValue()))
@@ -331,85 +475,21 @@ public class MomentDashboardService {
                 .eq(MomentMatchResult::getWeekTag, weekTag));
     }
 
+    private List<MomentUserPoolBest> listPoolBest(String weekTag) {
+        return userPoolBestMapper.selectList(
+                new LambdaQueryWrapper<MomentUserPoolBest>().eq(MomentUserPoolBest::getWeekTag, weekTag)
+        );
+    }
+
     private List<MomentPairScore> listPairScores(String weekTag) {
         return pairScoreMapper.selectList(new LambdaQueryWrapper<MomentPairScore>()
                 .eq(MomentPairScore::getWeekTag, weekTag));
     }
 
-    private double requiredThreshold(MomentPairScore score, int baseThreshold) {
-        int thresholdA = Math.max(0, baseThreshold - safeInt(score.getThresholdOffsetA()));
-        int thresholdB = Math.max(0, baseThreshold - safeInt(score.getThresholdOffsetB()));
-        return Math.max(thresholdA, thresholdB);
-    }
-
-    private int safeInt(Integer value) {
-        return value != null ? value : 0;
-    }
-
-    private Set<String> solveBipartite(List<MomentPairScore> scores, Map<Long, User> users) {
-        if (scores.isEmpty()) {
-            return Set.of();
-        }
-        SimpleWeightedGraph<Long, DefaultWeightedEdge> graph = new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
-        Set<Long> left = new LinkedHashSet<>();
-        Set<Long> right = new LinkedHashSet<>();
-        Map<DefaultWeightedEdge, String> edgeLookup = new HashMap<>();
-
-        for (MomentPairScore score : scores) {
-            graph.addVertex(score.getUserIdA());
-            graph.addVertex(score.getUserIdB());
-            User userA = users.get(score.getUserIdA());
-            User userB = users.get(score.getUserIdB());
-            if (userA != null && userA.getGender() != null && userA.getGender() == 1) {
-                left.add(score.getUserIdA());
-                right.add(score.getUserIdB());
-            } else {
-                left.add(score.getUserIdB());
-                right.add(score.getUserIdA());
-            }
-            DefaultWeightedEdge edge = graph.addEdge(score.getUserIdA(), score.getUserIdB());
-            if (edge != null) {
-                graph.setEdgeWeight(edge, score.getScore().doubleValue());
-                edgeLookup.put(edge, pairKey(score.getUserIdA(), score.getUserIdB()));
-            }
-        }
-
-        MatchingAlgorithm.Matching<Long, DefaultWeightedEdge> matching =
-                new MaximumWeightBipartiteMatching<>(graph, left, right).getMatching();
-        return matching.getEdges().stream()
-                .map(edgeLookup::get)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-    }
-
-    private Set<String> solveGeneralGraph(List<MomentPairScore> scores) {
-        if (scores.isEmpty()) {
-            return Set.of();
-        }
-        SimpleWeightedGraph<Long, DefaultWeightedEdge> graph = new SimpleWeightedGraph<>(DefaultWeightedEdge.class);
-        Map<DefaultWeightedEdge, String> edgeLookup = new HashMap<>();
-        for (MomentPairScore score : scores) {
-            graph.addVertex(score.getUserIdA());
-            graph.addVertex(score.getUserIdB());
-            DefaultWeightedEdge edge = graph.addEdge(score.getUserIdA(), score.getUserIdB());
-            if (edge != null) {
-                graph.setEdgeWeight(edge, score.getScore().doubleValue());
-                edgeLookup.put(edge, pairKey(score.getUserIdA(), score.getUserIdB()));
-            }
-        }
-
-        MatchingAlgorithm.Matching<Long, DefaultWeightedEdge> matching =
-                new KolmogorovWeightedMatching<>(graph, ObjectiveSense.MAXIMIZE).getMatching();
-        return matching.getEdges().stream()
-                .map(edgeLookup::get)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toCollection(LinkedHashSet::new));
-    }
-
-    private String pairKey(Long a, Long b) {
-        long left = Math.min(a, b);
-        long right = Math.max(a, b);
-        return left + "_" + right;
+    private List<MomentPairScore> listPairScoresLimited(String weekTag, int maxRows) {
+        return pairScoreMapper.selectList(new LambdaQueryWrapper<MomentPairScore>()
+                .eq(MomentPairScore::getWeekTag, weekTag)
+                .last("LIMIT " + maxRows));
     }
 
     private double round(double value) {
@@ -430,7 +510,9 @@ public class MomentDashboardService {
             List<ReasonStat> hardFilterStats,
             List<ReasonStat> softPenaltyStats,
             List<ReasonStat> unmatchedReasonStats,
-            List<FilteredPairSample> filteredPairSamples
+            List<FilteredPairSample> filteredPairSamples,
+            int eligibleTopK,
+            String statsNote
     ) {}
 
     public record HistogramBucket(String label, long count) {}
@@ -459,5 +541,10 @@ public class MomentDashboardService {
             int unmatchedUsers,
             double successRate,
             int deltaPairs
+    ) {}
+
+    private record UnmatchedMetrics(
+            List<Double> unmatchedBestScores,
+            List<String> unmatchedReasons
     ) {}
 }

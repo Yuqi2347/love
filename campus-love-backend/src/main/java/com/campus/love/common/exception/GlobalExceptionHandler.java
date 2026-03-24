@@ -3,6 +3,7 @@ package com.campus.love.common.exception;
 import com.campus.love.common.result.Result;
 import com.campus.love.common.result.ResultCode;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.catalina.connector.ClientAbortException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.validation.FieldError;
@@ -13,11 +14,22 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.multipart.MaxUploadSizeExceededException;
 import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+import java.io.IOException;
 import java.util.stream.Collectors;
 
 @Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    /**
+     * 客户端已断开（切换页面、前端超时取消、杀进程等），服务端写 JSON 时触发 Broken pipe。
+     * 不是业务错误，不应打 ERROR，避免与「接口慢」混淆。
+     */
+    @ExceptionHandler(ClientAbortException.class)
+    public ResponseEntity<Void> handleClientAbort(ClientAbortException e) {
+        log.debug("客户端断开连接: {}", e.getMessage());
+        return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+    }
 
     /** Spring Boot 3.2+：请求未匹配到 Controller 时由 ResourceHttpRequestHandler 抛出，避免误报为系统内部错误 */
     @ExceptionHandler(NoResourceFoundException.class)
@@ -83,11 +95,30 @@ public class GlobalExceptionHandler {
     }
 
     @ExceptionHandler(Exception.class)
-    @ResponseStatus(HttpStatus.INTERNAL_SERVER_ERROR)
-    public Result<Void> handleException(Exception e) {
+    public ResponseEntity<Result<Void>> handleException(Exception e) {
+        if (isClientDisconnected(e)) {
+            log.debug("客户端已断开（Broken pipe/连接重置），忽略写响应: {}", e.getMessage());
+            return ResponseEntity.status(HttpStatus.NO_CONTENT).build();
+        }
         log.error("系统异常: {}", e.getMessage(), e);
         String msg = buildInternalErrorMessage(e);
-        return Result.error(ResultCode.INTERNAL_ERROR.getCode(), msg);
+        return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
+                .body(Result.error(ResultCode.INTERNAL_ERROR.getCode(), msg));
+    }
+
+    private static boolean isClientDisconnected(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause()) {
+            if (t instanceof ClientAbortException) {
+                return true;
+            }
+            if (t instanceof IOException) {
+                String m = t.getMessage();
+                if (m != null && (m.contains("Broken pipe") || m.contains("Connection reset"))) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     /** 构建可读的内部错误信息，便于排查数据库/表缺失等问题 */

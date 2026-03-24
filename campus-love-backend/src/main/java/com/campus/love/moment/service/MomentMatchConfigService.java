@@ -32,13 +32,21 @@ public class MomentMatchConfigService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "匹配配置不能为空");
         }
         MomentMatchConfig current = getConfig();
-        current.setBaseThreshold(requireNonNegative(incoming.getBaseThreshold(), "基础阈值"));
+        current.setBaseThreshold(requireBetween(
+                incoming.getBaseThreshold(),
+                MomentMatchConfig.MIN_EFFECTIVE_THRESHOLD,
+                100,
+                "基础阈值"));
         current.setPrioritizeOffset(requireNonNegative(incoming.getPrioritizeOffset(), "优先匹配偏移"));
         current.setPriorityOffset(requireNonNegative(incoming.getPriorityOffset(), "优先权单次偏移"));
         current.setPriorityMaxStack(requireNonNegative(incoming.getPriorityMaxStack(), "优先权最大叠加次数"));
+        current.setEligibleTopK(requireBetween(incoming.getEligibleTopK(), 1, 10_000, "eligibleTopK（图匹配每人保留边数）"));
         current.setAutoMatchEnabled(incoming.getAutoMatchEnabled() != null ? incoming.getAutoMatchEnabled() : MomentMatchConfig.DEFAULT_AUTO_MATCH_ENABLED);
         current.setAutoMatchDayOfWeek(requireBetween(incoming.getAutoMatchDayOfWeek(), 1, 7, "自动匹配周几"));
         current.setAutoMatchTime(requireTimeHHmm(incoming.getAutoMatchTime(), "自动匹配时间"));
+        current.setAutoPublishEnabled(incoming.getAutoPublishEnabled() != null ? incoming.getAutoPublishEnabled() : MomentMatchConfig.DEFAULT_AUTO_PUBLISH_ENABLED);
+        current.setAutoPublishDayOfWeek(requireBetween(incoming.getAutoPublishDayOfWeek(), 1, 7, "自动公布周几"));
+        current.setAutoPublishTime(requireTimeHHmm(incoming.getAutoPublishTime(), "自动公布时间"));
         matchConfigMapper.updateById(current);
         return current;
     }
@@ -46,7 +54,7 @@ public class MomentMatchConfigService {
     public int calculateEffectiveThreshold(User user, MomentProfile profile, MomentMatchConfig config) {
         int base = normalize(config).getBaseThreshold();
         int offset = calculateThresholdOffset(user, profile, config);
-        return Math.max(0, base - offset);
+        return Math.max(MomentMatchConfig.MIN_EFFECTIVE_THRESHOLD, base - offset);
     }
 
     public int calculateThresholdOffset(User user, MomentProfile profile, MomentMatchConfig config) {
@@ -79,6 +87,9 @@ public class MomentMatchConfigService {
         if (config.getPriorityMaxStack() == null) {
             config.setPriorityMaxStack(MomentMatchConfig.DEFAULT_PRIORITY_MAX_STACK);
         }
+        if (config.getEligibleTopK() == null) {
+            config.setEligibleTopK(MomentMatchConfig.DEFAULT_ELIGIBLE_TOP_K);
+        }
         if (config.getAutoMatchEnabled() == null) {
             config.setAutoMatchEnabled(MomentMatchConfig.DEFAULT_AUTO_MATCH_ENABLED);
         }
@@ -87,6 +98,15 @@ public class MomentMatchConfigService {
         }
         if (config.getAutoMatchTime() == null || config.getAutoMatchTime().isBlank()) {
             config.setAutoMatchTime(MomentMatchConfig.DEFAULT_AUTO_MATCH_TIME);
+        }
+        if (config.getAutoPublishEnabled() == null) {
+            config.setAutoPublishEnabled(MomentMatchConfig.DEFAULT_AUTO_PUBLISH_ENABLED);
+        }
+        if (config.getAutoPublishDayOfWeek() == null) {
+            config.setAutoPublishDayOfWeek(MomentMatchConfig.DEFAULT_AUTO_PUBLISH_DAY_OF_WEEK);
+        }
+        if (config.getAutoPublishTime() == null || config.getAutoPublishTime().isBlank()) {
+            config.setAutoPublishTime(MomentMatchConfig.DEFAULT_AUTO_PUBLISH_TIME);
         }
         return config;
     }
@@ -98,9 +118,13 @@ public class MomentMatchConfigService {
         config.setPrioritizeOffset(MomentMatchConfig.DEFAULT_PRIORITIZE_OFFSET);
         config.setPriorityOffset(MomentMatchConfig.DEFAULT_PRIORITY_OFFSET);
         config.setPriorityMaxStack(MomentMatchConfig.DEFAULT_PRIORITY_MAX_STACK);
+        config.setEligibleTopK(MomentMatchConfig.DEFAULT_ELIGIBLE_TOP_K);
         config.setAutoMatchEnabled(MomentMatchConfig.DEFAULT_AUTO_MATCH_ENABLED);
         config.setAutoMatchDayOfWeek(MomentMatchConfig.DEFAULT_AUTO_MATCH_DAY_OF_WEEK);
         config.setAutoMatchTime(MomentMatchConfig.DEFAULT_AUTO_MATCH_TIME);
+        config.setAutoPublishEnabled(MomentMatchConfig.DEFAULT_AUTO_PUBLISH_ENABLED);
+        config.setAutoPublishDayOfWeek(MomentMatchConfig.DEFAULT_AUTO_PUBLISH_DAY_OF_WEEK);
+        config.setAutoPublishTime(MomentMatchConfig.DEFAULT_AUTO_PUBLISH_TIME);
         return config;
     }
 

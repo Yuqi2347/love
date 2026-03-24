@@ -11,7 +11,8 @@ export interface ApiResult<T = unknown> {
 
 const service: AxiosInstance = axios.create({
   baseURL: '/api',
-  timeout: 15000,
+  /** 心动时刻管理端会拉取大量报名/打分数据，15s 易超时 */
+  timeout: 120000,
 })
 
 service.interceptors.request.use(

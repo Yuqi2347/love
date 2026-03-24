@@ -4,11 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.moment.entity.MomentActivityWeek;
-import com.campus.love.moment.entity.MomentEnrollment;
-import com.campus.love.moment.entity.MomentMatchResult;
 import com.campus.love.moment.mapper.MomentActivityWeekMapper;
-import com.campus.love.moment.mapper.MomentEnrollmentMapper;
-import com.campus.love.moment.mapper.MomentMatchResultMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
@@ -21,8 +17,6 @@ import java.time.LocalDateTime;
 public class MomentActivityWeekService {
 
     private final MomentActivityWeekMapper activityWeekMapper;
-    private final MomentEnrollmentMapper enrollmentMapper;
-    private final MomentMatchResultMapper matchResultMapper;
 
     public MomentActivityWeek getOrCreateWeek(String weekTag) {
         MomentActivityWeek existing = activityWeekMapper.selectOne(
@@ -54,7 +48,7 @@ public class MomentActivityWeekService {
     @Transactional
     public MomentActivityWeek closeEnrollment(String weekTag) {
         MomentActivityWeek week = getOrCreateWeek(weekTag);
-        if (MomentActivityWeek.STATUS_RESULT_READY.equals(week.getStatus())) {
+        if (MomentWeekStatusPolicy.closeEnrollmentNoOp(week.getStatus())) {
             return week;
         }
         week.setStatus(MomentActivityWeek.STATUS_WAITING_MATCH);
@@ -69,19 +63,32 @@ public class MomentActivityWeekService {
     @Transactional
     public MomentActivityWeek reopenEnrollment(String weekTag) {
         MomentActivityWeek week = getOrCreateWeek(weekTag);
-        if (MomentActivityWeek.STATUS_RESULT_READY.equals(week.getStatus())) {
-            throw new BusinessException(ResultCode.BAD_REQUEST, "匹配结果已生成，不能重新开放报名");
+        if (MomentWeekStatusPolicy.blocksReopenEnrollment(week.getStatus())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "当前阶段不可重新开放报名");
         }
         week.setStatus(MomentActivityWeek.STATUS_ENROLLING);
         week.setEnrollmentOpen(true);
         week.setClosedAt(null);
         week.setMatchedAt(null);
+        week.setErrorMessage(null);
         activityWeekMapper.updateById(week);
         return week;
     }
 
+    /** 匹配与分级落库完成，进入长文 AI 队列阶段 */
     @Transactional
-    public MomentActivityWeek markMatched(String weekTag) {
+    public MomentActivityWeek markAiAnalyzing(String weekTag) {
+        MomentActivityWeek week = getOrCreateWeek(weekTag);
+        week.setStatus(MomentActivityWeek.STATUS_AI_ANALYZING);
+        week.setEnrollmentOpen(false);
+        week.setErrorMessage(null);
+        activityWeekMapper.updateById(week);
+        return week;
+    }
+
+    /** 全部 AI 任务结束（或无需 AI），管理员可预览 */
+    @Transactional
+    public MomentActivityWeek markResultReady(String weekTag) {
         MomentActivityWeek week = getOrCreateWeek(weekTag);
         LocalDateTime now = LocalDateTime.now();
         week.setStatus(MomentActivityWeek.STATUS_RESULT_READY);
@@ -90,6 +97,29 @@ public class MomentActivityWeekService {
             week.setClosedAt(now);
         }
         week.setMatchedAt(now);
+        week.setErrorMessage(null);
+        activityWeekMapper.updateById(week);
+        return week;
+    }
+
+    @Transactional
+    public MomentActivityWeek markPublished(String weekTag) {
+        MomentActivityWeek week = getOrCreateWeek(weekTag);
+        week.setStatus(MomentActivityWeek.STATUS_PUBLISHED);
+        week.setEnrollmentOpen(false);
+        week.setErrorMessage(null);
+        if (week.getPublishedAt() == null) {
+            week.setPublishedAt(LocalDateTime.now());
+        }
+        activityWeekMapper.updateById(week);
+        return week;
+    }
+
+    @Transactional
+    public MomentActivityWeek markFailed(String weekTag, String errorMessage) {
+        MomentActivityWeek week = getOrCreateWeek(weekTag);
+        week.setStatus(MomentActivityWeek.STATUS_FAILED);
+        week.setErrorMessage(errorMessage != null && errorMessage.length() > 1000 ? errorMessage.substring(0, 1000) : errorMessage);
         activityWeekMapper.updateById(week);
         return week;
     }
@@ -104,46 +134,35 @@ public class MomentActivityWeekService {
         return week;
     }
 
+    /** 重置为「已截止、待触发匹配」，不自动开放报名 */
     @Transactional
-    public MomentActivityWeek resetWeek(String weekTag) {
+    public MomentActivityWeek resetWeekToWaitingMatch(String weekTag) {
         MomentActivityWeek week = getOrCreateWeek(weekTag);
-        week.setStatus(MomentActivityWeek.STATUS_ENROLLING);
-        week.setEnrollmentOpen(true);
-        week.setClosedAt(null);
+        week.setStatus(MomentActivityWeek.STATUS_WAITING_MATCH);
+        week.setEnrollmentOpen(false);
+        week.setClosedAt(week.getClosedAt() != null ? week.getClosedAt() : LocalDateTime.now());
         week.setMatchedAt(null);
+        week.setPublishedAt(null);
+        week.setErrorMessage(null);
+        activityWeekMapper.updateById(week);
+        return week;
+    }
+
+    @Transactional
+    public MomentActivityWeek setMatching(String weekTag) {
+        MomentActivityWeek week = getOrCreateWeek(weekTag);
+        week.setStatus(MomentActivityWeek.STATUS_MATCHING);
+        week.setEnrollmentOpen(false);
+        week.setErrorMessage(null);
         activityWeekMapper.updateById(week);
         return week;
     }
 
     private MomentActivityWeek buildInitialWeek(String weekTag) {
-        Long resultCount = matchResultMapper.selectCount(
-                new LambdaQueryWrapper<MomentMatchResult>()
-                        .eq(MomentMatchResult::getWeekTag, weekTag)
-        );
-        Long resolvedCount = enrollmentMapper.selectCount(
-                new LambdaQueryWrapper<MomentEnrollment>()
-                        .eq(MomentEnrollment::getWeekTag, weekTag)
-                        .ne(MomentEnrollment::getStatus, MomentEnrollment.STATUS_WAITING)
-        );
         MomentActivityWeek week = new MomentActivityWeek();
         week.setWeekTag(weekTag);
-        if ((resultCount != null && resultCount > 0) || (resolvedCount != null && resolvedCount > 0)) {
-            week.setStatus(MomentActivityWeek.STATUS_RESULT_READY);
-            week.setEnrollmentOpen(false);
-            MomentMatchResult lastResult = matchResultMapper.selectOne(
-                    new LambdaQueryWrapper<MomentMatchResult>()
-                            .eq(MomentMatchResult::getWeekTag, weekTag)
-                            .orderByDesc(MomentMatchResult::getCreatedAt)
-                            .last("limit 1")
-            );
-            if (lastResult != null) {
-                week.setMatchedAt(lastResult.getCreatedAt());
-                week.setClosedAt(lastResult.getCreatedAt());
-            }
-        } else {
-            week.setStatus(MomentActivityWeek.STATUS_ENROLLING);
-            week.setEnrollmentOpen(true);
-        }
+        week.setStatus(MomentActivityWeek.STATUS_ENROLLING);
+        week.setEnrollmentOpen(true);
         return week;
     }
 }

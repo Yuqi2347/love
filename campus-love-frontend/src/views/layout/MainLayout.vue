@@ -283,9 +283,9 @@ const schoolColorStyle = computed(() => ({
 const navItems = computed(() => {
   const b = badgeStore.badges
   const items = [
-    { path: '/discover', label: '探索', icon: 'Compass', showDot: false },
-    { path: '/moment', label: '心动', icon: 'Aim', showDot: false },
-    { path: '/invite', label: '约局', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
+    { path: '/discover', label: '共鸣', icon: 'Connection', showDot: false },
+    { path: '/moment', label: '心动', icon: 'Opportunity', showDot: false },
+    { path: '/invite', label: '同行', icon: 'Guide', showDot: b.newInviteActivityCount > 0 },
     { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 || b.newFeedActivityCount > 0 || b.newInviteActivityCount > 0 },
   ]
   if (SHOW_MATCH_NAV) {
@@ -303,9 +303,9 @@ const isActive = (path: string) => route.path.startsWith(path)
 const mobileNavItems = computed(() => {
   const b = badgeStore.badges
   const items = [
-    { path: '/discover', label: '发现', icon: 'Compass', showDot: false },
-    { path: '/moment', label: '心动', icon: 'Aim', showDot: false },
-    { path: '/invite', label: '约局', icon: 'Calendar', showDot: b.newInviteActivityCount > 0 },
+    { path: '/discover', label: '共鸣', icon: 'Connection', showDot: false },
+    { path: '/moment', label: '心动', icon: 'Opportunity', showDot: false },
+    { path: '/invite', label: '同行', icon: 'Guide', showDot: b.newInviteActivityCount > 0 },
     { path: '/chat', label: '消息', icon: 'ChatDotRound', showDot: b.unreadMessageCount > 0 || b.newFollowerCount > 0 || b.newFeedActivityCount > 0 },
     { path: '/profile', label: '我', icon: 'User', showDot: false },
   ]
@@ -743,6 +743,38 @@ onMounted(loadInviteBoard)
     color: $primary;
   }
 
+  .el-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border-radius: 16px;
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.92), rgba(246, 239, 234, 0.88));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.9),
+      0 10px 22px rgba(117, 83, 58, 0.08);
+    color: #6a5447;
+    transition: all $transition-fast;
+  }
+
+  &:hover .el-icon {
+    transform: translateY(-1px);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.92),
+      0 14px 28px rgba(117, 83, 58, 0.12);
+  }
+
+  &.active .el-icon {
+    background:
+      linear-gradient(180deg, rgba(255, 244, 237, 0.96), rgba(246, 226, 214, 0.94));
+    color: $primary;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.95),
+      0 14px 30px rgba(194, 120, 77, 0.18);
+  }
+
   .nav-dot {
     position: absolute;
     right: 16px;
@@ -1173,6 +1205,30 @@ onMounted(loadInviteBoard)
   &.active {
     color: $primary;
     font-weight: 600;
+  }
+
+  .el-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.78);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.88),
+      0 8px 18px rgba(117, 83, 58, 0.08);
+    color: #6a5447;
+    transition: all $transition-fast;
+  }
+
+  &.active .el-icon {
+    background:
+      linear-gradient(180deg, rgba(255, 244, 237, 0.96), rgba(246, 226, 214, 0.94));
+    color: $primary;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.94),
+      0 10px 22px rgba(194, 120, 77, 0.16);
   }
 }
 

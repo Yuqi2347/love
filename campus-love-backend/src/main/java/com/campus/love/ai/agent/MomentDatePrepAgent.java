@@ -249,19 +249,19 @@ public class MomentDatePrepAgent {
     }
 
     private String buildTargetSummary(MomentProfile targetProfile, List<String> targetInterests) {
-        String personality = switch (targetProfile != null ? targetProfile.getPersonalityBase() : null) {
+        String personality = switch (nz(targetProfile != null ? targetProfile.getPersonalityBase() : null)) {
             case "A" -> "更容易被轻松外放的气氛带动";
             case "B" -> "通常需要一点时间建立熟悉感";
             case "C" -> "会根据当下氛围决定打开程度";
             default -> "会更在意相处时是否自然";
         };
-        String emotion = switch (targetProfile != null ? targetProfile.getEmotionStyle() : null) {
+        String emotion = switch (nz(targetProfile != null ? targetProfile.getEmotionStyle() : null)) {
             case "A" -> "表达感受通常比较直接";
             case "B" -> "不一定会立刻说很多，但会默默感受细节";
             case "C" -> "更看情境和对象决定表达深浅";
             default -> "对表达方式比较看重";
         };
-        String rhythm = switch (targetProfile != null ? targetProfile.getLifeRhythm() : null) {
+        String rhythm = switch (nz(targetProfile != null ? targetProfile.getLifeRhythm() : null)) {
             case "A" -> "偏好有安排和可预期的节奏";
             case "B" -> "更适合松弛、不被催促的推进方式";
             case "C" -> "既能接受计划，也保留临场弹性";
@@ -282,7 +282,7 @@ public class MomentDatePrepAgent {
             if (targetInterests.stream().anyMatch(it -> it.contains("文学") || it.contains("写作"))) {
                 return "可以提前准备一个和书、电影或最近阅读有关的小问题，见面后自然抛给TA。比起刻意设计惊喜，这种能接住TA兴趣的开场，会让第一次聊天更自然，也更容易显出你的用心。";
             }
-            if ("B".equals(targetProfile != null ? targetProfile.getEmotionStyle() : null)) {
+            if ("B".equals(nz(targetProfile != null ? targetProfile.getEmotionStyle() : null))) {
                 return "不一定要准备明显惊喜，反而可以在见面结束后发一条简短消息，说出你今天注意到的一个细节。对情绪更内收的人来说，被认真留意到，往往比热烈表达更容易产生好感。";
             }
             return "可以提前把见面的节奏想清楚，比如主场景选哪里、如果聊得顺再去哪一站、什么时候自然收尾。第一次见面里，这种稳定又不过度的准备感，本身就是很成熟的体贴。";
@@ -290,10 +290,10 @@ public class MomentDatePrepAgent {
         if (targetInterests.stream().anyMatch(it -> it.contains("音乐") || it.contains("现场"))) {
             return "可以在见面前轻轻分享一首你最近喜欢的歌，或者提一句这家店的氛围歌单你觉得TA可能会喜欢。这样的小铺垫不会太用力，但能让第一次见面的气氛更自然地接上。";
         }
-        if ("A".equals(targetProfile != null ? targetProfile.getLifeRhythm() : null)) {
+        if ("A".equals(nz(targetProfile != null ? targetProfile.getLifeRhythm() : null))) {
             return "见面时可以顺手问一句TA对附近有没有更喜欢的店或更顺路的下一站。对偏计划型的人来说，这种被信任和被请教的感觉，会让TA更自然地投入这次见面。";
         }
-        if ("A".equals(targetProfile != null ? targetProfile.getPersonalityBase() : null)) {
+        if ("A".equals(nz(targetProfile != null ? targetProfile.getPersonalityBase() : null))) {
             return "可以提前准备一个很轻的小互动，比如一个有趣的问题、一张最近看到的照片，或者一个和共同兴趣有关的话题。外向的人通常很擅长接住这种轻松氛围，但重点还是自然，不要太像设计好的节目。";
         }
         return "比起刻意制造惊喜，更适合准备一点让气氛变柔和的小细节，比如提前到几分钟、带着轻松的话题，或者记住TA提过的小偏好。很多第一次见面的好感，都是这样慢慢被托住的。";
@@ -304,5 +304,9 @@ public class MomentDatePrepAgent {
             return fallback;
         }
         return value.trim();
+    }
+
+    private String nz(String value) {
+        return value == null ? "" : value.trim();
     }
 }

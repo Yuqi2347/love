@@ -12,6 +12,7 @@ import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
 import java.time.LocalTime;
+import java.time.ZoneId;
 import java.util.Map;
 
 /**
@@ -24,6 +25,7 @@ import java.util.Map;
 @RequiredArgsConstructor
 public class MomentAutoMatchScheduler {
 
+    private static final ZoneId SHANGHAI = ZoneId.of("Asia/Shanghai");
     private static final long SCHEDULER_FIXED_DELAY_MS = 60 * 1000L;
 
     private final MomentMatchConfigService matchConfigService;
@@ -35,14 +37,14 @@ public class MomentAutoMatchScheduler {
     @Scheduled(fixedDelay = SCHEDULER_FIXED_DELAY_MS)
     public void autoTriggerCurrentWeek() {
         MomentMatchConfig config = matchConfigService.getConfig();
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(SHANGHAI);
         if (!shouldTriggerNow(config, now)) {
             return;
         }
 
         String weekTag = momentService.getCurrentWeekTag();
         MomentActivityWeek week = activityWeekService.getOrCreateWeek(weekTag);
-        if (week.getAutoMatchAt() != null || MomentActivityWeek.STATUS_RESULT_READY.equals(week.getStatus())) {
+        if (week.getAutoMatchAt() != null || MomentWeekStatusPolicy.blocksTriggerMatching(week.getStatus())) {
             return;
         }
 

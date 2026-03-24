@@ -369,7 +369,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
   getDiscoveryPosts,
@@ -516,6 +516,7 @@ const feedHasMore = ref(true)
 const feedLoading = ref(false)
 const sentinelRef = ref<HTMLElement>()
 let scrollObserver: IntersectionObserver | null = null
+let discoverSideEffectsBound = false
 
 // 触摸下拉刷新状态（手机端）
 let touchStartY = 0
@@ -674,6 +675,25 @@ async function loadLikedPosts(isRefresh = false) {
 onMounted(async () => {
   await loadLevelInfo()
   await refreshPosts()
+  bindDiscoverSideEffects()
+})
+
+onUnmounted(() => {
+  unbindDiscoverSideEffects()
+  if (userSearchTimer) clearTimeout(userSearchTimer)
+})
+
+onActivated(() => {
+  bindDiscoverSideEffects()
+})
+
+onDeactivated(() => {
+  unbindDiscoverSideEffects()
+})
+
+function bindDiscoverSideEffects() {
+  if (discoverSideEffectsBound) return
+  discoverSideEffectsBound = true
   // IntersectionObserver：上划触底时加载更多
   scrollObserver = new IntersectionObserver(
     (entries) => {
@@ -689,15 +709,17 @@ onMounted(async () => {
   document.addEventListener('touchend', onTouchEnd, { passive: true })
   // 用户搜索下拉框点击外关闭
   document.addEventListener('click', closeUserDropdown)
-})
+}
 
-onUnmounted(() => {
+function unbindDiscoverSideEffects() {
+  if (!discoverSideEffectsBound) return
+  discoverSideEffectsBound = false
   scrollObserver?.disconnect()
+  scrollObserver = null
   document.removeEventListener('touchstart', onTouchStart)
   document.removeEventListener('touchend', onTouchEnd)
   document.removeEventListener('click', closeUserDropdown)
-  if (userSearchTimer) clearTimeout(userSearchTimer)
-})
+}
 
 function onTouchStart(e: TouchEvent) {
   touchStartY = e.touches[0]?.clientY ?? 0

@@ -7,6 +7,8 @@ import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.common.service.FileUploadService;
 import com.campus.love.follow.service.FollowService;
+import com.campus.love.pairdate.service.PairDateService;
+import com.campus.love.pairdate.util.PairDateTimeUtils;
 import com.campus.love.moment.dto.MomentConfirmRequest;
 import com.campus.love.moment.dto.MomentDatePrepResponse;
 import com.campus.love.moment.dto.MomentEnrollRequest;
@@ -14,11 +16,14 @@ import com.campus.love.moment.dto.MomentResultResponse;
 import com.campus.love.moment.dto.MomentStatusResponse;
 import com.campus.love.moment.entity.MomentEnrollment;
 import com.campus.love.moment.entity.MomentMatchConfirm;
+import com.campus.love.moment.entity.MomentActivityWeek;
 import com.campus.love.moment.entity.MomentMatchResult;
+import com.campus.love.moment.entity.MomentMatchResultContent;
 import com.campus.love.moment.entity.MomentProfile;
 import com.campus.love.moment.enums.MomentPool;
 import com.campus.love.moment.mapper.MomentEnrollmentMapper;
 import com.campus.love.moment.mapper.MomentMatchConfirmMapper;
+import com.campus.love.moment.mapper.MomentMatchResultContentMapper;
 import com.campus.love.moment.mapper.MomentMatchResultMapper;
 import com.campus.love.moment.mapper.MomentProfileMapper;
 import com.campus.love.profile.entity.UserPortrait;
@@ -30,6 +35,8 @@ import com.campus.love.user.mapper.UserMapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
@@ -39,6 +46,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
+import java.time.ZoneId;
 import java.time.temporal.WeekFields;
 import java.util.*;
 
@@ -50,6 +58,7 @@ public class MomentService {
     private final MomentProfileMapper profileMapper;
     private final MomentEnrollmentMapper enrollmentMapper;
     private final MomentMatchResultMapper matchResultMapper;
+    private final MomentMatchResultContentMapper matchResultContentMapper;
     private final MomentMatchConfirmMapper matchConfirmMapper;
     private final UserMapper userMapper;
     private final ObjectMapper objectMapper;
@@ -60,6 +69,10 @@ public class MomentService {
     private final OceanConfidenceService oceanConfidenceService;
     private final MomentResultContentService momentResultContentService;
     private final FollowService followService;
+
+    @Lazy
+    @Autowired
+    private PairDateService pairDateService;
 
     /**
      * 判断本周报名是否仍开放：
@@ -72,6 +85,19 @@ public class MomentService {
         } catch (Exception e) {
             log.warn("查询报名开放状态失败，默认开放", e);
             return true;
+        }
+    }
+
+    /** 与 PairDateTimeUtils.revealFriday 一致：当周周五 12:00（上海），供端上倒计时展示。 */
+    private Long computeRevealAtEpochMillis(String weekTag) {
+        if (weekTag == null || !weekTag.contains("-W")) {
+            return null;
+        }
+        try {
+            LocalDate friday = PairDateTimeUtils.revealFriday(weekTag);
+            return friday.atTime(12, 0).atZone(ZoneId.of("Asia/Shanghai")).toInstant().toEpochMilli();
+        } catch (Exception e) {
+            return null;
         }
     }
 
@@ -114,12 +140,20 @@ public class MomentService {
         }
 
         boolean open = isEnrollmentOpen(weekTag);
+        String weekStatus = MomentActivityWeek.STATUS_ENROLLING;
+        try {
+            weekStatus = activityWeekService.getOrCreateWeek(weekTag).getStatus();
+        } catch (Exception e) {
+            log.warn("查询周状态失败", e);
+        }
+
         String matchedTitle = null;
         if (MomentEnrollment.STATUS_MATCHED.equals(status)) {
             MomentMatchResult matchResult = findMatchResult(weekTag, userId);
             if (matchResult != null) {
                 ensureResultContent(matchResult);
-                matchedTitle = matchResult.getYuanfenTitle();
+                MomentMatchResultContent c = loadContentByMatchResultId(matchResult.getId());
+                matchedTitle = c != null ? c.getYuanfenTitle() : null;
             }
         }
 
@@ -129,6 +163,8 @@ public class MomentService {
                 .participantCount(participantCount)
                 .enrollmentOpen(open)
                 .matchedTitle(matchedTitle)
+                .weekStatus(weekStatus)
+                .revealAtEpochMillis(computeRevealAtEpochMillis(weekTag))
                 .build();
     }
 
@@ -226,6 +262,7 @@ public class MomentService {
                 .status("WAITING")
                 .participantCount(participantCount)
                 .enrollmentOpen(true)
+                .revealAtEpochMillis(computeRevealAtEpochMillis(weekTag))
                 .build();
     }
 
@@ -255,6 +292,11 @@ public class MomentService {
                     .build();
         }
 
+        MomentActivityWeek week = activityWeekService.getOrCreateWeek(weekTag);
+        if (!MomentWeekStatusPolicy.userMayViewPublishedResults(week.getStatus())) {
+            throw new BusinessException(ResultCode.MOMENT_NO_RESULT);
+        }
+
         MomentMatchResult matchResult = findMatchResult(weekTag, userId);
         if (matchResult == null) {
             return MomentResultResponse.builder()
@@ -264,6 +306,7 @@ public class MomentService {
         }
 
         ensureResultContent(matchResult);
+        MomentMatchResultContent content = requireContent(matchResult.getId());
 
         Long matchedUserId = matchResult.getUserIdA().equals(userId)
                 ? matchResult.getUserIdB()
@@ -284,13 +327,13 @@ public class MomentService {
 
         ConfirmView confirmView = resolveConfirmView(matchResult, userId);
 
-        Integer matchScorePercent = resolveMatchScorePercent(matchResult);
+        Integer matchScorePercent = resolveMatchScorePercent(matchResult, content);
 
         return MomentResultResponse.builder()
                 .matched(true)
                 .weekTag(weekTag)
                 .matchResultId(matchResult.getId())
-                .yuanfenTitle(matchResult.getYuanfenTitle())
+                .yuanfenTitle(content.getYuanfenTitle())
                 .matchedUserId(matchedUserId)
                 .nickname(matchedUser.getNickname())
                 .avatarUrl(matchedUser.getAvatarUrl())
@@ -302,11 +345,11 @@ public class MomentService {
                 .mbti(matchedUser.getMbti())
                 .zodiac(matchedUser.getZodiac())
                 .age(age)
-                .complementaryModes(momentResultContentService.parseJsonList(matchResult.getComplementaryModes()))
-                .insightCards(momentResultContentService.buildInsightCards(matchResult))
-                .goldenSentence(matchResult.getGoldenSentence())
-                .dimensionLabels(momentResultContentService.parseJsonList(matchResult.getDimensionLabels()))
-                .aboutMatchedUser(matchResult.getUserIdA().equals(userId) ? matchResult.getAboutUserB() : matchResult.getAboutUserA())
+                .complementaryModes(momentResultContentService.parseJsonList(content.getComplementaryModes()))
+                .insightCards(momentResultContentService.buildInsightCards(content))
+                .goldenSentence(content.getGoldenSentence())
+                .dimensionLabels(momentResultContentService.parseJsonList(content.getDimensionLabels()))
+                .aboutMatchedUser(matchResult.getUserIdA().equals(userId) ? content.getAboutUserB() : content.getAboutUserA())
                 .confirmStatus(confirmView.status())
                 .myChoice(confirmView.myChoice())
                 .datePrepUnlocked(confirmView.datePrepUnlocked())
@@ -318,6 +361,10 @@ public class MomentService {
     public MomentResultResponse confirmChoice(MomentConfirmRequest request) {
         Long currentUserId = CurrentUser.getId();
         String weekTag = getCurrentWeekTag();
+        MomentActivityWeek week = activityWeekService.getOrCreateWeek(weekTag);
+        if (!MomentWeekStatusPolicy.userMayViewPublishedResults(week.getStatus())) {
+            throw new BusinessException(ResultCode.MOMENT_NO_RESULT);
+        }
         MomentMatchResult matchResult = findMatchResult(weekTag, currentUserId);
         if (matchResult == null) {
             throw new BusinessException(ResultCode.MOMENT_NO_RESULT);
@@ -327,6 +374,9 @@ public class MomentService {
         MomentMatchConfirm confirm = getOrCreateConfirm(matchResult);
         applyTimeoutIfNeeded(confirm);
         if (bothYue(confirm) || hasAnyGuanzhu(confirm)) {
+            if (bothYue(confirm)) {
+                pairDateService.ensureNegotiationReadyForMatch(matchResult.getId());
+            }
             return getResult();
         }
 
@@ -351,6 +401,9 @@ public class MomentService {
         if (hasAnyGuanzhu(confirm)) {
             followService.mutualFollow(confirm.getUserIdA(), confirm.getUserIdB());
         }
+        if (bothYue(confirm)) {
+            pairDateService.ensureNegotiationReadyForMatch(matchResult.getId());
+        }
         return getResult();
     }
 
@@ -358,15 +411,22 @@ public class MomentService {
     public MomentDatePrepResponse getDatePrep() {
         Long currentUserId = CurrentUser.getId();
         String weekTag = getCurrentWeekTag();
+        MomentActivityWeek week = activityWeekService.getOrCreateWeek(weekTag);
+        if (!MomentWeekStatusPolicy.userMayViewPublishedResults(week.getStatus())) {
+            throw new BusinessException(ResultCode.MOMENT_NO_RESULT);
+        }
         MomentMatchResult matchResult = findMatchResult(weekTag, currentUserId);
         if (matchResult == null) {
             throw new BusinessException(ResultCode.MOMENT_NO_RESULT);
         }
         ensureResultContent(matchResult);
+        MomentMatchResultContent content = requireContent(matchResult.getId());
         ConfirmView confirmView = resolveConfirmView(matchResult, currentUserId);
         if (!Boolean.TRUE.equals(confirmView.datePrepUnlocked())) {
             throw new BusinessException(ResultCode.FORBIDDEN, "双方确认约会后才会解锁约会准备");
         }
+
+        pairDateService.ensureNegotiationReadyForMatch(matchResult.getId());
 
         Long targetUserId = Objects.equals(matchResult.getUserIdA(), currentUserId)
                 ? matchResult.getUserIdB()
@@ -378,11 +438,9 @@ public class MomentService {
         UserPortrait requesterPortrait = userPortraitService.getPortrait(currentUserId);
         UserPortrait targetPortrait = userPortraitService.getPortrait(targetUserId);
         MomentDatePrepResponse response = momentResultContentService.getOrGenerateDatePrep(
-                matchResult, currentUserId, requester, target, requesterProfile, targetProfile, requesterPortrait, targetPortrait
+                matchResult, content, currentUserId, requester, target, requesterProfile, targetProfile, requesterPortrait, targetPortrait
         );
-        if (matchResult.getId() != null) {
-            matchResultMapper.updateById(matchResult);
-        }
+        matchResultContentMapper.updateById(content);
         return response;
     }
 
@@ -506,17 +564,41 @@ public class MomentService {
                 || Objects.equals(confirm.getChoiceB(), MomentMatchConfirm.CHOICE_GUANZHU);
     }
 
+    private MomentMatchResultContent loadContentByMatchResultId(Long matchResultId) {
+        if (matchResultId == null) {
+            return null;
+        }
+        return matchResultContentMapper.selectOne(
+                new LambdaQueryWrapper<MomentMatchResultContent>()
+                        .eq(MomentMatchResultContent::getMatchResultId, matchResultId)
+                        .last("limit 1")
+        );
+    }
+
+    private MomentMatchResultContent requireContent(Long matchResultId) {
+        MomentMatchResultContent c = loadContentByMatchResultId(matchResultId);
+        if (c == null) {
+            throw new BusinessException(ResultCode.MOMENT_NO_RESULT);
+        }
+        return c;
+    }
+
     private void ensureResultContent(MomentMatchResult matchResult) {
-        if (matchResult == null) {
+        if (matchResult == null || matchResult.getId() == null) {
             return;
         }
-        boolean ready = matchResult.getYuanfenTitle() != null
-                && matchResult.getInsightCard1() != null
-                && matchResult.getInsightCard2() != null
-                && matchResult.getInsightCard3() != null
-                && matchResult.getDimensionLabels() != null
-                && matchResult.getAboutUserA() != null
-                && matchResult.getAboutUserB() != null;
+        MomentMatchResultContent content = loadContentByMatchResultId(matchResult.getId());
+        if (content == null) {
+            content = new MomentMatchResultContent();
+            content.setMatchResultId(matchResult.getId());
+        }
+        boolean ready = content.getYuanfenTitle() != null
+                && content.getInsightCard1() != null
+                && content.getInsightCard2() != null
+                && content.getInsightCard3() != null
+                && content.getDimensionLabels() != null
+                && content.getAboutUserA() != null
+                && content.getAboutUserB() != null;
         if (ready) {
             return;
         }
@@ -527,19 +609,23 @@ public class MomentService {
         MomentProfile profileB = loadProfile(matchResult.getUserIdB());
         UserPortrait portraitA = userPortraitService.getPortrait(matchResult.getUserIdA());
         UserPortrait portraitB = userPortraitService.getPortrait(matchResult.getUserIdB());
-        Map<String, Object> scoreDetail = parseScoreDetail(matchResult.getScoreDetail());
-        momentResultContentService.fillPrecomputedContent(
-                matchResult, userA, userB, profileA, profileB, portraitA, portraitB, scoreDetail
+        Map<String, Object> scoreDetail = parseScoreDetail(content.getScoreDetail());
+        momentResultContentService.fillRuleBasedContent(
+                content, userA, userB, profileA, profileB, portraitA, portraitB, scoreDetail
         );
-        matchResultMapper.updateById(matchResult);
+        if (content.getId() == null) {
+            matchResultContentMapper.insert(content);
+        } else {
+            matchResultContentMapper.updateById(content);
+        }
     }
 
     /**
      * 综合匹配度：优先读 score_detail.finalScore；缺失时回退 t_moment_match_result.total_score
      * （避免 JSON 未写入、旧数据或解析失败导致前端无数字）
      */
-    private Integer resolveMatchScorePercent(MomentMatchResult matchResult) {
-        Map<String, Object> scoreDetail = parseScoreDetail(matchResult.getScoreDetail());
+    private Integer resolveMatchScorePercent(MomentMatchResult matchResult, MomentMatchResultContent content) {
+        Map<String, Object> scoreDetail = parseScoreDetail(content != null ? content.getScoreDetail() : null);
         Object fs = scoreDetail.get("finalScore");
         if (fs instanceof Number) {
             int p = (int) Math.round(((Number) fs).doubleValue());

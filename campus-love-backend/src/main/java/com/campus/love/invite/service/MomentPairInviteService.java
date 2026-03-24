@@ -102,8 +102,7 @@ public class MomentPairInviteService {
         } else if (neg.getMeetingTimeSlot() != null) {
             content.append("· 约定时段：").append(neg.getMeetingTimeSlot()).append("。\n");
         }
-        content.append("· 地点：由 ").append(deciderNick).append(" 决定具体见面位置。\n\n");
-        content.append("（协商记录编号 #").append(neg.getId()).append("）");
+        content.append("· 地点：由 ").append(deciderNick).append(" 决定具体见面位置。\n");
 
         Invite invite = new Invite();
         invite.setCreatorId(decider);

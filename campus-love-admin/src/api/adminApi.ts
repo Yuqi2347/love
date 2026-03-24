@@ -123,15 +123,26 @@ export function reviewReport(id: number, data: { adminNote?: string; status?: st
 
 // ==================== AI Token 统计 ====================
 
-export interface AiTokenDailyStat {
-  date: string
+export interface AiTokenCategoryStat {
   tokensUsed: number
   callCount: number
+}
+
+export interface AiTokenDailyStat {
+  date: string
+  totalTokens: number
+  callCount: number
+  avatarTokens: number
+  avatarCallCount: number
+  analysisTokens: number
+  analysisCallCount: number
 }
 
 export interface AiTokenStats {
   totalTokens: number
   callCount: number
+  avatar: AiTokenCategoryStat
+  analysis: AiTokenCategoryStat
   dailyStats: AiTokenDailyStat[]
 }
 
@@ -164,9 +175,15 @@ export interface MomentMatchConfig {
   prioritizeOffset: number
   priorityOffset: number
   priorityMaxStack: number
+  /** 图匹配每人保留 eligible 边数 Top-K，默认 200 */
+  eligibleTopK: number
   autoMatchEnabled: boolean
   autoMatchDayOfWeek: number
   autoMatchTime: string
+  /** 流水线 RESULT_READY 后按北京时间自动公布给用户 */
+  autoPublishEnabled: boolean
+  autoPublishDayOfWeek: number
+  autoPublishTime: string
 }
 
 export interface MomentAdminOverviewPoolStat {
@@ -178,7 +195,14 @@ export interface MomentAdminOverviewPoolStat {
 
 export interface MomentAdminOverview {
   weekTag: string
-  phase: 'ENROLLING' | 'WAITING_MATCH' | 'RESULT_READY'
+  phase:
+    | 'ENROLLING'
+    | 'WAITING_MATCH'
+    | 'MATCHING'
+    | 'AI_ANALYZING'
+    | 'RESULT_READY'
+    | 'PUBLISHED'
+    | 'FAILED'
   participantCount: number
   waitingUsers: number
   matchedUsers: number
@@ -192,11 +216,32 @@ export interface MomentAdminOverview {
   autoMatchTime: string
   nextAutoMatchAt?: string | null
   lastMatchAt?: string | null
+  autoPublishEnabled?: boolean
+  autoPublishDayOfWeek?: number
+  autoPublishTime?: string
+  /** RESULT_READY 且未到点时有值 */
+  nextAutoPublishAt?: string | null
   poolStats: MomentAdminOverviewPoolStat[]
   canTriggerMatching: boolean
   canCloseEnrollment: boolean
   canReopenEnrollment: boolean
   canResetWeek: boolean
+  /** RESULT_READY 时可公布给用户 */
+  canPublishResult: boolean
+}
+
+export interface MomentMatchProgressSnapshot {
+  currentPool: string
+  processedPairs: number
+  totalEstimatedPairs: number
+  matchedPairs: number
+}
+
+export interface MomentMatchProgressResponse {
+  status: string
+  errorMessage?: string | null
+  matchProgress: MomentMatchProgressSnapshot
+  aiProgress: { total: number; done: number; failed: number }
 }
 
 export interface MomentHistogramBucket {
@@ -239,6 +284,10 @@ export interface MomentDashboardData {
   softPenaltyStats: MomentReasonStat[]
   unmatchedReasonStats: MomentReasonStat[]
   filteredPairSamples: MomentFilteredPairSample[]
+  /** 当前配置的 Top-K */
+  eligibleTopK: number
+  /** 候选边类指标口径说明 */
+  statsNote: string
 }
 
 export interface MomentUnmatchedUser {
@@ -265,6 +314,7 @@ export interface MomentEnrollmentAdminItem {
   weekTag: string
   userId: number
   nickname: string
+  gender?: number | null
   school?: string | null
   major?: string | null
   grade?: string | null
@@ -368,6 +418,18 @@ export function triggerMomentMatching(weekTag?: string) {
   })
 }
 
+export function publishMomentResult(weekTag?: string) {
+  return request.post<ApiResult<Record<string, unknown>>>('/moment/admin/publish', null, {
+    params: weekTag ? { weekTag } : {},
+  })
+}
+
+export function getMomentMatchProgress(weekTag?: string) {
+  return request.get<ApiResult<MomentMatchProgressResponse>>('/moment/admin/match/progress', {
+    params: weekTag ? { weekTag } : {},
+  })
+}
+
 export function getMomentAdminOverview(weekTag?: string) {
   return request.get<ApiResult<MomentAdminOverview>>('/moment/admin/overview', {
     params: weekTag ? { weekTag } : {},
@@ -421,6 +483,7 @@ export function getMomentAdminEnrollments(params: {
   size?: number
   weekTag?: string
   pool?: string
+  gender?: number
   status?: string
   keyword?: string
 }) {

@@ -9,6 +9,10 @@
             <el-option label="FF 女生" value="FF" />
             <el-option label="MM 男生" value="MM" />
           </el-select>
+          <el-select v-model="filters.gender" placeholder="性别" clearable class="field-short">
+            <el-option label="男" :value="1" />
+            <el-option label="女" :value="2" />
+          </el-select>
           <el-select v-model="filters.status" placeholder="状态" clearable class="field-short">
             <el-option label="待匹配" value="WAITING" />
             <el-option label="已匹配" value="MATCHED" />
@@ -35,6 +39,9 @@
         <el-table-column prop="weekTag" label="周次" width="120" />
         <el-table-column prop="userId" label="用户ID" width="100" />
         <el-table-column prop="nickname" label="昵称" min-width="140" />
+        <el-table-column label="性别" width="90">
+          <template #default="{ row }">{{ genderText(row.gender) }}</template>
+        </el-table-column>
         <el-table-column label="学校 / 专业" min-width="220">
           <template #default="{ row }">
             <div class="stack-text">
@@ -111,12 +118,17 @@ const rows = ref<MomentEnrollmentAdminItem[]>([])
 const filters = reactive({
   weekTag: '',
   pool: '',
+  gender: undefined as number | undefined,
   status: '',
   keyword: '',
 })
 
 function poolLabel(pool: string) {
   return { MF: 'MF 异性', FF: 'FF 女生', MM: 'MM 男生' }[pool] || pool
+}
+
+function genderText(gender?: number | null) {
+  return gender === 1 ? '男' : gender === 2 ? '女' : '--'
 }
 
 function statusText(status: string) {
@@ -140,6 +152,7 @@ async function loadData() {
       size: size.value,
       weekTag: filters.weekTag || undefined,
       pool: filters.pool || undefined,
+      gender: filters.gender,
       status: filters.status || undefined,
       keyword: filters.keyword || undefined,
     })
@@ -174,6 +187,7 @@ function handleSearch() {
 function resetFilters() {
   filters.weekTag = ''
   filters.pool = ''
+  filters.gender = undefined
   filters.status = ''
   filters.keyword = ''
   handleSearch()

@@ -51,7 +51,9 @@ mybatis-plus:
   mapper-locations: classpath:mapper/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
-    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+    # 切勿使用 StdOutImpl：会把每条 SQL 打到 stdout，日志洪水 + 严重拖慢 I/O（易被误认为「MySQL 在狂刷」）
+    # 需要排查 SQL 时：改用 Slf4jImpl，并在 logback / logging.level 对 org.apache.ibatis 或具体 Mapper 开 DEBUG
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
   global-config:
     db-config:
       id-type: auto

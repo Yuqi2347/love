@@ -3,6 +3,7 @@ package com.campus.love.user.service;
 import com.campus.love.ai.config.AiConfig;
 import com.campus.love.ai.prompt.AvatarStudioPrompts;
 import com.campus.love.ai.service.AvatarStudioArkClient;
+import com.campus.love.ai.service.AiUsageLogService;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.user.dto.AvatarStudioGenerateResponse;
@@ -26,6 +27,7 @@ public class AvatarStudioService {
     private final UserMapper userMapper;
     private final AvatarStudioArkClient arkClient;
     private final AiConfig aiConfig;
+    private final AiUsageLogService aiUsageLogService;
 
     public AvatarStudioQuotaResponse getQuota(Long userId) {
         User user = userMapper.selectById(userId);
@@ -77,9 +79,9 @@ public class AvatarStudioService {
             throw new BusinessException(ResultCode.BAD_REQUEST, "读取图片失败");
         }
 
-        byte[] pngBytes;
+        AvatarStudioArkClient.AvatarStudioImageResult imageResult;
         try {
-            pngBytes = arkClient.generateStyledImage(prompt, dataUri);
+            imageResult = arkClient.generateStyledImage(prompt, dataUri);
         } catch (IllegalStateException e) {
             log.warn("Ark 图生图失败: {}", e.getMessage());
             throw new BusinessException(ResultCode.AVATAR_STUDIO_IMAGE_UNAVAILABLE, e.getMessage());
@@ -91,9 +93,10 @@ public class AvatarStudioService {
         int newUsed = used + 1;
         user.setAvatarStudioUsedCount(newUsed);
         userMapper.updateById(user);
+        aiUsageLogService.logAvatarUsage(userId, imageResult.tokensUsed(), imageResult.modelName(), styleKey);
 
         int remaining = Math.max(0, limit - newUsed);
-        String imageBase64 = Base64.getEncoder().encodeToString(pngBytes);
+        String imageBase64 = Base64.getEncoder().encodeToString(imageResult.imageBytes());
         return new AvatarStudioGenerateResponse(imageBase64, "image/png", remaining);
     }
 

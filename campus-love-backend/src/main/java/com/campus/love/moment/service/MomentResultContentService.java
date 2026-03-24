@@ -4,6 +4,7 @@ import com.campus.love.ai.agent.MomentDatePrepAgent;
 import com.campus.love.ai.agent.MomentResultPackAgent;
 import com.campus.love.moment.dto.MomentDatePrepResponse;
 import com.campus.love.moment.entity.MomentMatchResult;
+import com.campus.love.moment.entity.MomentMatchResultContent;
 import com.campus.love.moment.entity.MomentProfile;
 import com.campus.love.profile.entity.UserPortrait;
 import com.campus.love.user.entity.User;
@@ -31,8 +32,11 @@ public class MomentResultContentService {
     private final MomentDatePrepAgent momentDatePrepAgent;
     private final ObjectMapper objectMapper;
 
-    public void fillPrecomputedContent(
-            MomentMatchResult result,
+    /**
+     * 写入 content 附表（规则模板，不调 LLM）。主表 {@link MomentMatchResult} 仅保留瘦字段。
+     */
+    public void fillRuleBasedContent(
+            MomentMatchResultContent content,
             User userA,
             User userB,
             MomentProfile profileA,
@@ -48,25 +52,26 @@ public class MomentResultContentService {
                 profileB != null ? profileB.getDateStyle() : null
         );
         List<String> dimensionLabels = dimensionLabelResolver.resolveLabels(scoreDetail);
-        MomentResultPackAgent.ResultPack resultPack = momentResultPackAgent.generate(
+        MomentResultPackAgent.ResultPack resultPack = momentResultPackAgent.buildRuleBasedPack(
                 userA, userB, profileA, profileB, portraitA, portraitB, modes, softPenaltyReasons
         );
 
-        result.setYuanfenTitle(complementaryModeService.resolvePrimaryTitle(profileA, profileB));
-        result.setComplementaryModes(writeJson(modes));
-        result.setSoftPenaltyReasons(writeJson(softPenaltyReasons));
-        result.setDateSceneType(dateSceneType);
-        result.setInsightCard1(resultPack.insight.card1);
-        result.setInsightCard2(resultPack.insight.card2);
-        result.setInsightCard3(resultPack.insight.card3);
-        result.setGoldenSentence(resultPack.insight.goldenSentence);
-        result.setDimensionLabels(writeJson(dimensionLabels));
-        result.setAboutUserA(resultPack.aboutUserA);
-        result.setAboutUserB(resultPack.aboutUserB);
+        content.setYuanfenTitle(complementaryModeService.resolvePrimaryTitle(profileA, profileB));
+        content.setComplementaryModes(writeJson(modes));
+        content.setSoftPenaltyReasons(writeJson(softPenaltyReasons));
+        content.setDateSceneType(dateSceneType);
+        content.setInsightCard1(resultPack.insight.card1);
+        content.setInsightCard2(resultPack.insight.card2);
+        content.setInsightCard3(resultPack.insight.card3);
+        content.setGoldenSentence(resultPack.insight.goldenSentence);
+        content.setDimensionLabels(writeJson(dimensionLabels));
+        content.setAboutUserA(resultPack.aboutUserA);
+        content.setAboutUserB(resultPack.aboutUserB);
     }
 
     public MomentDatePrepResponse getOrGenerateDatePrep(
             MomentMatchResult result,
+            MomentMatchResultContent content,
             Long currentUserId,
             User requester,
             User target,
@@ -76,10 +81,12 @@ public class MomentResultContentService {
             UserPortrait targetPortrait
     ) {
         String cacheKey = resolveDatePrepCacheKey(result, currentUserId);
-        MomentDatePrepResponse cached = parseDatePrep(result.getDatePrepJson(), cacheKey);
+        String rawJson = content != null ? content.getDatePrepJson() : null;
+        MomentDatePrepResponse cached = parseDatePrep(rawJson, cacheKey);
         if (cached != null && !momentDatePrepAgent.shouldRefresh(cached)) {
             return cached;
         }
+        String dateScene = content != null ? content.getDateSceneType() : null;
         MomentDatePrepResponse generated = momentDatePrepAgent.generate(
                 requester,
                 target,
@@ -87,9 +94,11 @@ public class MomentResultContentService {
                 targetProfile,
                 requesterPortrait,
                 targetPortrait,
-                result.getDateSceneType()
+                dateScene
         );
-        result.setDatePrepJson(mergeDatePrep(result.getDatePrepJson(), cacheKey, generated));
+        if (content != null) {
+            content.setDatePrepJson(mergeDatePrep(rawJson, cacheKey, generated));
+        }
         return generated;
     }
 
@@ -121,16 +130,19 @@ public class MomentResultContentService {
         return parseJsonList(String.valueOf(source));
     }
 
-    public List<String> buildInsightCards(MomentMatchResult result) {
+    public List<String> buildInsightCards(MomentMatchResultContent content) {
+        if (content == null) {
+            return List.of();
+        }
         List<String> cards = new ArrayList<>();
-        if (result.getInsightCard1() != null && !result.getInsightCard1().isBlank()) {
-            cards.add(result.getInsightCard1());
+        if (content.getInsightCard1() != null && !content.getInsightCard1().isBlank()) {
+            cards.add(content.getInsightCard1());
         }
-        if (result.getInsightCard2() != null && !result.getInsightCard2().isBlank()) {
-            cards.add(result.getInsightCard2());
+        if (content.getInsightCard2() != null && !content.getInsightCard2().isBlank()) {
+            cards.add(content.getInsightCard2());
         }
-        if (result.getInsightCard3() != null && !result.getInsightCard3().isBlank()) {
-            cards.add(result.getInsightCard3());
+        if (content.getInsightCard3() != null && !content.getInsightCard3().isBlank()) {
+            cards.add(content.getInsightCard3());
         }
         return cards;
     }

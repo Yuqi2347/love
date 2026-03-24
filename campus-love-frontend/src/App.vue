@@ -1,7 +1,10 @@
 <template>
-  <router-view v-slot="{ Component }">
+  <router-view v-slot="{ Component, route }">
     <transition name="page" mode="out-in">
-      <component :is="Component" />
+      <keep-alive v-if="route.meta.keepAlive">
+        <component :is="Component" :key="String(route.name || route.path)" />
+      </keep-alive>
+      <component v-else :is="Component" :key="route.fullPath" />
     </transition>
   </router-view>
 </template>

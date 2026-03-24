@@ -26,7 +26,7 @@
         </div>
       </template>
 
-      <el-table :data="rows" v-loading="loading">
+      <el-table :data="rows" v-loading="loading" :default-sort="{ prop: 'totalScore', order: 'descending' }">
         <el-table-column prop="id" label="结果ID" width="100" />
         <el-table-column prop="weekTag" label="周次" width="120" />
         <el-table-column label="池" width="120">
@@ -38,7 +38,7 @@
         <el-table-column label="B 用户" min-width="170">
           <template #default="{ row }">{{ row.nicknameB }} (#{{ row.userIdB }})</template>
         </el-table-column>
-        <el-table-column prop="totalScore" label="匹配分" width="100" />
+        <el-table-column prop="totalScore" label="匹配分" width="100" sortable />
         <el-table-column prop="yuanfenTitle" label="缘分标题" min-width="160" />
         <el-table-column label="确认进度" width="150">
           <template #default="{ row }">

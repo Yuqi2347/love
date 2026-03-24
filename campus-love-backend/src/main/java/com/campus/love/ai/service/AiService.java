@@ -2,6 +2,7 @@ package com.campus.love.ai.service;
 
 import com.campus.love.ai.config.AiConfig;
 import com.campus.love.ai.dto.AiChatResult;
+import com.campus.love.auth.security.CurrentUser;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -16,6 +17,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 /**
  * AI 调用网关 —— DashScope（兼容 OpenAI 格式，支持 qwen3.5-flash）
@@ -27,6 +29,7 @@ public class AiService {
 
     private final AiConfig aiConfig;
     private final ObjectMapper objectMapper;
+    private final AiUsageLogService aiUsageLogService;
 
     private static final HttpClient HTTP_CLIENT = HttpClient.newBuilder()
             .connectTimeout(java.time.Duration.ofSeconds(10))
@@ -55,6 +58,7 @@ public class AiService {
             Integer maxTokensOverride,
             Integer timeoutSecondsOverride) {
         String url = aiConfig.requiredBaseUrl() + "/chat/completions";
+        String model = aiConfig.requiredModel();
 
         int cap = aiConfig.getMaxTokens() > 0 ? aiConfig.getMaxTokens() : 4096;
         int maxTok = maxTokensOverride != null && maxTokensOverride > 0
@@ -62,7 +66,7 @@ public class AiService {
                 : (aiConfig.getMaxTokens() > 0 ? aiConfig.getMaxTokens() : 4096);
 
         Map<String, Object> body = new LinkedHashMap<>();
-        body.put("model", aiConfig.requiredModel());
+        body.put("model", model);
         body.put("max_tokens", maxTok);
         body.put("stream", false);
         body.put("messages", List.of(
@@ -70,7 +74,7 @@ public class AiService {
                 Map.of("role", "user", "content", userMessage)
         ));
 
-        log.info("AI request start -> model={}, url={}", aiConfig.requiredModel(), url);
+        log.info("AI request start -> model={}, url={}", model, url);
         long start = System.currentTimeMillis();
 
         try {
@@ -106,6 +110,7 @@ public class AiService {
             if (tokensUsed != null) {
                 log.info("AI tokens used: {}", tokensUsed);
             }
+            aiUsageLogService.logAnalysisUsage(tokensUsed, model, resolveCurrentUserId(), resolveScene(), null);
             return AiChatResult.of(content, tokensUsed);
         } catch (Exception e) {
             long elapsed = System.currentTimeMillis() - start;
@@ -128,5 +133,40 @@ public class AiService {
             log.debug("Parse usage failed: {}", e.getMessage());
             return null;
         }
+    }
+
+    private Long resolveCurrentUserId() {
+        try {
+            return CurrentUser.getId();
+        } catch (Exception ignored) {
+            return null;
+        }
+    }
+
+    private String resolveScene() {
+        return StackWalker.getInstance().walk(frames -> frames
+                .map(StackWalker.StackFrame::getClassName)
+                .map(this::mapScene)
+                .filter(Objects::nonNull)
+                .findFirst()
+                .orElse("GENERAL"));
+    }
+
+    private String mapScene(String className) {
+        if (className == null || className.equals(AiService.class.getName())) {
+            return null;
+        }
+        if (className.endsWith("YuanFenAnalysisSkill")) return "YUANFEN";
+        if (className.endsWith("IceBreakReActAgent")) return "ICE_BREAK";
+        if (className.endsWith("MomentSummaryReActAgent")) return "MOMENT_SUMMARY";
+        if (className.endsWith("MomentResultPackAgent")) return "MOMENT_RESULT_PACK";
+        if (className.endsWith("MomentLongAnalysisAgent")) return "MOMENT_LONG_ANALYSIS";
+        if (className.endsWith("MomentInsightAgent")) return "MOMENT_INSIGHT";
+        if (className.endsWith("MomentDatePrepAgent")) return "MOMENT_DATE_PREP";
+        if (className.endsWith("MomentAboutAgent")) return "MOMENT_ABOUT";
+        if (className.endsWith("FeedTaggingSkill")) return "FEED_TAGGING";
+        if (className.endsWith("DateOptionSkill")) return "PAIR_DATE_OPTION";
+        if (className.endsWith("ProfileCorrectionService")) return "PROFILE_CORRECTION";
+        return null;
     }
 }

@@ -40,6 +40,7 @@ const router = createRouter({
           path: 'discover',
           name: 'Discover',
           component: () => import('@/views/match/DiscoverView.vue'),
+          meta: { keepAlive: true },
         },
         {
           path: 'match',
@@ -65,6 +66,7 @@ const router = createRouter({
           path: 'invite',
           name: 'Invite',
           component: () => import('@/views/invite/InviteView.vue'),
+          meta: { keepAlive: true },
         },
         {
           path: 'moment',

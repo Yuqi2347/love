@@ -35,7 +35,7 @@ public class AvatarStudioArkClient {
     /**
      * 调用 Ark 生成图片，返回 PNG 字节。
      */
-    public byte[] generateStyledImage(String prompt, String imageDataUri) throws Exception {
+    public AvatarStudioImageResult generateStyledImage(String prompt, String imageDataUri) throws Exception {
         String apiKey = aiConfig.getArkApiKey();
         String baseUrl = aiConfig.getArkBaseUrl();
         if (!StringUtils.hasText(apiKey) || !StringUtils.hasText(baseUrl)) {
@@ -83,6 +83,10 @@ public class AvatarStudioArkClient {
             log.warn("Ark images error payload: {}", truncate(response.body(), 2000));
             throw new IllegalStateException(msg);
         }
+        Integer tokensUsed = parseTokensUsed(root);
+        if (tokensUsed != null) {
+            log.info("Ark image tokens used: {}", tokensUsed);
+        }
 
         JsonNode data = root.path("data");
         if (!data.isArray() || data.size() == 0) {
@@ -92,7 +96,7 @@ public class AvatarStudioArkClient {
         if (!StringUtils.hasText(imageUrl)) {
             String b64 = data.get(0).path("b64_json").asText(null);
             if (StringUtils.hasText(b64)) {
-                return java.util.Base64.getDecoder().decode(b64);
+                return new AvatarStudioImageResult(java.util.Base64.getDecoder().decode(b64), tokensUsed, model);
             }
             throw new IllegalStateException("图生图返回无 url/b64_json");
         }
@@ -106,7 +110,7 @@ public class AvatarStudioArkClient {
         if (imgResp.statusCode() < 200 || imgResp.statusCode() >= 300) {
             throw new IllegalStateException("下载生成图失败 HTTP " + imgResp.statusCode());
         }
-        return imgResp.body();
+        return new AvatarStudioImageResult(imgResp.body(), tokensUsed, model);
     }
 
     private static String trimTrailingSlash(String url) {
@@ -123,4 +127,21 @@ public class AvatarStudioArkClient {
         }
         return s.length() <= max ? s : s.substring(0, max) + "...";
     }
+
+    private Integer parseTokensUsed(JsonNode root) {
+        try {
+            JsonNode usage = root.path("usage");
+            if (usage.isMissingNode()) return null;
+            JsonNode total = usage.path("total_tokens");
+            if (total.isNumber()) return total.asInt();
+            int prompt = usage.path("prompt_tokens").asInt(0);
+            int completion = usage.path("completion_tokens").asInt(0);
+            return prompt + completion > 0 ? prompt + completion : null;
+        } catch (Exception e) {
+            log.debug("Parse avatar usage failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    public record AvatarStudioImageResult(byte[] imageBytes, Integer tokensUsed, String modelName) {}
 }

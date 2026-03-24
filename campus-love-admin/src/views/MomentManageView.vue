@@ -6,7 +6,12 @@
         <h1>本周活动节奏和自动匹配都在这里处理</h1>
         <p>
           当前周次 {{ overview?.weekTag || '--' }}，{{ phaseText }}。
-          {{ overview?.autoMatchEnabled ? `系统将在 ${formattedNextAutoMatch} 自动截止报名并执行匹配。` : '自动匹配未开启。' }}
+          {{ overview?.autoMatchEnabled ? `系统将在 ${formattedNextAutoMatch} 自动截止报名并启动异步匹配。` : '自动匹配未开启。' }}
+          {{
+            overview?.autoPublishEnabled
+              ? ` 自动公布：${formattedNextAutoPublish}。`
+              : ' 自动公布未开启（侧栏「匹配配置」可开启）。'
+          }}
         </p>
       </div>
       <div class="hero-actions">
@@ -27,6 +32,46 @@
       class="result-alert"
       @close="resultMessage = ''"
     />
+
+    <el-card v-if="showMatchStatusCard" class="panel-card progress-card">
+      <template #header>
+        <div class="panel-header">
+          <span>匹配与 AI 进度</span>
+          <span class="panel-meta">{{ matchProgress?.status || overview?.phase }}</span>
+        </div>
+      </template>
+      <div v-if="overview?.phase === 'FAILED' && matchProgress?.errorMessage" class="progress-error">
+        {{ matchProgress.errorMessage }}
+      </div>
+      <div class="progress-grid">
+        <div>
+          <div class="progress-label">当前池</div>
+          <div class="progress-value">{{ matchProgress?.matchProgress?.currentPool || '—' }}</div>
+        </div>
+        <div>
+          <div class="progress-label">已处理配对（估算）</div>
+          <div class="progress-value">
+            {{ matchProgress?.matchProgress?.processedPairs ?? 0 }}
+            <span class="progress-muted"
+              >/ {{ matchProgress?.matchProgress?.totalEstimatedPairs ?? 0 }}</span
+            >
+          </div>
+        </div>
+        <div>
+          <div class="progress-label">已写入对数</div>
+          <div class="progress-value">{{ matchProgress?.matchProgress?.matchedPairs ?? 0 }}</div>
+        </div>
+        <div>
+          <div class="progress-label">AI 任务</div>
+          <div class="progress-value">
+            {{ matchProgress?.aiProgress?.done ?? 0 }} / {{ matchProgress?.aiProgress?.total ?? 0 }}
+            <span v-if="(matchProgress?.aiProgress?.failed ?? 0) > 0" class="progress-warn">
+              （失败 {{ matchProgress?.aiProgress?.failed }}）
+            </span>
+          </div>
+        </div>
+      </div>
+    </el-card>
 
     <section class="stats-grid">
       <article class="stat-card">
@@ -53,6 +98,11 @@
         <div class="stat-label">下次自动匹配</div>
         <div class="stat-value small">{{ formattedNextAutoMatch }}</div>
         <div class="stat-sub">上次执行 {{ formattedLastMatch }}</div>
+      </article>
+      <article class="stat-card">
+        <div class="stat-label">下次自动公布</div>
+        <div class="stat-value small">{{ formattedNextAutoPublish }}</div>
+        <div class="stat-sub">{{ overview?.autoPublishEnabled ? '北京时间' : '未开启' }}</div>
       </article>
       <article class="stat-card">
         <div class="stat-label">未匹配用户</div>
@@ -89,7 +139,7 @@
           <div class="action-row">
             <div>
               <h3>触发匹配</h3>
-              <p>立即截止报名并执行本周匹配，结果生成后用户可查看。</p>
+              <p>立即截止报名并启动异步匹配；图匹配与分级落库完成后进入 AI 分析，全部完成后为「可预览」，需再点「公布结果」用户端才可见。</p>
             </div>
             <el-button
               type="primary"
@@ -98,6 +148,22 @@
               @click="handleTrigger"
             >
               立即匹配
+            </el-button>
+          </div>
+
+          <div class="action-row">
+            <div>
+              <h3>公布结果</h3>
+              <p>当状态为「可预览 / RESULT_READY」时，将结果对用户端开放（PUBLISHED）。</p>
+            </div>
+            <el-button
+              type="primary"
+              plain
+              :disabled="!overview?.canPublishResult"
+              :loading="actionLoading === 'publish'"
+              @click="handlePublish"
+            >
+              公布结果
             </el-button>
           </div>
 
@@ -180,6 +246,38 @@
             到达设定时间后，系统会先自动截止报名，再执行匹配。
           </div>
 
+          <el-divider content-position="left">自动公布缘分</el-divider>
+
+          <el-form-item label="开启自动公布">
+            <el-switch v-model="configForm.autoPublishEnabled" />
+          </el-form-item>
+
+          <el-form-item label="公布日期">
+            <el-select v-model="configForm.autoPublishDayOfWeek">
+              <el-option
+                v-for="item in dayOptions"
+                :key="item.value"
+                :label="item.label"
+                :value="item.value"
+              />
+            </el-select>
+          </el-form-item>
+
+          <el-form-item label="公布时间">
+            <el-time-select
+              v-model="configForm.autoPublishTime"
+              start="00:00"
+              step="00:15"
+              end="23:45"
+              format="HH:mm"
+              placeholder="选择时间"
+            />
+          </el-form-item>
+
+          <div class="automation-note">
+            本周进入「可预览」后，北京时间到达上述时刻即自动公布；详细说明见「匹配配置」页。
+          </div>
+
           <div class="automation-footer">
             <div class="quick-info">
               <span>基础阈值 {{ configForm.baseThreshold }}</span>
@@ -212,19 +310,26 @@
 </template>
 
 <script setup lang="ts">
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { Refresh } from '@element-plus/icons-vue'
+import { ElMessage } from 'element-plus'
 import {
   closeMomentEnrollment,
   getMomentAdminOverview,
   getMomentMatchConfig,
+  getMomentMatchProgress,
+  publishMomentResult,
   reopenMomentEnrollment,
   resetMomentWeek,
   triggerMomentMatching,
   updateMomentMatchConfig,
 } from '@/api/adminApi'
-import type { MomentAdminOverview, MomentMatchConfig } from '@/api/adminApi'
+import type {
+  MomentAdminOverview,
+  MomentMatchConfig,
+  MomentMatchProgressResponse,
+} from '@/api/adminApi'
 
 const router = useRouter()
 const loading = ref(false)
@@ -233,14 +338,19 @@ const actionLoading = ref('')
 const resultMessage = ref('')
 const resultType = ref<'success' | 'error' | 'warning'>('success')
 const overview = ref<MomentAdminOverview | null>(null)
+const matchProgress = ref<MomentMatchProgressResponse | null>(null)
 const configForm = reactive<Omit<MomentMatchConfig, 'id'>>({
-  baseThreshold: 60,
+  baseThreshold: 75,
   prioritizeOffset: 10,
   priorityOffset: 5,
   priorityMaxStack: 2,
+  eligibleTopK: 200,
   autoMatchEnabled: false,
   autoMatchDayOfWeek: 5,
   autoMatchTime: '20:00',
+  autoPublishEnabled: false,
+  autoPublishDayOfWeek: 5,
+  autoPublishTime: '12:00',
 })
 
 const dayOptions = [
@@ -257,11 +367,26 @@ const phaseText = computed(() => {
   const phase = overview.value?.phase
   if (phase === 'ENROLLING') return '报名中'
   if (phase === 'WAITING_MATCH') return '待匹配'
-  if (phase === 'RESULT_READY') return '结果已生成'
+  if (phase === 'MATCHING') return '匹配进行中'
+  if (phase === 'AI_ANALYZING') return 'AI 分析中'
+  if (phase === 'RESULT_READY') return '可预览（待公布）'
+  if (phase === 'PUBLISHED') return '已公布'
+  if (phase === 'FAILED') return '匹配失败'
   return '--'
 })
 
+const showMatchStatusCard = computed(() => {
+  const p = overview.value?.phase
+  return p === 'MATCHING' || p === 'AI_ANALYZING' || p === 'FAILED'
+})
+
 const formattedNextAutoMatch = computed(() => formatDateTime(overview.value?.nextAutoMatchAt, false))
+const formattedNextAutoPublish = computed(() => {
+  if (!overview.value?.autoPublishEnabled) return '未开启'
+  const t = overview.value?.nextAutoPublishAt
+  if (!t) return '即将或已自动公布'
+  return formatDateTime(t, false)
+})
 const formattedLastMatch = computed(() => formatDateTime(overview.value?.lastMatchAt, true))
 
 function poolLabel(pool: string) {
@@ -282,30 +407,99 @@ function syncConfig(config?: MomentMatchConfig | null) {
   configForm.prioritizeOffset = config.prioritizeOffset
   configForm.priorityOffset = config.priorityOffset
   configForm.priorityMaxStack = config.priorityMaxStack
+  configForm.eligibleTopK = config.eligibleTopK ?? 200
   configForm.autoMatchEnabled = config.autoMatchEnabled
   configForm.autoMatchDayOfWeek = config.autoMatchDayOfWeek
   configForm.autoMatchTime = config.autoMatchTime
+  configForm.autoPublishEnabled = config.autoPublishEnabled ?? false
+  configForm.autoPublishDayOfWeek = config.autoPublishDayOfWeek ?? 5
+  configForm.autoPublishTime = config.autoPublishTime ?? '12:00'
 }
+
+let progressPollTimer: ReturnType<typeof setInterval> | null = null
+
+function stopProgressPoll() {
+  if (progressPollTimer != null) {
+    clearInterval(progressPollTimer)
+    progressPollTimer = null
+  }
+}
+
+async function loadMatchProgress() {
+  try {
+    const res = await getMomentMatchProgress()
+    matchProgress.value = res.data.data ?? null
+  } catch {
+    /* 轮询失败时保留上一次数据 */
+  }
+}
+
+function startProgressPoll() {
+  stopProgressPoll()
+  void loadMatchProgress()
+  progressPollTimer = setInterval(() => {
+    void loadMatchProgress()
+  }, 5000)
+}
+
+watch(
+  () => overview.value?.phase,
+  (phase) => {
+    if (phase === 'MATCHING' || phase === 'AI_ANALYZING') {
+      startProgressPoll()
+    } else if (phase === 'FAILED') {
+      stopProgressPoll()
+      void loadMatchProgress()
+    } else {
+      stopProgressPoll()
+      matchProgress.value = null
+    }
+  },
+)
 
 async function loadData() {
   loading.value = true
   try {
-    const [overviewRes, configRes] = await Promise.all([
+    const [overviewRes, configRes] = await Promise.allSettled([
       getMomentAdminOverview(),
       getMomentMatchConfig(),
     ])
-    overview.value = overviewRes.data.data
-    syncConfig(configRes.data.data)
-  } catch {
-    resultMessage.value = '加载心动时刻总控信息失败'
-    resultType.value = 'error'
+    const overviewFailed = overviewRes.status === 'rejected'
+    const configFailed = configRes.status === 'rejected'
+
+    if (!overviewFailed) {
+      overview.value = overviewRes.value.data.data
+    } else {
+      overview.value = null
+    }
+    if (!configFailed) {
+      syncConfig(configRes.value.data.data)
+    }
+
+    if (!overviewFailed && !configFailed) {
+      if (resultType.value === 'error' && resultMessage.value.includes('加载')) {
+        resultMessage.value = ''
+      }
+      return
+    }
+    if (overviewFailed && configFailed) {
+      resultMessage.value = '加载活动总览和匹配配置失败'
+      resultType.value = 'error'
+      return
+    }
+    if (overviewFailed) {
+      resultMessage.value = '加载活动总览失败'
+      resultType.value = 'error'
+      return
+    }
+    ElMessage.warning('匹配配置加载失败，已保留当前页面配置值')
   } finally {
     loading.value = false
   }
 }
 
 async function runAction(
-  key: 'close' | 'trigger' | 'reopen' | 'reset',
+  key: 'close' | 'trigger' | 'reopen' | 'reset' | 'publish',
   action: () => Promise<unknown>,
   successMessage: string | ((payload: Record<string, unknown> | undefined) => string),
   successType: 'success' | 'warning' = 'success',
@@ -324,6 +518,7 @@ async function runAction(
         trigger: '触发匹配失败',
         reopen: '重新开放失败',
         reset: '重置失败',
+        publish: '公布结果失败',
       }[key]
     resultType.value = 'error'
   } finally {
@@ -340,11 +535,21 @@ async function handleTrigger() {
     'trigger',
     () => triggerMomentMatching(),
     (payload) => {
+      if (payload?.async === true || payload?.message === '匹配任务已启动') {
+        return '匹配任务已启动，后台异步执行中，下方可查看进度。'
+      }
+      if (typeof payload?.message === 'string') {
+        return payload.message
+      }
       const matchedPairs = typeof payload?.matchedPairs === 'number' ? payload.matchedPairs : 0
       const unmatchedUsers = typeof payload?.unmatchedUsers === 'number' ? payload.unmatchedUsers : 0
       return `匹配完成，配对 ${matchedPairs} 对，未匹配 ${unmatchedUsers} 人`
     },
   )
+}
+
+async function handlePublish() {
+  await runAction('publish', () => publishMomentResult(), '已公布本周匹配结果，用户端可见')
 }
 
 async function handleReopen() {
@@ -371,6 +576,7 @@ async function saveAutomation() {
 }
 
 onMounted(loadData)
+onUnmounted(stopProgressPoll)
 </script>
 
 <style lang="scss" scoped>
@@ -426,6 +632,46 @@ onMounted(loadData)
 
 .result-alert {
   margin-bottom: 0;
+}
+
+.progress-card {
+  .progress-error {
+    margin-bottom: 12px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    background: rgba(220, 38, 38, 0.08);
+    color: #b91c1c;
+    font-size: 13px;
+  }
+
+  .progress-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 16px;
+  }
+
+  .progress-label {
+    font-size: 12px;
+    color: #6b7280;
+    margin-bottom: 6px;
+  }
+
+  .progress-value {
+    font-size: 18px;
+    font-weight: 600;
+    color: #111827;
+  }
+
+  .progress-muted {
+    font-size: 14px;
+    font-weight: 500;
+    color: #9ca3af;
+  }
+
+  .progress-warn {
+    font-size: 13px;
+    color: #d97706;
+  }
 }
 
 .stats-grid {

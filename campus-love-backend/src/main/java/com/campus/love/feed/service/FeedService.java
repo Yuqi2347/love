@@ -157,12 +157,9 @@ public class FeedService {
 
         Map<Long, User> authorMap = batchLoadAuthors(posts);
         Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(posts);
-        return posts.stream().map(p -> {
-            FeedPostResponse response = toResponse(p, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap);
-            activityService.recordActivity(com.campus.love.common.enums.ActivityTypeEnum.VIEW, p.getId());
-            behaviorTracker.trackFeedView(currentUserId, p.getId());
-            return response;
-        }).collect(Collectors.toList());
+        // 注意：勿在列表循环里对每条帖子 recordActivity + trackFeedView——会导致每帖约 4 次写库且反复 UPDATE t_user，
+        // 一次翻页就会把接口拖慢。浏览行为请在「帖子详情」等单条路径记录（见 getPostDetail 中的 trackFeedView）。
+        return toResponseListPosts(posts, currentUserId, authorMap, null, inviteCardMap);
     }
 
     /**
@@ -329,7 +326,7 @@ public class FeedService {
                 .limit(size)
                 .collect(Collectors.toList());
         Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(filtered);
-        return filtered.stream().map(p -> toResponse(p, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap)).collect(Collectors.toList());
+        return toResponseListPosts(filtered, currentUserId, authorMap, null, inviteCardMap);
     }
 
     /** 按帖子 visibility 判断当前用户是否可见（以帖子字段为准，兼容旧数据无 visibility 时视为 ALL） */
@@ -399,9 +396,7 @@ public class FeedService {
                 .limit(size)
                 .collect(Collectors.toList());
         Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(pagePosts);
-        return pagePosts.stream()
-                .map(p -> toResponse(p, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap))
-                .collect(Collectors.toList());
+        return toResponseListPosts(pagePosts, currentUserId, authorMap, null, inviteCardMap);
     }
 
     /**
@@ -424,9 +419,7 @@ public class FeedService {
                 .limit(size)
                 .collect(Collectors.toList());
         Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(pagePosts);
-        return pagePosts.stream()
-                .map(p -> toResponse(p, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap))
-                .collect(Collectors.toList());
+        return toResponseListPosts(pagePosts, currentUserId, authorMap, null, inviteCardMap);
     }
 
     /**
@@ -449,9 +442,7 @@ public class FeedService {
                 .limit(size)
                 .collect(Collectors.toList());
         Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(pagePosts);
-        return pagePosts.stream()
-                .map(p -> toResponse(p, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap))
-                .collect(Collectors.toList());
+        return toResponseListPosts(pagePosts, currentUserId, authorMap, null, inviteCardMap);
     }
 
     private Map<Long, User> batchLoadAuthors(List<FeedPost> posts) {
@@ -734,8 +725,13 @@ public class FeedService {
         LocalDateTime since = user != null ? user.getLastFeedActivityViewedAt() : null;
         if (since == null) return 0;
         List<Long> myPostIds = feedPostMapper.selectList(
-                        new LambdaQueryWrapper<FeedPost>().eq(FeedPost::getUserId, userId))
-                .stream().map(FeedPost::getId).collect(Collectors.toList());
+                        new LambdaQueryWrapper<FeedPost>()
+                                .eq(FeedPost::getUserId, userId)
+                                .select(FeedPost::getId))
+                .stream()
+                .map(FeedPost::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
 
         long likeCount = 0;
         long commentCount = 0;
@@ -776,37 +772,25 @@ public class FeedService {
     public List<Map<String, Object>> getSocialNotifications(Long userId) {
         List<Map<String, Object>> result = new ArrayList<>();
 
-        List<FeedPost> myPosts = feedPostMapper.selectList(
-                new LambdaQueryWrapper<FeedPost>().eq(FeedPost::getUserId, userId));
-        List<Long> myPostIds = myPosts.isEmpty()
-                ? new ArrayList<>()
-                : myPosts.stream().map(FeedPost::getId).collect(Collectors.toList());
+        List<Long> myPostIds = feedPostMapper.selectList(
+                        new LambdaQueryWrapper<FeedPost>()
+                                .eq(FeedPost::getUserId, userId)
+                                .select(FeedPost::getId))
+                .stream()
+                .map(FeedPost::getId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toList());
 
-        // 点赞通知（仅当有本人发布的动态时）
+        List<FeedLike> likes = List.of();
         if (!myPostIds.isEmpty()) {
-            List<FeedLike> likes = feedLikeMapper.selectList(
+            likes = feedLikeMapper.selectList(
                     new LambdaQueryWrapper<FeedLike>()
                             .in(FeedLike::getPostId, myPostIds)
                             .ne(FeedLike::getUserId, userId)
                             .orderByDesc(FeedLike::getCreatedAt)
                             .last("LIMIT " + FeedConstants.SOCIAL_NOTIFICATION_LIMIT));
-            for (FeedLike like : likes) {
-                User sender = userMapper.selectById(like.getUserId());
-                if (sender == null) continue;
-                Map<String, Object> item = new HashMap<>();
-                item.put("id", like.getId());
-                item.put("senderId", sender.getId());
-                item.put("senderNickname", sender.getNickname());
-                item.put("senderAvatarUrl", sender.getAvatarUrl());
-                item.put("type", "LIKE");
-                item.put("content", "赞了你的动态");
-                item.put("postId", like.getPostId());
-                item.put("createdAt", like.getCreatedAt() != null ? like.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "");
-                result.add(item);
-            }
         }
 
-        // 评论通知（包括@回复，排除已删除）；无动态时仍可拉「@我」相关评论
         LambdaQueryWrapper<FeedComment> commentWrapper = new LambdaQueryWrapper<FeedComment>()
                 .ne(FeedComment::getUserId, userId)
                 .and(w -> w.isNull(FeedComment::getEraseFlag).or().ne(FeedComment::getEraseFlag, FeedComment.DELETED));
@@ -819,9 +803,60 @@ public class FeedService {
                 commentWrapper
                         .orderByDesc(FeedComment::getCreatedAt)
                         .last("LIMIT " + FeedConstants.SOCIAL_NOTIFICATION_LIMIT));
+
+        List<com.campus.love.notification.entity.Notification> commentLikeNotifs =
+                notificationService.getCommentLikeNotifications(userId, FeedConstants.SOCIAL_NOTIFICATION_LIMIT);
+
+        Set<Long> senderIds = new HashSet<>();
+        for (FeedLike like : likes) {
+            if (like.getUserId() != null) {
+                senderIds.add(like.getUserId());
+            }
+        }
+        for (FeedComment c : comments) {
+            if (c.getUserId() != null) {
+                senderIds.add(c.getUserId());
+            }
+        }
+        for (com.campus.love.notification.entity.Notification n : commentLikeNotifs) {
+            if (n.getSenderId() != null) {
+                senderIds.add(n.getSenderId());
+            }
+        }
+        Map<Long, User> senderMap = new HashMap<>();
+        if (!senderIds.isEmpty()) {
+            List<User> users = userMapper.selectBatchIds(senderIds);
+            if (users != null) {
+                for (User u : users) {
+                    if (u != null) {
+                        senderMap.put(u.getId(), u);
+                    }
+                }
+            }
+        }
+
+        for (FeedLike like : likes) {
+            User sender = senderMap.get(like.getUserId());
+            if (sender == null) {
+                continue;
+            }
+            Map<String, Object> item = new HashMap<>();
+            item.put("id", like.getId());
+            item.put("senderId", sender.getId());
+            item.put("senderNickname", sender.getNickname());
+            item.put("senderAvatarUrl", sender.getAvatarUrl());
+            item.put("type", "LIKE");
+            item.put("content", "赞了你的动态");
+            item.put("postId", like.getPostId());
+            item.put("createdAt", like.getCreatedAt() != null ? like.getCreatedAt().format(DateTimeConstants.DATETIME_FMT) : "");
+            result.add(item);
+        }
+
         for (FeedComment comment : comments) {
-            User sender = userMapper.selectById(comment.getUserId());
-            if (sender == null) continue;
+            User sender = senderMap.get(comment.getUserId());
+            if (sender == null) {
+                continue;
+            }
             Map<String, Object> item = new HashMap<>();
             item.put("id", comment.getId() + 100000);
             item.put("senderId", sender.getId());
@@ -837,14 +872,12 @@ public class FeedService {
             result.add(item);
         }
 
-        // 评论点赞通知（V39：从 t_notification 查询 COMMENT_LIKE 类型；与红点统计一致，无动态也可能有）
-        List<com.campus.love.notification.entity.Notification> commentLikeNotifs =
-                notificationService.getCommentLikeNotifications(userId, FeedConstants.SOCIAL_NOTIFICATION_LIMIT);
         for (com.campus.love.notification.entity.Notification n : commentLikeNotifs) {
-            User sender = userMapper.selectById(n.getSenderId());
-            if (sender == null) continue;
+            User sender = senderMap.get(n.getSenderId());
+            if (sender == null) {
+                continue;
+            }
             Map<String, Object> item = new HashMap<>();
-            // 使用负数 ID 区间，避免与 t_feed_like id 冲突
             item.put("id", -(n.getId()));
             item.put("senderId", sender.getId());
             item.put("senderNickname", sender.getNickname());
@@ -983,60 +1016,91 @@ public class FeedService {
         return cur.getId();
     }
 
-    private FeedPostResponse toResponse(FeedPost post, Long currentUserId) {
-        return toResponse(post, currentUserId, null, FeedConstants.LIST_COMMENT_LIMIT, null, null);
-    }
-
-    private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap) {
-        return toResponse(post, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, null);
-    }
-
-    private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap, int commentLimit) {
-        return toResponse(post, currentUserId, authorMap, commentLimit, null, null);
-    }
-
-    private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap, int commentLimit, String commentSort, Map<Long, InviteFeedCard> inviteCardMap) {
-        User author = authorMap != null ? authorMap.get(post.getUserId()) : null;
-        if (author == null) {
-            author = userMapper.selectById(post.getUserId());
+    /** 当前用户对一批帖子的点赞（1 次查询） */
+    private Set<Long> batchLoadLikedPostIds(Long userId, Collection<Long> postIds) {
+        if (userId == null || postIds == null || postIds.isEmpty()) {
+            return Set.of();
         }
-        boolean liked = feedLikeMapper.selectCount(
+        List<FeedLike> rows = feedLikeMapper.selectList(
                 new LambdaQueryWrapper<FeedLike>()
-                        .eq(FeedLike::getPostId, post.getId())
-                        .eq(FeedLike::getUserId, currentUserId)) > 0;
+                        .eq(FeedLike::getUserId, userId)
+                        .in(FeedLike::getPostId, postIds));
+        return rows.stream().map(FeedLike::getPostId).collect(Collectors.toSet());
+    }
 
-        List<FeedComment> comments;
-        if (commentLimit == FeedConstants.DETAIL_COMMENT_LIMIT) {
-            comments = loadCommentsForPostDetail(post.getId(), commentSort);
-        } else {
-            LambdaQueryWrapper<FeedComment> commentWrapper = new LambdaQueryWrapper<FeedComment>()
-                    .eq(FeedComment::getPostId, post.getId());
-            if ("hot".equalsIgnoreCase(commentSort)) {
-                // 热度排序：点赞数降序，同分时按 id 降序（最新楼层优先）
-                commentWrapper.last("ORDER BY COALESCE(like_count,0) DESC, id DESC LIMIT " + commentLimit);
-            } else {
-                // 时间排序：最新的在最上面，created_at 为 NULL 时用 id 降序兜底（id 越大越新）
-                commentWrapper.last("ORDER BY COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC LIMIT " + commentLimit);
-            }
-            comments = feedCommentMapper.selectList(commentWrapper);
+    /** 当前用户对一批评论的点赞（1 次查询） */
+    private Set<Long> batchLoadLikedCommentIds(Long userId, Collection<Long> commentIds) {
+        if (userId == null || commentIds == null || commentIds.isEmpty()) {
+            return Set.of();
         }
-        comments = dropErasedCommentsWithoutReplies(comments);
+        List<FeedCommentLike> rows = feedCommentLikeMapper.selectList(
+                new LambdaQueryWrapper<FeedCommentLike>()
+                        .eq(FeedCommentLike::getUserId, userId)
+                        .in(FeedCommentLike::getCommentId, commentIds));
+        return rows.stream().map(FeedCommentLike::getCommentId).collect(Collectors.toSet());
+    }
 
-        Map<Long, User> userCache = new HashMap<>();
-        List<FeedPostResponse.CommentItem> commentItems = comments.stream().map(c -> {
-            User u = userCache.computeIfAbsent(c.getUserId(), userMapper::selectById);
-            // 获取被回复用户的昵称
+    /** 列表页：单帖评论窗口（与旧 toResponse 列表分支一致） */
+    private List<FeedComment> loadCommentsForListPage(Long postId, int commentLimit, String commentSort) {
+        LambdaQueryWrapper<FeedComment> commentWrapper = new LambdaQueryWrapper<FeedComment>()
+                .eq(FeedComment::getPostId, postId);
+        if ("hot".equalsIgnoreCase(commentSort)) {
+            commentWrapper.last("ORDER BY COALESCE(like_count,0) DESC, id DESC LIMIT " + commentLimit);
+        } else {
+            commentWrapper.last("ORDER BY COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC LIMIT " + commentLimit);
+        }
+        return feedCommentMapper.selectList(commentWrapper);
+    }
+
+    private Map<Long, User> loadUsersForComments(List<FeedComment> comments, Map<Long, User> authorMap) {
+        Set<Long> need = new HashSet<>();
+        for (FeedComment c : comments) {
+            if (c.getUserId() != null) {
+                need.add(c.getUserId());
+            }
+            if (c.getRepliedUserId() != null) {
+                need.add(c.getRepliedUserId());
+            }
+        }
+        Map<Long, User> out = new HashMap<>();
+        Set<Long> missing = new HashSet<>();
+        for (Long uid : need) {
+            User fromAuthor = authorMap != null ? authorMap.get(uid) : null;
+            if (fromAuthor != null) {
+                out.put(uid, fromAuthor);
+            } else {
+                missing.add(uid);
+            }
+        }
+        if (!missing.isEmpty()) {
+            List<User> loaded = userMapper.selectBatchIds(missing);
+            if (loaded != null) {
+                for (User u : loaded) {
+                    if (u != null) {
+                        out.put(u.getId(), u);
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    private List<FeedPostResponse.CommentItem> buildCommentItems(
+            List<FeedComment> comments,
+            Set<Long> likedCommentIds,
+            Map<Long, User> userById
+    ) {
+        List<FeedPostResponse.CommentItem> items = new ArrayList<>(comments.size());
+        for (FeedComment c : comments) {
+            User u = userById.get(c.getUserId());
             String repliedToName = null;
             if (c.getRepliedUserId() != null) {
-                User repliedUser = userCache.computeIfAbsent(c.getRepliedUserId(), userMapper::selectById);
+                User repliedUser = userById.get(c.getRepliedUserId());
                 repliedToName = repliedUser != null ? repliedUser.getNickname() : null;
             }
             boolean isDeleted = c.getEraseFlag() != null && c.getEraseFlag() == FeedComment.DELETED;
-            boolean commentLiked = feedCommentLikeMapper.selectCount(
-                    new LambdaQueryWrapper<FeedCommentLike>()
-                            .eq(FeedCommentLike::getCommentId, c.getId())
-                            .eq(FeedCommentLike::getUserId, currentUserId)) > 0;
-            return FeedPostResponse.CommentItem.builder()
+            boolean commentLiked = likedCommentIds.contains(c.getId());
+            items.add(FeedPostResponse.CommentItem.builder()
                     .id(c.getId())
                     .userId(c.getUserId())
                     .nickname(u != null ? u.getNickname() : "")
@@ -1049,19 +1113,31 @@ public class FeedService {
                     .deleted(isDeleted)
                     .likeCount(c.getLikeCount() != null ? c.getLikeCount() : 0)
                     .liked(commentLiked)
-                    .build();
-        }).collect(Collectors.toList());
+                    .build());
+        }
+        return items;
+    }
 
-        InviteFeedCard inviteCard = null;
-        if (post.getInviteId() != null) {
-            if (inviteCardMap != null) {
-                inviteCard = inviteCardMap.get(post.getInviteId());
-            }
-            if (inviteCard == null) {
-                inviteCard = loadInviteFeedCard(post.getInviteId());
+    private InviteFeedCard resolveInviteCard(FeedPost post, Map<Long, InviteFeedCard> inviteCardMap) {
+        if (post.getInviteId() == null) {
+            return null;
+        }
+        if (inviteCardMap != null) {
+            InviteFeedCard c = inviteCardMap.get(post.getInviteId());
+            if (c != null) {
+                return c;
             }
         }
+        return loadInviteFeedCard(post.getInviteId());
+    }
 
+    private FeedPostResponse buildFeedPostResponseCore(
+            FeedPost post,
+            User author,
+            boolean liked,
+            List<FeedPostResponse.CommentItem> commentItems,
+            InviteFeedCard inviteCard
+    ) {
         return FeedPostResponse.builder()
                 .id(post.getId())
                 .userId(post.getUserId())
@@ -1085,6 +1161,96 @@ public class FeedService {
                 .pinned(post.getPinnedAt() != null)
                 .pinnedAt(post.getPinnedAt() != null ? post.getPinnedAt().format(DateTimeConstants.DATETIME_FMT) : null)
                 .build();
+    }
+
+    /**
+     * 列表路径批量组装：每页 2 次点赞查询 + 每帖 1 次评论查询 + 评论用户批量加载（避免 N+1）。
+     */
+    private List<FeedPostResponse> toResponseListPosts(
+            List<FeedPost> posts,
+            Long currentUserId,
+            Map<Long, User> authorMap,
+            String commentSort,
+            Map<Long, InviteFeedCard> inviteCardMap
+    ) {
+        if (posts == null || posts.isEmpty()) {
+            return List.of();
+        }
+        List<Long> postIds = posts.stream().map(FeedPost::getId).filter(Objects::nonNull).toList();
+        Set<Long> likedPostIds = batchLoadLikedPostIds(currentUserId, postIds);
+        List<FeedComment> allComments = new ArrayList<>();
+        Map<Long, List<FeedComment>> commentsByPost = new LinkedHashMap<>();
+        for (FeedPost p : posts) {
+            List<FeedComment> cs = loadCommentsForListPage(p.getId(), FeedConstants.LIST_COMMENT_LIMIT, commentSort);
+            cs = dropErasedCommentsWithoutReplies(cs);
+            commentsByPost.put(p.getId(), cs);
+            allComments.addAll(cs);
+        }
+        Set<Long> likedCommentIds = batchLoadLikedCommentIds(
+                currentUserId,
+                allComments.stream().map(FeedComment::getId).collect(Collectors.toList()));
+        Map<Long, User> userById = loadUsersForComments(allComments, authorMap);
+        List<FeedPostResponse> out = new ArrayList<>(posts.size());
+        for (FeedPost post : posts) {
+            User author = authorMap != null ? authorMap.get(post.getUserId()) : null;
+            if (author == null) {
+                author = userMapper.selectById(post.getUserId());
+            }
+            List<FeedPostResponse.CommentItem> items = buildCommentItems(
+                    commentsByPost.getOrDefault(post.getId(), List.of()),
+                    likedCommentIds,
+                    userById);
+            InviteFeedCard inviteCard = resolveInviteCard(post, inviteCardMap);
+            out.add(buildFeedPostResponseCore(
+                    post,
+                    author,
+                    likedPostIds.contains(post.getId()),
+                    items,
+                    inviteCard));
+        }
+        return out;
+    }
+
+    private FeedPostResponse toResponsePostDetail(
+            FeedPost post,
+            Long currentUserId,
+            Map<Long, User> authorMap,
+            String commentSort,
+            Map<Long, InviteFeedCard> inviteCardMap
+    ) {
+        User author = authorMap != null ? authorMap.get(post.getUserId()) : null;
+        if (author == null) {
+            author = userMapper.selectById(post.getUserId());
+        }
+        boolean liked = batchLoadLikedPostIds(currentUserId, List.of(post.getId())).contains(post.getId());
+        List<FeedComment> comments = loadCommentsForPostDetail(post.getId(), commentSort);
+        comments = dropErasedCommentsWithoutReplies(comments);
+        Set<Long> likedCommentIds = batchLoadLikedCommentIds(
+                currentUserId,
+                comments.stream().map(FeedComment::getId).collect(Collectors.toList()));
+        Map<Long, User> userById = loadUsersForComments(comments, authorMap);
+        List<FeedPostResponse.CommentItem> commentItems = buildCommentItems(comments, likedCommentIds, userById);
+        InviteFeedCard inviteCard = resolveInviteCard(post, inviteCardMap);
+        return buildFeedPostResponseCore(post, author, liked, commentItems, inviteCard);
+    }
+
+    private FeedPostResponse toResponse(FeedPost post, Long currentUserId) {
+        return toResponse(post, currentUserId, null, FeedConstants.LIST_COMMENT_LIMIT, null, null);
+    }
+
+    private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap) {
+        return toResponse(post, currentUserId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, null);
+    }
+
+    private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap, int commentLimit) {
+        return toResponse(post, currentUserId, authorMap, commentLimit, null, null);
+    }
+
+    private FeedPostResponse toResponse(FeedPost post, Long currentUserId, Map<Long, User> authorMap, int commentLimit, String commentSort, Map<Long, InviteFeedCard> inviteCardMap) {
+        if (commentLimit == FeedConstants.DETAIL_COMMENT_LIMIT) {
+            return toResponsePostDetail(post, currentUserId, authorMap, commentSort, inviteCardMap);
+        }
+        return toResponseListPosts(List.of(post), currentUserId, authorMap, commentSort, inviteCardMap).get(0);
     }
 
     /**
@@ -1179,9 +1345,7 @@ public class FeedService {
 
         Map<Long, User> authorMap = batchLoadAuthors(orderedPosts);
         Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(orderedPosts);
-        return orderedPosts.stream()
-                .map(p -> toResponse(p, userId, authorMap, FeedConstants.LIST_COMMENT_LIMIT, null, inviteCardMap))
-                .collect(Collectors.toList());
+        return toResponseListPosts(orderedPosts, userId, authorMap, null, inviteCardMap);
     }
 
     private Map<Long, InviteFeedCard> batchInviteCards(List<FeedPost> posts) {

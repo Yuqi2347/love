@@ -1,9 +1,9 @@
 -- =============================================
 -- 校园交友 App - 数据库结构快照（参考 / 比对用，不作为新环境主路径）
--- 版本：与 Flyway V1～V46 迁移链对齐后的人工汇总（见 db/migration/）
--- 更新时间：2026-03-20
+-- 版本：与 Flyway V1～V49 迁移链对齐后的人工汇总（见 db/migration/）
+-- 更新时间：2026-03-22（含 V49 匹配流水线、content 附表、归档相关表）
 --
--- 【新环境】请创建空库后启动后端，由 Flyway 自动执行 db/migration/V1__… 至 V46__…。
+-- 【新环境】请创建空库后启动后端，由 Flyway 自动执行 db/migration/V1__… 至最新版本。
 -- 本文件可用于：文档对照、diff 检查、应急手工修复；勿与 Flyway 重复执行同一 DDL。
 -- =============================================
 
@@ -123,7 +123,8 @@ CREATE TABLE IF NOT EXISTS t_feed_like (
     post_id         BIGINT          NOT NULL,
     user_id         BIGINT          NOT NULL,
     created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_like (post_id, user_id)
+    UNIQUE KEY uk_like (post_id, user_id),
+    INDEX idx_user_post (user_id, post_id)
 ) COMMENT '朋友圈点赞';
 
 -- 朋友圈评论表（含 V16 被回复用户ID，V17 软删除，V39 点赞数）
@@ -148,7 +149,8 @@ CREATE TABLE IF NOT EXISTS t_feed_comment_like (
     user_id         BIGINT          NOT NULL,
     created_at      DATETIME        DEFAULT CURRENT_TIMESTAMP,
     UNIQUE KEY uk_comment_user (comment_id, user_id),
-    INDEX idx_comment (comment_id)
+    INDEX idx_comment (comment_id),
+    INDEX idx_user_comment (user_id, comment_id)
 ) COMMENT '评论点赞';
 
 -- 用户相册表
@@ -413,34 +415,63 @@ CREATE TABLE IF NOT EXISTS t_moment_enrollment (
     pool        VARCHAR(4)   NOT NULL COMMENT '匹配池: MF/MM/FF',
     status      VARCHAR(20)  DEFAULT 'WAITING' COMMENT 'WAITING/MATCHED/UNMATCHED',
     created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE KEY uk_user_week_pool (user_id, week_tag, pool)
+    UNIQUE KEY uk_user_week_pool (user_id, week_tag, pool),
+    INDEX idx_week_created (week_tag, created_at),
+    INDEX idx_week_pool_status_user (week_tag, pool, status, user_id)
 ) COMMENT '心动一刻每周报名记录（V17 支持同周多池）';
 
 CREATE TABLE IF NOT EXISTS t_moment_match_result (
     id          BIGINT PRIMARY KEY AUTO_INCREMENT,
-    week_tag    VARCHAR(10)  NOT NULL COMMENT '活动周标识',
-    pool        VARCHAR(4)   NOT NULL COMMENT '匹配池: MF/MM/FF',
+    week_tag    VARCHAR(16)  NOT NULL COMMENT '活动周标识',
+    pool        VARCHAR(8)   NOT NULL COMMENT '匹配池: MF/MM/FF',
     user_id_a   BIGINT       NOT NULL,
     user_id_b   BIGINT       NOT NULL,
     total_score DECIMAL(5,2) COMMENT '配对综合分',
-    score_detail JSON        COMMENT '四维度分数明细',
-    yuanfen_title VARCHAR(32) DEFAULT NULL COMMENT '缘分标题',
-    complementary_modes JSON DEFAULT NULL COMMENT '命中的互补模式列表',
-    soft_penalty_reasons JSON DEFAULT NULL COMMENT '软惩罚触发原因列表',
-    date_scene_type VARCHAR(20) DEFAULT NULL COMMENT '约会场景类型',
-    insight_card_1 TEXT DEFAULT NULL COMMENT '心动之处卡片一',
-    insight_card_2 TEXT DEFAULT NULL COMMENT '心动之处卡片二',
-    insight_card_3 TEXT DEFAULT NULL COMMENT '心动之处卡片三',
-    golden_sentence VARCHAR(128) DEFAULT NULL COMMENT '专属金句',
-    dimension_labels JSON DEFAULT NULL COMMENT '四维度标签',
-    about_user_a TEXT DEFAULT NULL COMMENT '展示给B看的A画像',
-    about_user_b TEXT DEFAULT NULL COMMENT '展示给A看的B画像',
-    date_prep_json JSON DEFAULT NULL COMMENT '约会准备内容',
     created_at  DATETIME     DEFAULT CURRENT_TIMESTAMP,
     INDEX idx_week (week_tag),
+    INDEX idx_week_pool_created (week_tag, pool, created_at),
     INDEX idx_user_a (user_id_a),
     INDEX idx_user_b (user_id_b)
-) COMMENT '心动一刻每周配对结果';
+) COMMENT '心动一刻每周配对结果（瘦列，大字段见 t_moment_match_result_content，V49）';
+
+CREATE TABLE IF NOT EXISTS t_moment_match_result_content (
+  id                 BIGINT PRIMARY KEY AUTO_INCREMENT,
+  match_result_id    BIGINT NOT NULL COMMENT 't_moment_match_result.id',
+  score_detail       MEDIUMTEXT NULL COMMENT 'JSON 维度分',
+  ai_analysis        MEDIUMTEXT NULL COMMENT '长文 AI 分析',
+  yuanfen_title      VARCHAR(64) NULL,
+  complementary_modes JSON NULL,
+  soft_penalty_reasons JSON NULL,
+  date_scene_type    VARCHAR(32) NULL,
+  insight_card_1     TEXT NULL,
+  insight_card_2     TEXT NULL,
+  insight_card_3     TEXT NULL,
+  golden_sentence    VARCHAR(256) NULL,
+  dimension_labels   JSON NULL,
+  about_user_a       TEXT NULL,
+  about_user_b       TEXT NULL,
+  date_prep_json     JSON NULL,
+  created_at         DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at         DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_moment_content_result (match_result_id)
+) COMMENT '心动时刻匹配结果大字段（V49）';
+
+CREATE TABLE IF NOT EXISTS t_moment_match_reset_snapshot (
+    id                       BIGINT PRIMARY KEY AUTO_INCREMENT,
+    snapshot_batch_id        VARCHAR(36)  NOT NULL COMMENT '单次重置操作批次 UUID',
+    week_tag                 VARCHAR(16)  NOT NULL,
+    archived_at              DATETIME     NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    operator_id              BIGINT       NULL COMMENT '管理员用户 ID',
+    original_match_result_id BIGINT       NULL COMMENT '删除前 t_moment_match_result.id',
+    pool                     VARCHAR(8)   NOT NULL,
+    user_id_a                BIGINT       NOT NULL,
+    user_id_b                BIGINT       NOT NULL,
+    total_score              DECIMAL(5,2) NULL,
+    result_created_at        DATETIME     NULL,
+    content_snapshot_json    LONGTEXT     NULL COMMENT 't_moment_match_result_content 行 JSON 快照',
+    INDEX idx_week_archived (week_tag, archived_at),
+    INDEX idx_batch (snapshot_batch_id)
+) COMMENT '心动时刻：重置本周前的匹配结果快照（审计，V51）';
 
 CREATE TABLE IF NOT EXISTS t_moment_match_confirm (
     id              BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -463,20 +494,25 @@ CREATE TABLE IF NOT EXISTS t_moment_match_config (
     prioritize_offset   INT NOT NULL DEFAULT 10 COMMENT '优先匹配阈值减免',
     priority_offset     INT NOT NULL DEFAULT 5 COMMENT '优先权单次阈值减免',
     priority_max_stack  INT NOT NULL DEFAULT 2 COMMENT '优先权最大叠加次数',
+    eligible_top_k      INT NOT NULL DEFAULT 400 COMMENT '每人进入图的最大 eligible 边数 Top-K',
     auto_match_enabled  TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否开启每周自动匹配',
     auto_match_day_of_week TINYINT NOT NULL DEFAULT 1 COMMENT '每周几触发(1=周一..7=周日)',
     auto_match_time     VARCHAR(5) NOT NULL DEFAULT '16:00' COMMENT '触发时间(24h HH:mm)',
+    auto_publish_enabled TINYINT(1) NOT NULL DEFAULT 0 COMMENT '是否自动公布匹配结果',
+    auto_publish_day_of_week TINYINT NOT NULL DEFAULT 5 COMMENT '自动公布周几(1=周一..7=周日)',
+    auto_publish_time   VARCHAR(8) NOT NULL DEFAULT '12:00' COMMENT '自动公布时刻 HH:mm(北京时间)',
     created_at          DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at          DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 ) COMMENT '心动时刻匹配配置';
 
-INSERT INTO t_moment_match_config (id, base_threshold, prioritize_offset, priority_offset, priority_max_stack)
-VALUES (1, 60, 10, 5, 2)
+INSERT INTO t_moment_match_config (id, base_threshold, prioritize_offset, priority_offset, priority_max_stack, eligible_top_k)
+VALUES (1, 70, 10, 5, 2, 400)
 ON DUPLICATE KEY UPDATE
     base_threshold = VALUES(base_threshold),
     prioritize_offset = VALUES(prioritize_offset),
     priority_offset = VALUES(priority_offset),
-    priority_max_stack = VALUES(priority_max_stack);
+    priority_max_stack = VALUES(priority_max_stack),
+    eligible_top_k = VALUES(eligible_top_k);
 
 CREATE TABLE IF NOT EXISTS t_moment_pair_score (
     id                    BIGINT PRIMARY KEY AUTO_INCREMENT,
@@ -506,16 +542,59 @@ CREATE TABLE IF NOT EXISTS t_moment_pair_score (
 
 CREATE TABLE IF NOT EXISTS t_moment_activity_week (
     id               BIGINT PRIMARY KEY AUTO_INCREMENT,
-    week_tag         VARCHAR(10) NOT NULL COMMENT '活动周标识，如 2026-W10',
-    status           VARCHAR(20) NOT NULL DEFAULT 'ENROLLING' COMMENT 'ENROLLING/WAITING_MATCH/RESULT_READY',
+    week_tag         VARCHAR(16) NOT NULL COMMENT '活动周标识，如 2026-W10',
+    status           VARCHAR(20) NOT NULL DEFAULT 'ENROLLING' COMMENT 'ENROLLING/WAITING_MATCH/MATCHING/AI_ANALYZING/RESULT_READY/PUBLISHED/FAILED',
     enrollment_open  TINYINT(1) NOT NULL DEFAULT 1 COMMENT '是否允许继续报名',
     auto_match_at    DATETIME DEFAULT NULL COMMENT '本周自动匹配调度实际执行时间',
     closed_at        DATETIME DEFAULT NULL COMMENT '报名截止时间',
     matched_at       DATETIME DEFAULT NULL COMMENT '结果生成时间',
+    error_message    VARCHAR(1000) DEFAULT NULL COMMENT 'MATCHING/AI 失败信息',
+    published_at     DATETIME DEFAULT NULL COMMENT '对用户公布时间',
     created_at       DATETIME DEFAULT CURRENT_TIMESTAMP,
     updated_at       DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
     UNIQUE KEY uk_week_tag (week_tag)
-) COMMENT '心动时刻每周活动状态';
+) COMMENT '心动时刻每周活动状态（V49 扩展状态机）';
+
+CREATE TABLE IF NOT EXISTS t_moment_reject_summary (
+  id                        BIGINT PRIMARY KEY AUTO_INCREMENT,
+  week_tag                  VARCHAR(16) NOT NULL,
+  pool                      VARCHAR(8) NOT NULL,
+  hard_filter_count         INT NOT NULL DEFAULT 0,
+  hard_filter_reason_dist   JSON NULL,
+  below_threshold_count     INT NOT NULL DEFAULT 0,
+  score_distribution        JSON NULL COMMENT '11 桶',
+  soft_penalty_reason_dist  JSON NULL,
+  created_at                DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at                DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_reject_week_pool (week_tag, pool)
+) COMMENT '心动时刻硬筛/阈值拒绝聚合（V49）';
+
+CREATE TABLE IF NOT EXISTS t_moment_user_pool_best (
+  id                   BIGINT PRIMARY KEY AUTO_INCREMENT,
+  week_tag             VARCHAR(16) NOT NULL,
+  pool                 VARCHAR(8) NOT NULL,
+  user_id              BIGINT NOT NULL,
+  max_eligible_score   DECIMAL(6,2) NULL,
+  has_any_eligible     TINYINT(1) NOT NULL DEFAULT 0,
+  tier2_truncated      TINYINT(1) NOT NULL DEFAULT 0,
+  created_at           DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at           DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  UNIQUE KEY uk_user_pool_best (week_tag, pool, user_id),
+  INDEX idx_week_pool (week_tag, pool)
+) COMMENT '心动时刻用户在某池 eligible 最高分（V49）';
+
+CREATE TABLE IF NOT EXISTS t_moment_ai_analysis_task (
+  id              BIGINT PRIMARY KEY AUTO_INCREMENT,
+  week_tag        VARCHAR(16) NOT NULL,
+  match_result_id BIGINT NOT NULL,
+  status          TINYINT NOT NULL DEFAULT 0 COMMENT '0待处理 1处理中 2完成 3失败',
+  retry_count     INT NOT NULL DEFAULT 0,
+  error_msg       VARCHAR(1000) NULL,
+  created_at      DATETIME DEFAULT CURRENT_TIMESTAMP,
+  updated_at      DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+  INDEX idx_week_status (week_tag, status),
+  INDEX idx_match_result (match_result_id)
+) COMMENT '心动时刻长文 AI 分析任务（V49）';
 
 CREATE TABLE IF NOT EXISTS t_moment_admin_log (
     id           BIGINT PRIMARY KEY AUTO_INCREMENT,

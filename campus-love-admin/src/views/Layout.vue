@@ -41,7 +41,7 @@
         </el-sub-menu>
         <el-menu-item index="/ai-token-stats">
           <el-icon><TrendCharts /></el-icon>
-          <span>AI Token 统计</span>
+          <span>AI 用量统计</span>
         </el-menu-item>
         <el-menu-item index="/reports">
           <el-icon><Flag /></el-icon>
@@ -90,7 +90,7 @@ const currentTitle = computed(() => {
     '/moment/logs': '心动时刻操作日志',
     '/moment/dashboard': '心动时刻匹配看板',
     '/moment/config': '心动时刻匹配配置',
-    '/ai-token-stats': 'AI Token 统计',
+    '/ai-token-stats': 'AI 用量统计',
     '/reports': '举报管理',
     '/announcements': '全站公告',
   }

@@ -191,6 +191,13 @@
           </template>
         </el-input>
       </div>
+      <p
+        v-if="iceBreakStatus?.canShow && !iceBreakStatus.targetEnabled"
+        class="ice-break-disabled-hint"
+        role="note"
+      >
+        对方暂未允许您获取破冰灵感；请 TA 在上方打开「允许TA获取破冰灵感」后即可使用
+      </p>
     </div>
   </div>
 </template>
@@ -932,6 +939,20 @@ async function handleMediaSelect(e: Event) {
 
   .ice-break-allow-label {
     flex: 1;
+  }
+}
+
+.ice-break-disabled-hint {
+  margin: 8px 0 0;
+  padding: 0 4px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: $text-muted;
+}
+
+@media (min-width: 768px) {
+  .ice-break-disabled-hint {
+    display: none;
   }
 }
 

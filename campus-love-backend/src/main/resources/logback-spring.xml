@@ -16,6 +16,8 @@
 
     <!-- 应用包日志 -->
     <logger name="com.campus.love" level="INFO"/>
+    <!-- MyBatis（Slf4jImpl）：SQL 明细为 DEBUG，默认 root=INFO 即不刷屏；调 SQL 时可对具体 mapper 包开 DEBUG -->
+    <logger name="org.apache.ibatis" level="INFO"/>
     <!-- 降低 Spring 框架日志噪音 -->
     <logger name="org.springframework" level="WARN"/>
     <logger name="org.springframework.security" level="WARN"/>

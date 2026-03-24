@@ -104,12 +104,28 @@ public class MomentController {
 
     // ==================== 管理员接口 ====================
 
-    @Operation(summary = "管理员触发匹配（自动截止报名 → 执行匹配 → 结果立即可见）")
+    @Operation(summary = "管理员触发匹配（异步：匹配落库 → AI 分析 → RESULT_READY 可预览）")
     @PostMapping("/admin/trigger")
     public Result<Map<String, Object>> triggerMatching(
             @RequestParam(value = "weekTag", required = false) String weekTag) {
         requireAdmin();
         return Result.success(momentAdminService.triggerMatching(weekTag, momentService.getCurrentWeekTag(), CurrentUser.getId()));
+    }
+
+    @Operation(summary = "管理员公布匹配结果（RESULT_READY → PUBLISHED，用户端可见）")
+    @PostMapping("/admin/publish")
+    public Result<Map<String, Object>> publishResult(
+            @RequestParam(value = "weekTag", required = false) String weekTag) {
+        requireAdmin();
+        return Result.success(momentAdminService.publishResult(weekTag, momentService.getCurrentWeekTag(), CurrentUser.getId()));
+    }
+
+    @Operation(summary = "匹配与 AI 进度（管理端轮询）")
+    @GetMapping("/admin/match/progress")
+    public Result<Map<String, Object>> getMatchProgress(
+            @RequestParam(value = "weekTag", required = false) String weekTag) {
+        requireAdmin();
+        return Result.success(momentAdminService.getMatchProgress(weekTag, momentService.getCurrentWeekTag()));
     }
 
     @Operation(summary = "管理员手动截止报名")
@@ -160,9 +176,13 @@ public class MomentController {
         config.setPrioritizeOffset(request.getPrioritizeOffset());
         config.setPriorityOffset(request.getPriorityOffset());
         config.setPriorityMaxStack(request.getPriorityMaxStack());
+        config.setEligibleTopK(request.getEligibleTopK());
         config.setAutoMatchEnabled(request.getAutoMatchEnabled());
         config.setAutoMatchDayOfWeek(request.getAutoMatchDayOfWeek());
         config.setAutoMatchTime(request.getAutoMatchTime());
+        config.setAutoPublishEnabled(request.getAutoPublishEnabled());
+        config.setAutoPublishDayOfWeek(request.getAutoPublishDayOfWeek());
+        config.setAutoPublishTime(request.getAutoPublishTime());
         return Result.success(momentMatchConfigService.saveConfig(config));
     }
 
@@ -199,10 +219,12 @@ public class MomentController {
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(value = "weekTag", required = false) String weekTag,
             @RequestParam(value = "pool", required = false) String pool,
+            @RequestParam(value = "gender", required = false) Integer gender,
             @RequestParam(value = "status", required = false) String status,
             @RequestParam(value = "keyword", required = false) String keyword) {
         requireAdmin();
-        return Result.success(momentAdminService.listEnrollments(page, size, weekTag, pool, status, keyword));
+        String wt = (weekTag == null || weekTag.isBlank()) ? momentService.getCurrentWeekTag() : weekTag;
+        return Result.success(momentAdminService.listEnrollments(page, size, wt, pool, gender, status, keyword));
     }
 
     @Operation(summary = "移除指定用户本周报名")
@@ -224,7 +246,8 @@ public class MomentController {
             @RequestParam(value = "pool", required = false) String pool,
             @RequestParam(value = "keyword", required = false) String keyword) {
         requireAdmin();
-        return Result.success(momentAdminService.listResults(page, size, weekTag, pool, keyword));
+        String wt = (weekTag == null || weekTag.isBlank()) ? momentService.getCurrentWeekTag() : weekTag;
+        return Result.success(momentAdminService.listResults(page, size, wt, pool, keyword));
     }
 
     @Operation(summary = "获取心动时刻匹配结果详情")
@@ -242,6 +265,7 @@ public class MomentController {
             @RequestParam(value = "weekTag", required = false) String weekTag,
             @RequestParam(value = "actionType", required = false) String actionType) {
         requireAdmin();
-        return Result.success(momentAdminService.listLogs(page, size, weekTag, actionType));
+        String wt = (weekTag == null || weekTag.isBlank()) ? momentService.getCurrentWeekTag() : weekTag;
+        return Result.success(momentAdminService.listLogs(page, size, wt, actionType));
     }
 }

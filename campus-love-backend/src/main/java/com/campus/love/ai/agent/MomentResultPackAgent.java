@@ -48,6 +48,25 @@ public class MomentResultPackAgent {
     private final AiService aiService;
     private final ObjectMapper objectMapper;
 
+    /**
+     * 与 LLM 无关的规则/模板生成（用于匹配落库阶段，避免阻塞在同步大模型调用上）。
+     */
+    public ResultPack buildRuleBasedPack(
+            User userA,
+            User userB,
+            MomentProfile profileA,
+            MomentProfile profileB,
+            UserPortrait portraitA,
+            UserPortrait portraitB,
+            List<String> complementaryModes,
+            List<String> softPenaltyReasons
+    ) {
+        List<String> commonInterests = MomentPromptHelper.commonInterestNames(portraitA, userA, portraitB, userB, 3);
+        List<String> interestsA = MomentPromptHelper.interestNames(portraitA, userA, 3);
+        List<String> interestsB = MomentPromptHelper.interestNames(portraitB, userB, 3);
+        return fallback(complementaryModes, commonInterests, softPenaltyReasons, userA, userB, profileA, profileB, interestsA, interestsB);
+    }
+
     public ResultPack generate(
             User userA,
             User userB,

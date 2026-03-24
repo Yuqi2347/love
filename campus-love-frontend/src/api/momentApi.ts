@@ -9,6 +9,10 @@ export interface MomentStatusResponse {
   participantCount: number
   enrollmentOpen: boolean
   matchedTitle?: string | null
+  /** 与后端 t_moment_activity_week.status 一致；用户可看详情需 PUBLISHED */
+  weekStatus?: string | null
+  /** 本期预计周五 12:00（北京时间）揭晓时刻，毫秒时间戳；实际以管理员发布为准 */
+  revealAtEpochMillis?: number | null
 }
 
 export interface MomentEnrollRequest {

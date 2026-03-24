@@ -18,8 +18,13 @@ public final class MomentPromptHelper {
     private MomentPromptHelper() {
     }
 
+    /** switch 前归一化，避免 null 触发 String.hashCode NPE */
+    private static String nz(String code) {
+        return code == null ? "" : code.trim();
+    }
+
     public static String socialStyle(String code) {
-        return switch (code) {
+        return switch (nz(code)) {
             case "A" -> "热闹充电型";
             case "B" -> "深度小圈型";
             case "C" -> "灵活切换型";
@@ -28,7 +33,7 @@ public final class MomentPromptHelper {
     }
 
     public static String lifeRhythm(String code) {
-        return switch (code) {
+        return switch (nz(code)) {
             case "A" -> "计划型";
             case "B" -> "随性型";
             case "C" -> "半规半随型";
@@ -38,7 +43,7 @@ public final class MomentPromptHelper {
     }
 
     public static String personalityBase(String code) {
-        return switch (code) {
+        return switch (nz(code)) {
             case "A" -> "外向活泼";
             case "B" -> "内向安静";
             case "C" -> "多变切换";
@@ -47,7 +52,7 @@ public final class MomentPromptHelper {
     }
 
     public static String campusFocus(String code) {
-        return switch (code) {
+        return switch (nz(code)) {
             case "A" -> "学业至上";
             case "B" -> "社交为主";
             case "C" -> "兴趣优先";
@@ -57,7 +62,7 @@ public final class MomentPromptHelper {
     }
 
     public static String emotionStyle(String code) {
-        return switch (code) {
+        return switch (nz(code)) {
             case "A" -> "外放型";
             case "B" -> "内收型";
             case "C" -> "选择性表达";
@@ -66,7 +71,7 @@ public final class MomentPromptHelper {
     }
 
     public static String companionshipStyle(String code) {
-        return switch (code) {
+        return switch (nz(code)) {
             case "A" -> "形影不离";
             case "B" -> "各自空间";
             case "C" -> "视情况而定";
@@ -75,7 +80,7 @@ public final class MomentPromptHelper {
     }
 
     public static String dateStyle(String code) {
-        return switch (code) {
+        return switch (nz(code)) {
             case "A" -> "户外探索型";
             case "B" -> "室内舒适型";
             case "C" -> "校园日常型";
@@ -85,7 +90,7 @@ public final class MomentPromptHelper {
     }
 
     public static String intimacyPace(String code) {
-        return switch (code) {
+        return switch (nz(code)) {
             case "A" -> "迅速升温型";
             case "B" -> "慢热型";
             case "C" -> "随缘配合型";
@@ -94,7 +99,7 @@ public final class MomentPromptHelper {
     }
 
     public static String futureLifestyle(String code) {
-        return switch (code) {
+        return switch (nz(code)) {
             case "A" -> "安稳陪伴型";
             case "B" -> "自由探索型";
             case "C" -> "边走边看型";
@@ -103,7 +108,7 @@ public final class MomentPromptHelper {
     }
 
     public static String dateSceneTypeLabel(String sceneType) {
-        return switch (sceneType) {
+        return switch (nz(sceneType)) {
             case "OUTDOOR" -> "轻互动熟悉型";
             case "INDOOR" -> "轻松聊天型";
             case "CAMPUS_DAILY" -> "校园安全感型";

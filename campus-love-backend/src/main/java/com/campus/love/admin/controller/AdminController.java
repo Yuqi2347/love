@@ -110,7 +110,7 @@ public class AdminController {
         return Result.success(adminService.getDashboardStats());
     }
 
-    @Operation(summary = "AI Token 消耗统计（缘分解析）")
+    @Operation(summary = "AI 用量统计（全站）")
     @GetMapping("/ai/token-stats")
     public Result<AiTokenStatsService.AiTokenStats> aiTokenStats(
             @RequestParam(defaultValue = "week") String range) {

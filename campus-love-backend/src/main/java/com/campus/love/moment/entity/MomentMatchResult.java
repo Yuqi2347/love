@@ -18,22 +18,6 @@ public class MomentMatchResult {
     private Long userIdA;
     private Long userIdB;
     private BigDecimal totalScore;
-    private String scoreDetail;
-    private String yuanfenTitle;
-    private String complementaryModes;
-    private String softPenaltyReasons;
-    private String dateSceneType;
-    @TableField("insight_card_1")
-    private String insightCard1;
-    @TableField("insight_card_2")
-    private String insightCard2;
-    @TableField("insight_card_3")
-    private String insightCard3;
-    private String goldenSentence;
-    private String dimensionLabels;
-    private String aboutUserA;
-    private String aboutUserB;
-    private String datePrepJson;
 
     @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createdAt;

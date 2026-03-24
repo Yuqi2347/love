@@ -13,28 +13,28 @@ public final class MomentPersonalityMatrix {
     private static final int DEFAULT_SCORE = 60;
 
     private static final Map<String, Map<String, Integer>> SOCIAL_STYLE = Map.of(
-            "A", Map.of("A", 100, "B", 88, "C", 76),
-            "B", Map.of("A", 88, "B", 100, "C", 78),
-            "C", Map.of("A", 76, "B", 78, "C", 100)
+            "A", Map.of("A", 100, "B", 78, "C", 46),
+            "B", Map.of("A", 78, "B", 100, "C", 54),
+            "C", Map.of("A", 46, "B", 54, "C", 100)
     );
 
     private static final Map<String, Map<String, Integer>> LIFE_RHYTHM = Map.of(
-            "A", Map.of("A", 100, "B", 35, "C", 72, "D", 20),
-            "B", Map.of("A", 35, "B", 100, "C", 72, "D", 30),
-            "C", Map.of("A", 72, "B", 72, "C", 100, "D", 68),
-            "D", Map.of("A", 20, "B", 30, "C", 68, "D", 100)
+            "A", Map.of("A", 100, "B", 28, "C", 58, "D", 12),
+            "B", Map.of("A", 28, "B", 100, "C", 62, "D", 18),
+            "C", Map.of("A", 58, "B", 62, "C", 100, "D", 54),
+            "D", Map.of("A", 12, "B", 18, "C", 54, "D", 100)
     );
 
     private static final Map<String, Map<String, Integer>> PERSONALITY_BASE = Map.of(
-            "A", Map.of("A", 100, "B", 86, "C", 72),
-            "B", Map.of("A", 86, "B", 100, "C", 74),
-            "C", Map.of("A", 72, "B", 74, "C", 100)
+            "A", Map.of("A", 100, "B", 80, "C", 48),
+            "B", Map.of("A", 80, "B", 100, "C", 56),
+            "C", Map.of("A", 48, "B", 56, "C", 100)
     );
 
     private static final Map<String, Map<String, Integer>> EMOTION_STYLE = Map.of(
-            "A", Map.of("A", 100, "B", 62, "C", 82),
-            "B", Map.of("A", 75, "B", 100, "C", 88),
-            "C", Map.of("A", 80, "B", 86, "C", 100)
+            "A", Map.of("A", 100, "B", 48, "C", 68),
+            "B", Map.of("A", 58, "B", 100, "C", 74),
+            "C", Map.of("A", 68, "B", 74, "C", 100)
     );
 
     private MomentPersonalityMatrix() {

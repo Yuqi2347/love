@@ -54,8 +54,8 @@
         class="source-select"
         @change="handleSourceChange"
       >
-        <el-option label="与我相关（含心动一对一）" value="related" />
         <el-option label="公共邀约" value="public" />
+        <el-option label="与我相关（含心动一对一）" value="related" />
         <el-option label="我发起的" value="created" />
         <el-option label="我加入的" value="joined" />
       </el-select>
@@ -301,7 +301,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue'
+import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useInviteStore } from '@/store/inviteStore'
 import { useBadgeStore } from '@/store/badgeStore'
@@ -340,7 +340,7 @@ const inviteStore = useInviteStore()
 const badgeStore = useBadgeStore()
 
 const activeTab = ref<string>('list')
-const inviteSource = ref<'related' | 'public' | 'created' | 'joined'>('related')
+const inviteSource = ref<'related' | 'public' | 'created' | 'joined'>('public')
 const inviteSort = ref<'recommend' | 'time'>('recommend')
 const filterType = ref<string>()
 const filterStatus = ref<string>()
@@ -354,6 +354,7 @@ const historyType = ref<'created' | 'joined'>('created')
 // 加载更多 sentinel
 const inviteSentinelRef = ref<HTMLElement>()
 let inviteObserver: IntersectionObserver | null = null
+let inviteSideEffectsBound = false
 
 // 手机端下拉刷新
 let iTouchStartY = 0
@@ -592,6 +593,24 @@ onMounted(() => {
   loadWaitList()
   loadHistory()
 
+  bindInviteSideEffects()
+})
+
+onUnmounted(() => {
+  unbindInviteSideEffects()
+})
+
+onActivated(() => {
+  bindInviteSideEffects()
+})
+
+onDeactivated(() => {
+  unbindInviteSideEffects()
+})
+
+function bindInviteSideEffects() {
+  if (inviteSideEffectsBound) return
+  inviteSideEffectsBound = true
   // IntersectionObserver：上划触底加载更多
   inviteObserver = new IntersectionObserver(
     (entries) => {
@@ -606,13 +625,16 @@ onMounted(() => {
   // 手机端下拉刷新
   document.addEventListener('touchstart', onInviteTouchStart, { passive: true })
   document.addEventListener('touchend', onInviteTouchEnd, { passive: true })
-})
+}
 
-onUnmounted(() => {
+function unbindInviteSideEffects() {
+  if (!inviteSideEffectsBound) return
+  inviteSideEffectsBound = false
   inviteObserver?.disconnect()
+  inviteObserver = null
   document.removeEventListener('touchstart', onInviteTouchStart)
   document.removeEventListener('touchend', onInviteTouchEnd)
-})
+}
 
 function onInviteTouchStart(e: TouchEvent) {
   iTouchStartY = e.touches[0]?.clientY ?? 0

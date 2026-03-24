@@ -175,7 +175,7 @@
                 <button class="text-action" @click="goChat">去打招呼</button>
               </div>
               <p v-if="result.confirmStatus === 'BOTH_YUE' && result.datePrepUnlocked" class="decision-card__four-hint">
-                第四屏已解锁：除约会准备外，还可与 TA 完成「三步约会协商」；点「开始三步协商」时会自动互关，无需先手动关注。
+                第四屏已解锁：进入后将加载 AI 约会建议，并与「三步约会协商」一起展示（双方已互关）。
               </p>
             </article>
           </div>
@@ -192,7 +192,7 @@
           <header class="sheet-header">
             <span class="sheet-badge">第四屏</span>
             <h2>去见 TA</h2>
-            <p>AI 约会方式推荐生成后，可进行三步协商；你可先独立完成选项，无需等对方点击开始。</p>
+            <p>下方先展示 AI 约会建议，同步可进行三步协商；你可先独立完成选项，无需等对方。</p>
           </header>
 
           <div v-if="!result.datePrepUnlocked" class="locked-card">
@@ -252,7 +252,6 @@
             <PairDateNegotiationCore
               v-if="pairNegotiationEmbedVisible"
               embed
-              auto-start-yue
               :match-result-id="result.matchResultId!"
               :target-user-id="result.matchedUserId!"
             />
@@ -315,11 +314,10 @@ const choiceLocked = computed(() => {
     || result.value.confirmStatus === 'TIMEOUT_GUANZHU'
 })
 
-/** 第四屏嵌入「三步协商」：双方已选约起来；点「开始」时后端会自动互关 */
+/** 第四屏：约会准备加载完成后与三步协商同屏（后端已在双方约一下后创建协商） */
 const pairNegotiationEmbedVisible = computed(() => {
   const r = result.value
   if (!r?.datePrepUnlocked) return false
-  if (r.confirmStatus !== 'BOTH_YUE') return false
   if (!r.matchResultId || !r.matchedUserId) return false
   return true
 })

@@ -66,6 +66,52 @@ public class PairDateService {
     private final RedisTemplate<String, Object> redisTemplate;
     private final MomentPairInviteService momentPairInviteService;
 
+    /**
+     * 双方在心动物第三屏均选「约一下」后由心动模块调用；拉取约会准备时也可幂等补全。
+     * 互关、双方意向、创建协商行（与 {@link #yue(Long)} 兼容，已存在非过期协商则跳过）。
+     */
+    @Transactional
+    public void ensureNegotiationReadyForMatch(Long matchResultId) {
+        MomentMatchResult match = matchResultMapper.selectById(matchResultId);
+        if (match == null) {
+            return;
+        }
+        Long uidA = match.getUserIdA();
+        Long uidB = match.getUserIdB();
+        followService.mutualFollow(uidA, uidB);
+
+        PairDateNegotiation existing = negotiationMapper.selectOne(
+                new LambdaQueryWrapper<PairDateNegotiation>().eq(PairDateNegotiation::getMatchResultId, matchResultId));
+        if (existing != null) {
+            if (PairDateStatus.EXPIRED.name().equals(existing.getStatus())) {
+                yueIntentMapper.delete(new LambdaQueryWrapper<MomentYueIntent>()
+                        .eq(MomentYueIntent::getMatchResultId, matchResultId));
+                negotiationMapper.deleteById(existing.getId());
+            } else if (PairDateStatus.TIME_MISMATCH.name().equals(existing.getStatus())) {
+                return;
+            } else {
+                return;
+            }
+        }
+
+        for (Long uid : List.of(uidA, uidB)) {
+            MomentYueIntent intent = new MomentYueIntent();
+            intent.setMatchResultId(matchResultId);
+            intent.setUserId(uid);
+            try {
+                yueIntentMapper.insert(intent);
+            } catch (DuplicateKeyException ignored) {
+                // 已记录意向
+            }
+        }
+
+        PairDateNegotiation neg = negotiationMapper.selectOne(
+                new LambdaQueryWrapper<PairDateNegotiation>().eq(PairDateNegotiation::getMatchResultId, matchResultId));
+        if (neg == null) {
+            createNegotiationRow(match, uidA);
+        }
+    }
+
     @Transactional
     public PairDateNegotiationVO yue(Long matchResultId) {
         Long me = CurrentUser.getId();

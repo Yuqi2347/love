@@ -36,16 +36,34 @@
         <p v-if="detail.timeMismatch" class="pd-muted pd-terminal__lead">
           这周空闲没有完全对上，约会方式与地点决定者如下；具体时间请私下商量。
         </p>
-        <p v-else class="pd-muted pd-terminal__lead">以下为系统根据双方选择生成的一对一邀约摘要，点击卡片可进入完整邀约页。</p>
+        <p v-else class="pd-muted pd-terminal__lead">以下为系统根据双方选择生成的一对一邀约摘要；请先启封邀请函，再查看详情或进入完整邀约页。</p>
 
-        <div
-          class="pd-invite-card"
-          :class="{ 'pd-invite-card--clickable': !!detail.pairInviteId }"
-          role="button"
-          :tabindex="detail.pairInviteId ? 0 : -1"
-          @click="onInviteCardClick"
-          @keyup.enter="onInviteCardClick"
-        >
+        <div class="pd-invite-shell">
+          <Transition name="pd-invite-switch" mode="out-in">
+            <button
+              v-if="!inviteRevealed"
+              key="env"
+              type="button"
+              class="pd-invite-envelope"
+              aria-label="启封 Campus Love 专属邀约"
+              @click="inviteRevealed = true"
+            >
+              <div class="pd-invite-envelope__frame" />
+              <div class="pd-invite-envelope__wax" aria-hidden="true">CL</div>
+              <p class="pd-invite-envelope__kicker">Campus Love</p>
+              <p class="pd-invite-envelope__title">专属邀约</p>
+              <p class="pd-invite-envelope__hint">轻触启封</p>
+            </button>
+            <div
+              v-else
+              key="card"
+              class="pd-invite-card"
+              :class="{ 'pd-invite-card--clickable': !!detail.pairInviteId }"
+              role="button"
+              :tabindex="detail.pairInviteId ? 0 : -1"
+              @click="onInviteCardClick"
+              @keyup.enter="onInviteCardClick"
+            >
           <div class="pd-invite-card__ribbon">🌸 Campus Love 专属邀约</div>
 
           <div class="pd-invite-row">
@@ -90,6 +108,7 @@
             <span class="pd-invite-field__k">地点</span>
             <span class="pd-invite-field__v">由 {{ displayInitiatorName }} 决定</span>
           </div>
+          <p class="pd-location-hint">请尽量提前一天通知 TA 具体地点哦~</p>
 
           <p v-if="detail.deciderReasonKey" class="pd-invite-reason">{{ reasonHint }}</p>
 
@@ -106,6 +125,8 @@
             本轮协商已结束，未生成可跳转的一对一邀约
           </div>
           <div v-else class="pd-invite-tap-hint pd-invite-tap-hint--muted">邀约记录同步中，请稍后下拉刷新本页</div>
+            </div>
+          </Transition>
         </div>
       </section>
 
@@ -236,6 +257,9 @@ const countdownText = ref('—')
 const countdownUrgent = ref(false)
 const clockOffset = ref(0)
 
+/** 协商完成页：先展示邀请函封套，点击后再展示邀约卡片 */
+const inviteRevealed = ref(false)
+
 const routeNegotiationId = computed(() => Number(route.params.negotiationId))
 
 const effectiveNegotiationId = computed(() => {
@@ -329,7 +353,7 @@ const reasonHint = computed(() => {
     B_DECIDES_A_FLEX: `${guest} 表示都可以，所以交给 ${ini} 来定啦 ✨`,
     A_DECIDES_B_PICKED_A: `一方愿意交给对方决定，另一方表示都可以，由 ${ini} 来定地点 🌟`,
     B_DECIDES_A_PICKED_B: `一方愿意交给对方决定，另一方表示都可以，由 ${ini} 来定地点 🌟`,
-    DICE_ROLL: '你们都想做决定，系统帮你们掷了个骰子 🎲',
+    DICE_ROLL: '你们的选择没有达成一致，系统帮你们掷了个骰子 🎲',
   }
   return map[k] || ''
 })
@@ -616,6 +640,13 @@ watch(waitingPartner, (w) => {
   else stopPolling()
 })
 
+watch(
+  () => detail.value?.id,
+  () => {
+    inviteRevealed.value = false
+  },
+)
+
 onMounted(async () => {
   if (!userStore.user) {
     await userStore.fetchProfile()
@@ -706,6 +737,119 @@ $muted: #8f7480;
 .pd-terminal__lead {
   margin: 0 0 16px;
   line-height: 1.55;
+}
+
+.pd-invite-shell {
+  min-height: 120px;
+}
+
+.pd-invite-switch-enter-active,
+.pd-invite-switch-leave-active {
+  transition: opacity 0.35s ease, transform 0.35s ease;
+}
+.pd-invite-switch-enter-from {
+  opacity: 0;
+  transform: scale(0.96) translateY(8px);
+}
+.pd-invite-switch-leave-to {
+  opacity: 0;
+  transform: scale(0.98) translateY(-6px);
+}
+
+.pd-invite-envelope {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 220px;
+  padding: 28px 20px;
+  border: none;
+  border-radius: 20px;
+  cursor: pointer;
+  text-align: center;
+  color: #4a2c34;
+  background:
+    linear-gradient(165deg, rgba(255, 252, 248, 0.98) 0%, rgba(250, 236, 240, 0.96) 45%, rgba(245, 228, 234, 0.98) 100%);
+  box-shadow:
+    0 10px 36px rgba(120, 60, 80, 0.14),
+    inset 0 1px 0 rgba(255, 255, 255, 0.85),
+    inset 0 -2px 0 rgba(180, 120, 140, 0.08);
+  border: 1px solid rgba(180, 130, 150, 0.35);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  font-family: inherit;
+}
+
+.pd-invite-envelope:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 16px 44px rgba(120, 60, 80, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+}
+
+.pd-invite-envelope:focus-visible {
+  outline: 2px solid rgba(215, 127, 162, 0.85);
+  outline-offset: 3px;
+}
+
+.pd-invite-envelope__frame {
+  position: absolute;
+  inset: 12px;
+  border-radius: 14px;
+  border: 1px solid rgba(200, 150, 165, 0.25);
+  pointer-events: none;
+}
+
+.pd-invite-envelope__wax {
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  color: #f5e6dc;
+  background: radial-gradient(circle at 30% 28%, #c76b7e 0%, #7d2f3f 55%, #4f1f2c 100%);
+  box-shadow:
+    0 4px 12px rgba(80, 30, 45, 0.35),
+    inset 0 2px 0 rgba(255, 255, 255, 0.2);
+  margin-bottom: 14px;
+  z-index: 1;
+}
+
+.pd-invite-envelope__kicker {
+  margin: 0;
+  font-size: 0.72rem;
+  letter-spacing: 0.35em;
+  text-transform: uppercase;
+  color: #8a5a66;
+  z-index: 1;
+}
+
+.pd-invite-envelope__title {
+  margin: 8px 0 4px;
+  font-size: 1.35rem;
+  font-weight: 700;
+  font-family: 'Noto Serif SC', 'Songti SC', serif;
+  color: #5c2a38;
+  z-index: 1;
+}
+
+.pd-invite-envelope__hint {
+  margin: 12px 0 0;
+  font-size: 0.82rem;
+  color: #9a6b78;
+  z-index: 1;
+}
+
+.pd-location-hint {
+  margin: 8px 0 0;
+  font-size: 0.8rem;
+  color: #a07082;
+  line-height: 1.45;
 }
 
 .pd-invite-card {
