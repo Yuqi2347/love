@@ -42,6 +42,8 @@ export interface FeedPost {
   avatarUrl: string | null
   content: string
   images: string | null
+  /** 列表缩略图 URL，与 images 同序；无则与主图相同或未返回 */
+  imageThumbs?: string | null
   videos: string | null
   /** 引用的邀约 ID */
   inviteId?: number | null

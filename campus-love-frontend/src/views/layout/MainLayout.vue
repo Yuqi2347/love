@@ -32,9 +32,16 @@
       </div>
     </aside>
 
-    <!-- Main Content -->
+    <!-- Main Content：keep-alive 仅缓存需保留滚动/列表态的页（与路由 meta.keepAlive 一致） -->
     <main class="content-area">
-      <router-view />
+      <router-view v-slot="{ Component, route }">
+        <keep-alive :include="['Discover', 'Invite']">
+          <component
+            :is="Component"
+            :key="route.meta.keepAlive ? String(route.name ?? route.path) : route.fullPath"
+          />
+        </keep-alive>
+      </router-view>
     </main>
 
     <!-- Right Panel -->
@@ -205,6 +212,7 @@
             <span>图片/视频</span>
           </button>
         </div>
+        <p class="media-hint">图片最多 {{ FEED_POST_MAX_IMAGES }} 张</p>
 
         <div class="invite-picker-row">
           <span class="invite-picker-label">关联邀约（可选）</span>
@@ -222,6 +230,17 @@
               :label="inviteOptionLabel(inv)"
               :value="inv.id"
             />
+          </el-select>
+        </div>
+
+        <div class="invite-picker-row">
+          <span class="invite-picker-label">可见范围</span>
+          <el-select v-model="timelinePostVisibility" placeholder="默认与隐私设置一致" style="width: 100%">
+            <el-option label="所有人" value="ALL" />
+            <el-option label="我关注的人可见" value="FOLLOWING" />
+            <el-option label="关注我的人可见" value="FOLLOWERS" />
+            <el-option label="朋友（互相关注）" value="FRIENDS" />
+            <el-option label="仅自己" value="SELF" />
           </el-select>
         </div>
       </div>
@@ -332,9 +351,14 @@ const topFollowedMatches = computed(() => {
 const { postDialogWidth, postTextareaRows } = usePostPublishDialogLayout()
 const showPostDialog = ref(false)
 const postContent = ref('')
+/** 侧栏发布（朋友圈 TIMELINE）可见范围，与个人主页隐私默认同步 */
+const timelinePostVisibility = ref<string>('ALL')
 
 watch(showPostDialog, (open) => {
-  if (open) void loadInvitesForFeedPicker()
+  if (open) {
+    void loadInvitesForFeedPicker()
+    timelinePostVisibility.value = userStore.user?.feedVisibility ?? 'ALL'
+  }
 })
 
 function inviteOptionLabel(inv: Invite) {
@@ -353,6 +377,9 @@ async function loadInvitesForFeedPicker() {
     loadingInvitesForFeed.value = false
   }
 }
+
+/** 与后端 FeedConstants.POST_IMAGES_MAX 一致 */
+const FEED_POST_MAX_IMAGES = 8
 
 // 多媒体上传状态
 const uploadedImages = ref<string[]>([])
@@ -567,6 +594,7 @@ async function handleCreatePost() {
       images: uploadedImages.value.length ? uploadedImages.value.join(',') : undefined,
       videos: uploadedVideos.value.length ? uploadedVideos.value.join(',') : undefined,
       inviteId: selectedInviteId.value,
+      visibility: timelinePostVisibility.value || 'ALL',
     })
     ElMessage.success('发布成功')
     showPostDialog.value = false
@@ -583,6 +611,7 @@ function resetPostForm() {
   uploadedImages.value = []
   uploadedVideos.value = []
   selectedInviteId.value = undefined
+  timelinePostVisibility.value = userStore.user?.feedVisibility ?? 'ALL'
 }
 
 // 图片上传
@@ -590,6 +619,14 @@ async function handleMediaSelect(e: Event) {
   const target = e.target as HTMLInputElement
   const files = target.files
   if (!files) return
+
+  let imageSlots = FEED_POST_MAX_IMAGES - uploadedImages.value.length
+  if (imageSlots <= 0) {
+    const hasImage = Array.from(files).some((f) => !f.type.startsWith('video/'))
+    if (hasImage) {
+      ElMessage.warning(`图片最多 ${FEED_POST_MAX_IMAGES} 张`)
+    }
+  }
 
   for (const file of Array.from(files)) {
     const isVideo = file.type.startsWith('video/')
@@ -608,6 +645,10 @@ async function handleMediaSelect(e: Event) {
         ElMessage.error('视频上传失败')
       }
     } else {
+      if (imageSlots <= 0) {
+        ElMessage.warning(`已达到 ${FEED_POST_MAX_IMAGES} 张图片上限`)
+        continue
+      }
       if (file.size > 25 * 1024 * 1024) {
         ElMessage.warning('单张图片不能超过 25MB')
         continue
@@ -617,7 +658,10 @@ async function handleMediaSelect(e: Event) {
         const toSend = await compressImageFile(file)
         const res = await uploadImage(toSend)
         const path = res.data.data
-        if (path) uploadedImages.value.push(path)
+        if (path) {
+          uploadedImages.value.push(path)
+          imageSlots--
+        }
         ElMessage.success('图片上传成功')
       } catch (err) {
         ElMessage.error('图片上传失败')
@@ -841,7 +885,13 @@ onMounted(loadInviteBoard)
 .media-actions {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
+}
+
+.media-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: $text-secondary;
 }
 
 .media-btn {

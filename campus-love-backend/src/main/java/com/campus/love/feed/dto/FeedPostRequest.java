@@ -28,6 +28,6 @@ public class FeedPostRequest {
      */
     private String postType;
 
-    /** 可见范围：ALL=所有人，FOLLOWERS=关注我的人，FRIENDS=朋友，SELF=仅自己，默认 ALL */
+    /** 可见范围：ALL / FOLLOWING(我关注的人) / FOLLOWERS(关注我的人) / FRIENDS(互关) / SELF；省略时用用户资料默认 */
     private String visibility;
 }

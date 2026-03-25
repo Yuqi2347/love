@@ -11,7 +11,7 @@
     <div v-if="post" class="post-preview">
       <div class="post-author">
         <img
-          :src="post.avatarUrl || defaultAvatar"
+          :src="getMediaUrl(post.avatarUrl) || defaultAvatar"
           class="avatar"
           @error="handleAvatarError"
         />
@@ -80,7 +80,7 @@ import { ref, computed, watch } from 'vue'
 import { ElMessage } from 'element-plus'
 import { getFollowingList, getFollowerList, type FollowUser } from '@/api/followApi'
 import { sharePost } from '@/api/feedApi'
-import { DEFAULT_AVATAR } from '@/utils/shared'
+import { DEFAULT_AVATAR, getMediaUrl } from '@/utils/shared'
 
 const defaultAvatar = DEFAULT_AVATAR
 
@@ -122,7 +122,7 @@ const truncatedContent = computed(() => {
 // 解析图片
 const postImages = computed(() => {
   if (!props.post?.images) return []
-  return props.post.images.split(',').filter(Boolean)
+  return props.post.images.split(',').map((s) => s.trim()).filter(Boolean).map((u) => getMediaUrl(u))
 })
 
 // 获取用户显示名称

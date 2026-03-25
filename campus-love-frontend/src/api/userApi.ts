@@ -24,6 +24,8 @@ export interface UserProfile {
   bazi: string | null
   baziUnknown?: boolean
   avatarUrl: string | null
+  /** 头像更新时间戳（毫秒），固定路径换图时供前端失效缓存 */
+  avatarUpdatedAt?: number | null
   bio: string | null
   /** 旧格式（兼容），新格式用 interestTags */
   interests?: string | null
@@ -40,6 +42,10 @@ export interface UserProfile {
   iceBreakEnabled?: boolean | null
   /** V24：AI 信息公开授权设置 JSON */
   aiDisclosureSettings?: string | null
+  /** 关注数（资料接口返回，他人主页不可拉名单） */
+  followingCount?: number
+  followerCount?: number
+  mutualCount?: number
 }
 
 export interface UpdateProfileParams {

@@ -13,7 +13,8 @@ import java.time.LocalTime;
 @TableName("t_user")
 public class User {
 
-    @TableId(type = IdType.AUTO)
+    /** 新用户为 8 位数字随机 id；历史数据可能为较小自增值 */
+    @TableId(type = IdType.INPUT)
     private Long id;
 
     private String email;

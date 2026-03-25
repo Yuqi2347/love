@@ -20,6 +20,7 @@ application-*.local.yml
 
 # Uploads (local dev)
 uploads/
+campus-love-backend/uploads/
 
 # Logs
 *.log

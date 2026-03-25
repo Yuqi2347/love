@@ -13,6 +13,13 @@ spring:
     username: ${DB_USERNAME:}
     password: ${DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
+    hikari:
+      # 2C4G 单实例：池子过大易挤占内存且徒增 DB 连接；与远程库同区时优先调 RTT，而非盲目加大 pool
+      maximum-pool-size: ${DB_POOL_MAX:12}
+      minimum-idle: ${DB_POOL_MIN_IDLE:2}
+      connection-timeout: 20000
+      idle-timeout: 600000
+      max-lifetime: 1800000
 
   flyway:
     enabled: ${SPRING_FLYWAY_ENABLED:true}
@@ -70,6 +77,11 @@ app:
   upload:
     path: ${APP_UPLOAD_PATH:${user.home}/campus-love/uploads/}
     max-size: 52428800
+  feed:
+    # 探索列表短期本地缓存（秒），0=关闭；多节点时每机独立，可配合 Redis 后续统一
+    discovery-cache-seconds: ${DISCOVERY_CACHE_SECONDS:20}
+    # 为 true 时每条 discovery 打一行分阶段耗时（ms），排查性能时打开
+    discovery-timing-log: ${DISCOVERY_TIMING_LOG:false}
   follow:
     daily-chat-limit: 5
     daily-invite-limit: 3

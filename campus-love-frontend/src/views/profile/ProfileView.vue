@@ -153,25 +153,39 @@
         <div class="relations-card-header">
           <div>
             <div class="relations-card-title">{{ isMe ? '我的关系' : `${profile?.nickname || 'TA'}的关系` }}</div>
-            <div class="relations-card-desc">查看关注、粉丝和朋友列表</div>
+            <div v-if="isMe" class="relations-card-desc">点击查看关注、粉丝和朋友列表</div>
           </div>
         </div>
         <div class="relations-grid">
-          <button type="button" class="relation-tile" @click="handleOpenFollowing">
+          <button v-if="isMe" type="button" class="relation-tile" @click="handleOpenFollowing">
             <span class="relation-count">{{ followingCount }}</span>
-            <span class="relation-label">我关注的</span>
+            <span class="relation-label">{{ relationFollowingLabel }}</span>
           </button>
-          <button type="button" class="relation-tile" @click="handleOpenFollowers">
+          <div v-else class="relation-tile relation-tile-static">
+            <span class="relation-count">{{ followingCount }}</span>
+            <span class="relation-label">{{ relationFollowingLabel }}</span>
+          </div>
+          <button v-if="isMe" type="button" class="relation-tile" @click="handleOpenFollowers">
             <div class="relation-count-group">
               <span class="relation-count">{{ followerCount }}</span>
-              <span v-if="isMe && newFollowerCount > 0" class="relation-new">+{{ newFollowerCount }}</span>
+              <span v-if="newFollowerCount > 0" class="relation-new">+{{ newFollowerCount }}</span>
             </div>
-            <span class="relation-label">关注我的</span>
+            <span class="relation-label">{{ relationFollowersLabel }}</span>
           </button>
-          <button type="button" class="relation-tile" @click="handleOpenMutual">
+          <div v-else class="relation-tile relation-tile-static">
+            <div class="relation-count-group">
+              <span class="relation-count">{{ followerCount }}</span>
+            </div>
+            <span class="relation-label">{{ relationFollowersLabel }}</span>
+          </div>
+          <button v-if="isMe" type="button" class="relation-tile" @click="handleOpenMutual">
             <span class="relation-count">{{ mutualCount }}</span>
-            <span class="relation-label">朋友</span>
+            <span class="relation-label">{{ relationMutualLabel }}</span>
           </button>
+          <div v-else class="relation-tile relation-tile-static">
+            <span class="relation-count">{{ mutualCount }}</span>
+            <span class="relation-label">{{ relationMutualLabel }}</span>
+          </div>
         </div>
       </div>
 
@@ -381,7 +395,7 @@
   <BaseModalShell v-model="showPrivacySettings" title="隐私设置" width="420px" max-body-height="70vh">
     <div class="privacy-settings-form">
       <div class="setting-item">
-        <div class="setting-label">谁可以看我的动态</div>
+        <div class="setting-label">谁可以看我的动态（新发默认）</div>
         <el-select v-model="feedVisibility" placeholder="请选择" class="privacy-select" @change="saveFeedVisibility">
           <el-option label="所有人可见" value="ALL" />
           <el-option label="我关注的人可见" value="FOLLOWING" />
@@ -391,7 +405,7 @@
         </el-select>
       </div>
       <div class="setting-item">
-        <div class="setting-label">可见时间</div>
+        <div class="setting-label">动态展示多久（他人看我主页/信息流时隐藏更早的帖）</div>
         <el-select v-model="feedVisibilityTime" placeholder="请选择" class="privacy-select" @change="saveFeedVisibilityTime">
           <el-option label="展示全部" :value="-1" />
           <el-option label="近三天" :value="3" />
@@ -408,9 +422,14 @@
           <el-icon><Lock /></el-icon> AI 信息授权
         </button>
       </div>
-      <div class="privacy-hint">
+      <div class="privacy-hint privacy-hint-block">
         <el-icon><InfoFilled /></el-icon>
-        <span>朋友表示与你互相关注的用户</span>
+        <div class="privacy-hint-text">
+          <p>「谁可以看我的动态」会作为你在<strong>探索页</strong>与<strong>侧栏发布</strong>时的默认可见范围；打开发布框时会自动带上，仍可单条修改。已发布的帖子<strong>不会</strong>随你改这里而批量变更，仍以发布时选的为准。</p>
+          <p>「可见时间」按帖子发布时间过滤，影响别人在主页/列表里能滑到多早以前的动态。</p>
+          <p>探索页「关注」Tab 展示互关好友的<strong>朋友圈 + 探索发布</strong>，仍遵守<strong>每条帖</strong>自己选的可见范围。</p>
+          <p>朋友 = 互相关注的用户。</p>
+        </div>
       </div>
     </div>
   </BaseModalShell>
@@ -501,7 +520,7 @@ import { useFollowStore } from '@/store/followStore'
 import { getUserProfile, updateFeedVisibility, updateFeedVisibilityTime, updateIceBreakEnabled, type UserProfile, type AiDisclosureSettings } from '@/api/userApi'
 import { getMatchDetail, type MatchResult } from '@/api/matchApi'
 import { getInviteStats, getUserInviteStats, type InviteStats } from '@/api/inviteApi'
-import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, getUserFollowing, getUserFollowers, setUserRemark, type FollowUser } from '@/api/followApi'
+import { followUser, unfollowUser, getFollowStatus, getFollowingList, getFollowerList, setUserRemark, type FollowUser } from '@/api/followApi'
 import { getUserPostsSummary } from '@/api/feedApi'
 import { ElMessage } from 'element-plus'
 import { Camera, ChatDotRound, Calendar, Setting, Edit, Lock, SwitchButton, InfoFilled, ArrowLeft, Picture, DataAnalysis } from '@element-plus/icons-vue'
@@ -556,6 +575,10 @@ const followStore = useFollowStore()
 
 const profileId = computed<number | null>(() => route.params.userId ? Number(route.params.userId) : (userStore.user?.id ?? null))
 const isMe = computed(() => profileId.value === userStore.user?.id)
+
+const relationFollowingLabel = computed(() => (isMe.value ? '我关注的' : 'TA关注的'))
+const relationFollowersLabel = computed(() => (isMe.value ? '关注我的' : '关注TA的'))
+const relationMutualLabel = computed(() => (isMe.value ? '朋友' : '互关'))
 
 // 当查看他人主页时显示返回按钮（通过路由参数判断非底部导航直接进入）
 const showBackButton = computed(() => !isMe.value || window.history.length > 1)
@@ -958,7 +981,11 @@ async function loadProfile() {
   if (followStore.followedIds.length === 0) followStore.loadFollowedIds()
   try {
     const res = await getUserProfile(profileId.value)
-    profile.value = res.data.data
+    const data = res.data.data
+    profile.value = data
+    followingCount.value = data.followingCount ?? 0
+    followerCount.value = data.followerCount ?? 0
+    mutualCount.value = data.mutualCount ?? 0
 
     // 加载邀约统计（成就与平均评分）
     try {
@@ -995,33 +1022,54 @@ async function loadProfile() {
       startCooldownTimer(0)
     }
 
-    // 最后加载关注/粉丝数量（独立处理，不影响其他数据）
-    loadFollowCounts()
     if (isMe.value) await badgeStore.fetchBadges()
   } catch (err) {
     console.error('loadProfile error:', err)
   }
 }
 
-// 独立函数加载关注/粉丝/朋友数量
+/** 本人弹窗内操作关注后，与资料上的数字对齐 */
 async function loadFollowCounts() {
+  if (!isMe.value || !profileId.value) return
   try {
-    const [fing, fers] = await Promise.all([
-      isMe.value ? getFollowingList() : getUserFollowing(profileId.value!),
-      isMe.value ? getFollowerList() : getUserFollowers(profileId.value!)
-    ])
+    const [fing, fers] = await Promise.all([getFollowingList(), getFollowerList()])
     const fingList = fing.data.data || []
     const fersList = fers.data.data || []
     followingCount.value = fingList.length
     followerCount.value = fersList.length
-    // 朋友即互相关注的人
     const fingIds = new Set(fingList.map(u => u.userId))
     mutualCount.value = fersList.filter(u => fingIds.has(u.userId)).length
+    if (profile.value) {
+      profile.value = {
+        ...profile.value,
+        followingCount: followingCount.value,
+        followerCount: followerCount.value,
+        mutualCount: mutualCount.value,
+      }
+    }
   } catch (err) {
     console.error('load follow/follower count error:', err)
-    followingCount.value = 0
-    followerCount.value = 0
-    mutualCount.value = 0
+  }
+}
+
+async function refreshRelationCountsFromServer() {
+  if (!profileId.value) return
+  try {
+    const res = await getUserProfile(profileId.value)
+    const d = res.data.data
+    followingCount.value = d.followingCount ?? 0
+    followerCount.value = d.followerCount ?? 0
+    mutualCount.value = d.mutualCount ?? 0
+    if (profile.value) {
+      profile.value = {
+        ...profile.value,
+        followingCount: d.followingCount,
+        followerCount: d.followerCount,
+        mutualCount: d.mutualCount,
+      }
+    }
+  } catch {
+    /* ignore */
   }
 }
 
@@ -1077,6 +1125,7 @@ async function handleFollowToggle() {
       followStatus.value = FollowStatus.NONE
       ElMessage.success('已取消关注')
     }
+    await refreshRelationCountsFromServer()
   } catch {
     ElMessage.error('操作失败')
   }
@@ -1141,21 +1190,21 @@ async function openRelationDialog(tab: RelationTab) {
 async function loadRelationTab(tab: RelationTab) {
   relationLoading.value = true
   try {
+    if (!isMe.value) {
+      return
+    }
     if (tab === 'following') {
-      const res = isMe.value ? await getFollowingList() : await getUserFollowing(profileId.value!)
+      const res = await getFollowingList()
       followingList.value = res.data.data || []
       return
     }
     if (tab === 'followers') {
-      if (isMe.value) await followStore.loadFollowedIds()
-      const res = isMe.value ? await getFollowerList() : await getUserFollowers(profileId.value!)
+      await followStore.loadFollowedIds()
+      const res = await getFollowerList()
       followerList.value = res.data.data || []
       return
     }
-    const [fing, fers] = await Promise.all([
-      isMe.value ? getFollowingList() : getUserFollowing(profileId.value!),
-      isMe.value ? getFollowerList() : getUserFollowers(profileId.value!)
-    ])
+    const [fing, fers] = await Promise.all([getFollowingList(), getFollowerList()])
     const fingList = fing.data.data || []
     const fersList = fers.data.data || []
     const fingIds = new Set(fingList.map(u => u.userId))
@@ -1794,6 +1843,18 @@ function getLevelByScore(score: number): number {
   }
 }
 
+/* 他人主页：仅展示数字，不可点进名单 */
+.relation-tile-static {
+  cursor: default;
+  pointer-events: none;
+
+  &:hover {
+    background: rgba(#ffffff, 0.72);
+    box-shadow: none;
+    transform: none;
+  }
+}
+
 .relation-count-group {
   display: inline-flex;
   align-items: baseline;
@@ -2289,6 +2350,23 @@ function getLevelByScore(score: number): number {
   .el-icon {
     color: $primary;
     flex-shrink: 0;
+  }
+}
+
+.privacy-hint-block {
+  align-items: flex-start;
+
+  .privacy-hint-text {
+    flex: 1;
+    line-height: 1.55;
+
+    p {
+      margin: 0 0 8px;
+
+      &:last-child {
+        margin-bottom: 0;
+      }
+    }
   }
 }
 

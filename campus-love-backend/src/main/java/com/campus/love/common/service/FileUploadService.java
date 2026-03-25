@@ -11,10 +11,12 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.StandardCopyOption;
+import java.util.Objects;
 import java.util.UUID;
 
 /**
- * 统一文件上传：图片在服务端压成 JPEG（长边≤1920）；视频在可用 ffmpeg 时转 H.264 MP4。
+ * 统一文件上传：按用户分子目录 {@code uploads/{userId}/}；图片在服务端压成 JPEG（长边≤1920）；
+ * 视频在可用 ffmpeg 时转 H.264 MP4。
  */
 @Slf4j
 @Service
@@ -31,9 +33,12 @@ public class FileUploadService {
 
     private static final int FEED_IMAGE_MAX_EDGE = 1920;
     private static final float FEED_JPEG_QUALITY = 0.82f;
+    private static final int FEED_THUMB_MAX_EDGE = 520;
+    private static final float FEED_THUMB_JPEG_QUALITY = 0.74f;
 
     public String uploadMedia(MultipartFile file, MediaType mediaType, long maxSizeBytes,
-                             String filenamePrefix, String defaultExt) throws IOException {
+                             Long ownerUserId, String filenamePrefix, String defaultExt) throws IOException {
+        Objects.requireNonNull(ownerUserId, "ownerUserId");
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("请选择文件");
         }
@@ -51,7 +56,7 @@ public class FileUploadService {
             throw new IllegalArgumentException(hint);
         }
 
-        File dir = getUploadDir();
+        File dir = resolveUserUploadDir(ownerUserId);
         String uuid = System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
 
         if (mediaType == MediaType.IMAGE) {
@@ -70,7 +75,8 @@ public class FileUploadService {
             }
             String filename = filenamePrefix + uuid + ext;
             Files.write(new File(dir, filename).toPath(), raw);
-            return "/uploads/" + filename;
+            writeFeedListThumbIfApplicable(dir, filenamePrefix, uuid, raw);
+            return publicUrl(ownerUserId, filename);
         }
 
         String ext = getFileExtension(file.getOriginalFilename(), contentType, mediaType);
@@ -88,27 +94,48 @@ public class FileUploadService {
             Files.move(srcTmp.toPath(), fallback.toPath(), StandardCopyOption.REPLACE_EXISTING);
             VideoTranscodeUtil.deleteQuietly(outMp4);
             log.info("Video stored without transcode: {}", fallbackName);
-            return "/uploads/" + fallbackName;
+            return publicUrl(ownerUserId, fallbackName);
         }
         VideoTranscodeUtil.deleteQuietly(srcTmp);
         log.info("Video transcoded to MP4: {}", outMp4.getName());
-        return "/uploads/" + outMp4.getName();
+        return publicUrl(ownerUserId, outMp4.getName());
     }
 
     /** 动态/聊天等图片：上传上限 25MB，落盘为压缩后 JPEG（或原 GIF/SVG 等） */
-    public String uploadImage(MultipartFile file, String filenamePrefix) throws IOException {
-        return uploadMedia(file, MediaType.IMAGE, 25L * 1024 * 1024, filenamePrefix, ".jpg");
+    public String uploadImage(MultipartFile file, Long ownerUserId, String filenamePrefix) throws IOException {
+        return uploadMedia(file, MediaType.IMAGE, 25L * 1024 * 1024, ownerUserId, filenamePrefix, ".jpg");
     }
 
-    public String uploadImage(MultipartFile file, String filenamePrefix, long maxSizeBytes) throws IOException {
-        return uploadMedia(file, MediaType.IMAGE, maxSizeBytes, filenamePrefix, ".jpg");
+    public String uploadImage(MultipartFile file, Long ownerUserId, String filenamePrefix, long maxSizeBytes) throws IOException {
+        return uploadMedia(file, MediaType.IMAGE, maxSizeBytes, ownerUserId, filenamePrefix, ".jpg");
     }
 
     /** 视频：上传上限 120MB，优先转码为压缩 MP4 */
-    public String uploadVideo(MultipartFile file, String filenamePrefix) throws IOException {
-        return uploadMedia(file, MediaType.VIDEO, 120L * 1024 * 1024, filenamePrefix, ".mp4");
+    public String uploadVideo(MultipartFile file, Long ownerUserId, String filenamePrefix) throws IOException {
+        return uploadMedia(file, MediaType.VIDEO, 120L * 1024 * 1024, ownerUserId, filenamePrefix, ".mp4");
     }
 
+    private static String publicUrl(Long userId, String filename) {
+        return "/uploads/" + userId + "/" + filename;
+    }
+
+    private void writeFeedListThumbIfApplicable(File dir, String filenamePrefix, String uuid, byte[] mainImageBytes) {
+        if (!"feed_img_".equals(filenamePrefix) || mainImageBytes == null || mainImageBytes.length == 0) {
+            return;
+        }
+        try {
+            byte[] thumb = ImageCompressionUtil.toCompressedJpeg(
+                    mainImageBytes, FEED_THUMB_MAX_EDGE, FEED_THUMB_JPEG_QUALITY);
+            if (thumb != null) {
+                String thumbName = "thumb_" + filenamePrefix + uuid + ".jpg";
+                Files.write(new File(dir, thumbName).toPath(), thumb);
+            }
+        } catch (Exception e) {
+            log.debug("Feed list thumb skipped: {}", e.getMessage());
+        }
+    }
+
+    /** 根上传目录（各用户子目录的父目录） */
     public File getUploadDir() {
         File dir = new File(uploadPath);
         if (!dir.isAbsolute()) {
@@ -116,6 +143,15 @@ public class FileUploadService {
         }
         if (!dir.exists()) {
             dir.mkdirs();
+        }
+        return dir;
+    }
+
+    private File resolveUserUploadDir(Long userId) {
+        File base = getUploadDir();
+        File dir = new File(base, String.valueOf(userId));
+        if (!dir.exists() && !dir.mkdirs()) {
+            throw new IllegalStateException("无法创建用户上传目录: " + dir.getAbsolutePath());
         }
         return dir;
     }

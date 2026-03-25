@@ -2,7 +2,9 @@ package com.campus.love.follow.controller;
 
 import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.enums.FollowStatusEnum;
+import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.Result;
+import com.campus.love.common.result.ResultCode;
 import com.campus.love.follow.dto.FollowResponse;
 import com.campus.love.follow.service.FollowService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -57,15 +59,21 @@ public class FollowController {
         return Result.success(followService.getFollowerList(CurrentUser.getId()));
     }
 
-    @Operation(summary = "获取指定用户的关注列表")
+    @Operation(summary = "获取指定用户的关注列表", description = "仅可查询本人；他人主页只展示数量见用户资料接口")
     @GetMapping("/user/{userId}/following")
     public Result<List<FollowResponse>> getUserFollowing(@PathVariable Long userId) {
+        if (!CurrentUser.getId().equals(userId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN);
+        }
         return Result.success(followService.getFollowingList(userId));
     }
 
-    @Operation(summary = "获取指定用户的粉丝列表")
+    @Operation(summary = "获取指定用户的粉丝列表", description = "仅可查询本人")
     @GetMapping("/user/{userId}/followers")
     public Result<List<FollowResponse>> getUserFollowers(@PathVariable Long userId) {
+        if (!CurrentUser.getId().equals(userId)) {
+            throw new BusinessException(ResultCode.FORBIDDEN);
+        }
         return Result.success(followService.getFollowerList(userId));
     }
 

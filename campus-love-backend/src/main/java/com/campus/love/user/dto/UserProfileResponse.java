@@ -31,6 +31,8 @@ public class UserProfileResponse {
     /** V1.1.0：不知道时辰时八字权重清零 */
     private Boolean baziUnknown;
     private String avatarUrl;
+    /** 头像二进制更新时间（毫秒时间戳），URL 固定为 /user/avatar/{id} 时用于前端区分换图 */
+    private Long avatarUpdatedAt;
     /** 个人主页背景图 URL */
     private String coverImageUrl;
     private String bio;
@@ -47,4 +49,10 @@ public class UserProfileResponse {
     private Boolean iceBreakEnabled;
     /** V24：AI 信息公开授权设置 JSON（仅本人） */
     private String aiDisclosureSettings;
+    /** 关注数（公开） */
+    private Integer followingCount;
+    /** 粉丝数（公开） */
+    private Integer followerCount;
+    /** 互关（朋友）数（公开） */
+    private Integer mutualCount;
 }

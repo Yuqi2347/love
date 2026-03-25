@@ -62,7 +62,7 @@
           <button
             :class="['tab-btn', { active: activeTab === 'following' }]"
             type="button"
-            title="互相关注好友的朋友圈动态（不含单向关注；与发现页发帖类型不同）"
+            title="互关好友的朋友圈 + 探索动态（按对方每条帖子的可见范围）"
             @click="switchTab('following')"
           >
             关注
@@ -107,7 +107,7 @@
 
     <!-- 刷新工具栏（推荐/关注 tab，仅 PC 显示） -->
     <div v-if="activeTab !== 'liked'" class="load-toolbar">
-      <button class="btn-refresh" :disabled="feedLoading" @click="refreshPosts">
+      <button class="btn-refresh" :disabled="feedLoading" @click="refreshDiscoverFromToolbar">
         <el-icon :class="{ spinning: feedLoading }"><Refresh /></el-icon>
         {{ feedLoading ? '加载中...' : '刷新' }}
       </button>
@@ -185,12 +185,13 @@
           </div>
           <div v-if="item.post.images" class="feed-images" @click.stop>
             <img
-              v-for="(img, idx) in item.post.images.split(',').slice(0, 3)"
+              v-for="(img, idx) in feedCardImagePaths(item.post).slice(0, 3)"
               :key="idx"
               :src="getMediaUrl(img)"
               class="feed-image"
               loading="lazy"
-              @click.stop="openImagePreview(item.post.images.split(',').map(i => getMediaUrl(i)), idx)"
+              @error="onFeedListImgError($event, item.post, idx)"
+              @click.stop="openImagePreview(fullFeedImageUrls(item.post), idx)"
             />
           </div>
           <!-- 视频展示 -->
@@ -285,6 +286,7 @@
               <span>图片/视频</span>
             </button>
           </div>
+          <p class="media-hint">图片最多 {{ FEED_POST_MAX_IMAGES }} 张</p>
         </div>
 
         <el-form-item label="关联邀约（可选）">
@@ -307,10 +309,11 @@
 
         <!-- 可见范围 -->
         <el-form-item label="可见范围">
-          <el-select v-model="postVisibility" placeholder="选择可见范围" style="width: 100%">
+          <el-select v-model="postVisibility" placeholder="默认与个人主页隐私一致，可改" style="width: 100%">
             <el-option label="所有人" value="ALL" />
-            <el-option label="关注我的人" value="FOLLOWERS" />
-            <el-option label="朋友" value="FRIENDS" />
+            <el-option label="我关注的人可见" value="FOLLOWING" />
+            <el-option label="关注我的人可见" value="FOLLOWERS" />
+            <el-option label="朋友（互相关注）" value="FRIENDS" />
             <el-option label="仅自己" value="SELF" />
           </el-select>
         </el-form-item>
@@ -369,6 +372,8 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'Discover' })
+
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
@@ -402,7 +407,7 @@ import { getInvitesForFeed } from '@/api/inviteApi'
 import { INVITE_TYPE_LABELS, InviteType } from '@/constants/inviteConst'
 import ShareDialog from '@/components/ShareDialog.vue'
 import AppAvatar from '@/components/AppAvatar.vue'
-import { DEFAULT_AVATAR, getMediaUrl, formatRelativeTime } from '@/utils/shared'
+import { DEFAULT_AVATAR, getMediaUrl, formatRelativeTime, feedCardImagePaths } from '@/utils/shared'
 import { compressImageFile } from '@/utils/mediaCompress'
 import { usePostPublishDialogLayout } from '@/composables/usePostPublishDialogLayout'
 
@@ -426,6 +431,29 @@ let userSearchTimer: ReturnType<typeof setTimeout> | null = null
 const previewImages = ref<string[]>([])
 const previewIndex = ref(0)
 const previewVisible = ref(false)
+
+function fullFeedImageUrls(post: FeedPost): string[] {
+  return (post.images || '')
+    .split(',')
+    .map((s) => getMediaUrl(s.trim()))
+    .filter(Boolean)
+}
+
+/** 缩略图 404（历史数据无 thumb_ 文件）时回退主图 */
+function onFeedListImgError(e: Event, post: FeedPost, idx: number) {
+  const el = e.target as HTMLImageElement
+  const parts = (post.images || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const fallback = parts[idx]
+  if (!fallback) return
+  const next = getMediaUrl(fallback)
+  if (el.src !== next) {
+    el.onerror = null
+    el.src = next
+  }
+}
 
 function openImagePreview(images: string[], index: number) {
   previewImages.value = images
@@ -483,6 +511,8 @@ const likedPosts = ref<FeedPost[]>([])
 const expandedPosts = ref<Map<number, boolean>>(new Map())
 // 文字内容折叠配置
 const CONTENT_MAX_LENGTH = 100
+/** 与后端 FeedConstants.POST_IMAGES_MAX 一致 */
+const FEED_POST_MAX_IMAGES = 8
 
 const levelInfo = ref<UserLevelInfo | null>(null)
 const searchKeyword = ref('')
@@ -529,7 +559,10 @@ const postVisibility = ref('ALL')
 const posting = ref(false)
 
 watch(showPostDialog, (open) => {
-  if (open) void loadInvitesForFeedPicker()
+  if (open) {
+    void loadInvitesForFeedPicker()
+    postVisibility.value = userStore.user?.feedVisibility ?? 'ALL'
+  }
 })
 
 function inviteOptionLabel(inv: Invite) {
@@ -620,6 +653,12 @@ function handleSortCommand(command: string | number | object) {
 }
 
 function doSearch() {
+  refreshPosts()
+}
+
+/** PC 工具栏「刷新」：与手机下拉刷新一致，回到推荐排序 */
+function refreshDiscoverFromToolbar() {
+  feedSort.value = 'recommend'
   refreshPosts()
 }
 
@@ -734,6 +773,8 @@ function onTouchEnd(e: TouchEvent) {
   if (delta > 80 && window.scrollY < 10 && !isPullRefreshing && !feedLoading.value) {
     isPullRefreshing = true
     pullRefreshVisible.value = true
+    // 下拉刷新视为「重新进页」：回到推荐排序（否则易停留在上次选的时间/热度）
+    feedSort.value = 'recommend'
     refreshPosts().finally(() => {
       pullRefreshVisible.value = false
     })
@@ -899,7 +940,7 @@ async function handlePost() {
 
 function resetPostForm() {
   postContent.value = ''
-  postVisibility.value = 'ALL'
+  postVisibility.value = userStore.user?.feedVisibility ?? 'ALL'
   uploadedImages.value = []
   uploadedVideos.value = []
   selectedInviteId.value = undefined
@@ -915,6 +956,14 @@ async function handleMediaSelect(e: Event) {
   const target = e.target as HTMLInputElement
   const files = target.files
   if (!files) return
+
+  let imageSlots = FEED_POST_MAX_IMAGES - uploadedImages.value.length
+  if (imageSlots <= 0) {
+    const hasImage = Array.from(files).some((f) => !f.type.startsWith('video/'))
+    if (hasImage) {
+      ElMessage.warning(`图片最多 ${FEED_POST_MAX_IMAGES} 张`)
+    }
+  }
 
   for (const file of Array.from(files)) {
     const isVideo = file.type.startsWith('video/')
@@ -933,6 +982,10 @@ async function handleMediaSelect(e: Event) {
         ElMessage.error('视频上传失败')
       }
     } else {
+      if (imageSlots <= 0) {
+        ElMessage.warning(`已达到 ${FEED_POST_MAX_IMAGES} 张图片上限`)
+        continue
+      }
       if (file.size > 25 * 1024 * 1024) {
         ElMessage.warning('单张图片不能超过 25MB')
         continue
@@ -942,7 +995,10 @@ async function handleMediaSelect(e: Event) {
         const toSend = await compressImageFile(file)
         const res = await uploadImage(toSend)
         const path = res.data.data
-        if (path) uploadedImages.value.push(path)
+        if (path) {
+          uploadedImages.value.push(path)
+          imageSlots--
+        }
         ElMessage.success('图片上传成功')
       } catch (err) {
         ElMessage.error('图片上传失败')
@@ -1765,7 +1821,13 @@ async function handlePinPost(post: FeedPost) {
 .media-actions {
   display: flex;
   gap: 8px;
-  margin-bottom: 12px;
+  margin-bottom: 4px;
+}
+
+.media-hint {
+  margin: 0 0 12px;
+  font-size: 12px;
+  color: $text-secondary;
 }
 
 .media-btn {

@@ -301,6 +301,8 @@
 </template>
 
 <script setup lang="ts">
+defineOptions({ name: 'Invite' })
+
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useInviteStore } from '@/store/inviteStore'

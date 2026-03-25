@@ -15,6 +15,8 @@ public class FeedPostResponse {
     private String avatarUrl;
     private String content;
     private String images;
+    /** 列表用缩略图 URL，逗号分隔，与 {@link #images} 同序；无缩略图时与主图相同或 null */
+    private String imageThumbs;
     private String videos;
 
     /** @deprecated 不再用于展示 */

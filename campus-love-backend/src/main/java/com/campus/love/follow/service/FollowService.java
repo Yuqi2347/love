@@ -113,6 +113,35 @@ public class FollowService {
         return isFollowed(userId2, userId1) && isFollowed(userId1, userId2);
     }
 
+    public int countFollowing(Long userId) {
+        if (userId == null) return 0;
+        Long c = followMapper.selectCount(new LambdaQueryWrapper<Follow>().eq(Follow::getFollowerId, userId));
+        return c == null ? 0 : c.intValue();
+    }
+
+    public int countFollowers(Long userId) {
+        if (userId == null) return 0;
+        Long c = followMapper.selectCount(new LambdaQueryWrapper<Follow>().eq(Follow::getFollowingId, userId));
+        return c == null ? 0 : c.intValue();
+    }
+
+    /** 互关人数（与 {@link #getMutualFriendList} 语义一致，不落库用户详情） */
+    public int countMutualFriends(Long userId) {
+        if (userId == null) return 0;
+        List<Follow> following = followMapper.selectList(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getFollowerId, userId));
+        Set<Long> followingIds = following.stream()
+                .map(Follow::getFollowingId)
+                .collect(Collectors.toSet());
+        List<Follow> followers = followMapper.selectList(
+                new LambdaQueryWrapper<Follow>().eq(Follow::getFollowingId, userId));
+        Set<Long> followerIds = followers.stream()
+                .map(Follow::getFollowerId)
+                .collect(Collectors.toSet());
+        followingIds.retainAll(followerIds);
+        return followingIds.size();
+    }
+
     public List<FollowResponse> getFollowingList(Long userId) {
         List<Follow> follows = followMapper.selectList(
                 new LambdaQueryWrapper<Follow>().eq(Follow::getFollowerId, userId));

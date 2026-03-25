@@ -467,7 +467,7 @@ public class MomentService {
 
     public String uploadPhoto(MultipartFile file) throws IOException {
         Long userId = CurrentUser.getId();
-        String photoUrl = fileUploadService.uploadImage(file, "moment_" + userId + "_");
+        String photoUrl = fileUploadService.uploadImage(file, userId, "moment_" + userId + "_");
 
         userMapper.update(null, new LambdaUpdateWrapper<User>()
                 .eq(User::getId, userId)

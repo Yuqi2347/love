@@ -26,7 +26,9 @@ import com.campus.love.feed.mapper.FeedCommentLikeMapper;
 import com.campus.love.feed.mapper.FeedCommentMapper;
 import com.campus.love.feed.mapper.FeedContentVectorMapper;
 import com.campus.love.feed.mapper.FeedLikeMapper;
+import com.campus.love.feed.cache.DiscoveryFeedResultCache;
 import com.campus.love.feed.mapper.FeedPostMapper;
+import com.campus.love.feed.util.FeedImageThumbPaths;
 import com.campus.love.follow.service.FollowService;
 import com.campus.love.profile.entity.UserProfileVector;
 import com.campus.love.profile.mapper.UserProfileVectorMapper;
@@ -40,6 +42,7 @@ import com.campus.love.user.service.ActivityService;
 import com.campus.love.chat.mapper.MessageMapper;
 import com.campus.love.chat.entity.Message;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -51,6 +54,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.time.LocalDateTime;
 import java.util.*;
 import java.time.temporal.ChronoUnit;
+import java.util.Locale;
 import java.util.stream.Collectors;
 
 import static java.util.stream.Collectors.toMap;
@@ -77,6 +81,10 @@ public class FeedService {
     private final UserProfileVectorMapper userProfileVectorMapper;
     private final InviteMapper inviteMapper;
     private final InviteQueryService inviteQueryService;
+    private final DiscoveryFeedResultCache discoveryFeedResultCache;
+
+    @Value("${app.feed.discovery-timing-log:false}")
+    private boolean discoveryTimingLog;
 
     /**
      * 创建朋友圈帖子
@@ -94,6 +102,7 @@ public class FeedService {
 
     private FeedPostResponse createPostInternal(FeedPostRequest request, String postType) {
         Long userId = CurrentUser.getId();
+        assertPostImagesWithinLimit(request.getImages());
         FeedPost post = new FeedPost();
         post.setUserId(userId);
         post.setContent(request.getContent());
@@ -108,7 +117,7 @@ public class FeedService {
             post.setInviteId(request.getInviteId());
         }
         post.setPostType(postType);
-        post.setVisibility(request.getVisibility() != null ? request.getVisibility() : VisibilityConstants.ALL);
+        post.setVisibility(resolvePostVisibility(userId, request.getVisibility()));
         post.setRequiredLevel(UserLevelConstants.getMinLevel());
         post.setLikeCount(0);
         post.setCommentCount(0);
@@ -123,6 +132,33 @@ public class FeedService {
         return toResponse(post, userId);
     }
 
+    /** 请求未带 visibility 时，用用户资料里的默认「谁可以看我的动态」 */
+    private String resolvePostVisibility(Long userId, String requestVisibility) {
+        if (requestVisibility != null && !requestVisibility.isBlank()) {
+            return requestVisibility.trim();
+        }
+        User u = userMapper.selectById(userId);
+        if (u != null && u.getFeedVisibility() != null && !u.getFeedVisibility().isBlank()) {
+            return u.getFeedVisibility().trim();
+        }
+        return VisibilityConstants.ALL;
+    }
+
+    private void assertPostImagesWithinLimit(String images) {
+        if (images == null || images.isBlank()) {
+            return;
+        }
+        int n = 0;
+        for (String part : images.split(",")) {
+            if (!part.trim().isEmpty()) {
+                n++;
+            }
+        }
+        if (n > FeedConstants.POST_IMAGES_MAX) {
+            throw new BusinessException(ResultCode.FEED_IMAGES_LIMIT);
+        }
+    }
+
     /**
      * 获取发现模块帖子列表
      * 只显示 DISCOVERY 类型的帖子
@@ -131,6 +167,14 @@ public class FeedService {
      */
     public List<FeedPostResponse> getDiscoveryPosts(int page, int size, String sort, String keyword) {
         Long currentUserId = CurrentUser.getId();
+        String sortNorm = sort == null ? "recommend" : sort.trim().toLowerCase(Locale.ROOT);
+        String kw = keyword == null ? "" : keyword.trim();
+        String cacheKey = (currentUserId != null ? currentUserId : 0L) + "|" + page + "|" + size + "|" + sortNorm + "|" + kw;
+        return discoveryFeedResultCache.getOrCompute(cacheKey, k -> loadDiscoveryPostsWithTiming(page, size, sort, keyword, currentUserId));
+    }
+
+    private List<FeedPostResponse> loadDiscoveryPostsWithTiming(int page, int size, String sort, String keyword, Long currentUserId) {
+        long t0 = System.nanoTime();
         boolean isRecommend = sort == null || "recommend".equalsIgnoreCase(sort);
 
         LambdaQueryWrapper<FeedPost> wrapper = new LambdaQueryWrapper<FeedPost>()
@@ -141,25 +185,41 @@ public class FeedService {
         }
 
         List<FeedPost> posts;
+        long msSql;
+        long msRank = 0;
         if (isRecommend) {
-            // 推荐排序：取较多的候选池，在 Java 层按兴趣标签打分后分页
             int candidateSize = Math.max(size * 5, 60);
             wrapper.last("ORDER BY pinned_at IS NOT NULL DESC, COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC LIMIT " + candidateSize);
+            long tSql0 = System.nanoTime();
             List<FeedPost> candidates = feedPostMapper.selectList(wrapper);
+            long tSql1 = System.nanoTime();
+            msSql = (tSql1 - tSql0) / 1_000_000L;
+            long tRank0 = System.nanoTime();
             User currentUser = userMapper.selectById(currentUserId);
             posts = rankByMultiFactor(candidates, currentUser, page, size);
+            msRank = (System.nanoTime() - tRank0) / 1_000_000L;
         } else {
             String orderClause = "hot".equalsIgnoreCase(sort)
                     ? "ORDER BY pinned_at IS NOT NULL DESC, (COALESCE(like_count,0) + COALESCE(comment_count,0)) DESC, COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC"
                     : "ORDER BY pinned_at IS NOT NULL DESC, COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC";
+            long tSql0 = System.nanoTime();
             posts = feedPostMapper.selectList(wrapper.last(orderClause + " LIMIT " + (page * size) + "," + size));
+            msSql = (System.nanoTime() - tSql0) / 1_000_000L;
         }
 
+        long tEnrich0 = System.nanoTime();
         Map<Long, User> authorMap = batchLoadAuthors(posts);
         Map<Long, InviteFeedCard> inviteCardMap = batchInviteCards(posts);
-        // 注意：勿在列表循环里对每条帖子 recordActivity + trackFeedView——会导致每帖约 4 次写库且反复 UPDATE t_user，
-        // 一次翻页就会把接口拖慢。浏览行为请在「帖子详情」等单条路径记录（见 getPostDetail 中的 trackFeedView）。
-        return toResponseListPosts(posts, currentUserId, authorMap, null, inviteCardMap);
+        List<FeedPostResponse> out = toResponseListPosts(posts, currentUserId, authorMap, null, inviteCardMap);
+        long msEnrich = (System.nanoTime() - tEnrich0) / 1_000_000L;
+        long msTotal = (System.nanoTime() - t0) / 1_000_000L;
+        if (discoveryTimingLog) {
+            log.info(
+                    "discovery_timing userId={} page={} size={} sort={} recommend={} ms_total={} ms_sql_posts={} ms_rank={} ms_list_enrich={} postsOut={}",
+                    currentUserId, page, size, sort == null ? "recommend" : sort, isRecommend,
+                    msTotal, msSql, msRank, msEnrich, out.size());
+        }
+        return out;
     }
 
     /**
@@ -301,8 +361,8 @@ public class FeedService {
     }
 
     /**
-     * 获取朋友圈动态流（互相关注用户的 TIMELINE 类型帖子）
-     * 根据作者的 feed_visibility 过滤：ALL=所有人，FOLLOWERS=仅粉丝，SELF=仅自己
+     * 获取「关注」流：互相关注用户发布的<strong>朋友圈</strong>与<strong>探索动态</strong>（按每条帖子的 visibility 过滤）。
+     * 作者个人资料里的「谁可以看我的动态」不直接改旧帖，仅作新发默认；时间范围仍用 feedVisibilityTime。
      * @param sort hot=按热度，time=按时间（默认）
      */
     public List<FeedPostResponse> getTimeline(int page, int size, String sort) {
@@ -312,7 +372,9 @@ public class FeedService {
 
         LambdaQueryWrapper<FeedPost> wrapper = new LambdaQueryWrapper<FeedPost>()
                 .in(FeedPost::getUserId, mutualIds)
-                .eq(FeedPost::getPostType, PostTypeConstants.TIMELINE);
+                .and(w -> w.eq(FeedPost::getPostType, PostTypeConstants.TIMELINE)
+                        .or()
+                        .eq(FeedPost::getPostType, PostTypeConstants.DISCOVERY));
         String orderClause = "hot".equalsIgnoreCase(sort)
                 ? "ORDER BY pinned_at IS NOT NULL DESC, (COALESCE(like_count,0) + COALESCE(comment_count,0)) DESC, COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC"
                 : "ORDER BY pinned_at IS NOT NULL DESC, COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC";
@@ -1040,16 +1102,25 @@ public class FeedService {
         return rows.stream().map(FeedCommentLike::getCommentId).collect(Collectors.toSet());
     }
 
-    /** 列表页：单帖评论窗口（与旧 toResponse 列表分支一致） */
-    private List<FeedComment> loadCommentsForListPage(Long postId, int commentLimit, String commentSort) {
-        LambdaQueryWrapper<FeedComment> commentWrapper = new LambdaQueryWrapper<FeedComment>()
-                .eq(FeedComment::getPostId, postId);
-        if ("hot".equalsIgnoreCase(commentSort)) {
-            commentWrapper.last("ORDER BY COALESCE(like_count,0) DESC, id DESC LIMIT " + commentLimit);
-        } else {
-            commentWrapper.last("ORDER BY COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC LIMIT " + commentLimit);
+    /** 列表页：多帖评论一次 SQL（窗口函数），再按 postId 分组 */
+    private Map<Long, List<FeedComment>> loadCommentsForListPageBatch(List<Long> postIds, int commentLimit, String commentSort) {
+        if (postIds == null || postIds.isEmpty()) {
+            return Map.of();
         }
-        return feedCommentMapper.selectList(commentWrapper);
+        boolean sortHot = "hot".equalsIgnoreCase(commentSort);
+        List<FeedComment> rows = feedCommentMapper.selectTopNPerPostForList(postIds, commentLimit, sortHot);
+        Map<Long, List<FeedComment>> map = new LinkedHashMap<>();
+        for (Long pid : postIds) {
+            map.put(pid, new ArrayList<>());
+        }
+        if (rows != null) {
+            for (FeedComment c : rows) {
+                if (c.getPostId() != null) {
+                    map.computeIfAbsent(c.getPostId(), k -> new ArrayList<>()).add(c);
+                }
+            }
+        }
+        return map;
     }
 
     private Map<Long, User> loadUsersForComments(List<FeedComment> comments, Map<Long, User> authorMap) {
@@ -1136,7 +1207,8 @@ public class FeedService {
             User author,
             boolean liked,
             List<FeedPostResponse.CommentItem> commentItems,
-            InviteFeedCard inviteCard
+            InviteFeedCard inviteCard,
+            String imageThumbs
     ) {
         return FeedPostResponse.builder()
                 .id(post.getId())
@@ -1145,6 +1217,7 @@ public class FeedService {
                 .avatarUrl(author != null ? author.getAvatarUrl() : "")
                 .content(post.getContent())
                 .images(post.getImages())
+                .imageThumbs(imageThumbs)
                 .videos(post.getVideos())
                 .linkUrl(null)
                 .linkTitle(null)
@@ -1164,7 +1237,7 @@ public class FeedService {
     }
 
     /**
-     * 列表路径批量组装：每页 2 次点赞查询 + 每帖 1 次评论查询 + 评论用户批量加载（避免 N+1）。
+     * 列表路径批量组装：每页 2 次点赞查询 + 1 次批量评论（窗口函数）+ 评论用户批量加载。
      */
     private List<FeedPostResponse> toResponseListPosts(
             List<FeedPost> posts,
@@ -1178,10 +1251,11 @@ public class FeedService {
         }
         List<Long> postIds = posts.stream().map(FeedPost::getId).filter(Objects::nonNull).toList();
         Set<Long> likedPostIds = batchLoadLikedPostIds(currentUserId, postIds);
-        List<FeedComment> allComments = new ArrayList<>();
+        Map<Long, List<FeedComment>> loadedByPost = loadCommentsForListPageBatch(postIds, FeedConstants.LIST_COMMENT_LIMIT, commentSort);
         Map<Long, List<FeedComment>> commentsByPost = new LinkedHashMap<>();
+        List<FeedComment> allComments = new ArrayList<>();
         for (FeedPost p : posts) {
-            List<FeedComment> cs = loadCommentsForListPage(p.getId(), FeedConstants.LIST_COMMENT_LIMIT, commentSort);
+            List<FeedComment> cs = new ArrayList<>(loadedByPost.getOrDefault(p.getId(), List.of()));
             cs = dropErasedCommentsWithoutReplies(cs);
             commentsByPost.put(p.getId(), cs);
             allComments.addAll(cs);
@@ -1189,24 +1263,39 @@ public class FeedService {
         Set<Long> likedCommentIds = batchLoadLikedCommentIds(
                 currentUserId,
                 allComments.stream().map(FeedComment::getId).collect(Collectors.toList()));
-        Map<Long, User> userById = loadUsersForComments(allComments, authorMap);
+        Map<Long, User> authors = authorMap == null ? new HashMap<>() : new HashMap<>(authorMap);
+        Set<Long> missingAuthorIds = posts.stream()
+                .map(FeedPost::getUserId)
+                .filter(Objects::nonNull)
+                .filter(uid -> !authors.containsKey(uid))
+                .collect(Collectors.toSet());
+        if (!missingAuthorIds.isEmpty()) {
+            List<User> fill = userMapper.selectBatchIds(missingAuthorIds);
+            if (fill != null) {
+                for (User u : fill) {
+                    if (u != null) {
+                        authors.put(u.getId(), u);
+                    }
+                }
+            }
+        }
+        Map<Long, User> userById = loadUsersForComments(allComments, authors);
         List<FeedPostResponse> out = new ArrayList<>(posts.size());
         for (FeedPost post : posts) {
-            User author = authorMap != null ? authorMap.get(post.getUserId()) : null;
-            if (author == null) {
-                author = userMapper.selectById(post.getUserId());
-            }
+            User author = authors.get(post.getUserId());
             List<FeedPostResponse.CommentItem> items = buildCommentItems(
                     commentsByPost.getOrDefault(post.getId(), List.of()),
                     likedCommentIds,
                     userById);
             InviteFeedCard inviteCard = resolveInviteCard(post, inviteCardMap);
+            String thumbs = FeedImageThumbPaths.buildImageThumbsCsv(post.getImages());
             out.add(buildFeedPostResponseCore(
                     post,
                     author,
                     likedPostIds.contains(post.getId()),
                     items,
-                    inviteCard));
+                    inviteCard,
+                    thumbs));
         }
         return out;
     }
@@ -1231,7 +1320,8 @@ public class FeedService {
         Map<Long, User> userById = loadUsersForComments(comments, authorMap);
         List<FeedPostResponse.CommentItem> commentItems = buildCommentItems(comments, likedCommentIds, userById);
         InviteFeedCard inviteCard = resolveInviteCard(post, inviteCardMap);
-        return buildFeedPostResponseCore(post, author, liked, commentItems, inviteCard);
+        String thumbs = FeedImageThumbPaths.buildImageThumbsCsv(post.getImages());
+        return buildFeedPostResponseCore(post, author, liked, commentItems, inviteCard, thumbs);
     }
 
     private FeedPostResponse toResponse(FeedPost post, Long currentUserId) {

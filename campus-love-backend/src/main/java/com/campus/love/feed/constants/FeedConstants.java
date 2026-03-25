@@ -23,4 +23,6 @@ public final class FeedConstants {
     public static final int USER_POSTS_SUMMARY_LIMIT = 200;
     /** 时间线/用户帖子分页过载倍数（用于 visibility 过滤后仍能取够一页） */
     public static final int TIMELINE_FETCH_MULTIPLIER = 5;
+    /** 单条动态允许的图片数量上限（逗号分隔 URL） */
+    public static final int POST_IMAGES_MAX = 8;
 }

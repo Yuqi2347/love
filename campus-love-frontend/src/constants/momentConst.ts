@@ -251,7 +251,7 @@ export const STEP3_QUESTIONS: Question[] = [
   { key: 'futureLifestyle', title: '你未来更向往的生活方式？', options: Q3_7_FUTURE_LIFESTYLE },
   { key: 'campusLovePlan', title: '你对校园恋爱的规划是？', options: Q3_8_CAMPUS_LOVE_PLAN },
   { key: 'idolRole', title: '偶像/爱豆在你生活中的角色？', options: Q3_9_IDOL_ROLE },
-  { key: 'temptationResponse', title: '面对新的心动对象时，你会？', options: Q3_10_TEMPTATION },
+  { key: 'temptationResponse', title: '恋爱中遇到心动对象时，你会？', options: Q3_10_TEMPTATION },
   { key: 'realityCondition', title: '你对爱情与现实条件的看法？', options: Q3_11_REALITY },
   { key: 'humanNatureView', title: '你对人性的看法？', options: Q3_12_HUMAN_NATURE },
   { key: 'breakupView', title: '当关系出现裂痕时，你会？', options: Q3_13_BREAKUP },

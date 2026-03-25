@@ -77,7 +77,7 @@
           <div class="swipe-overlay nope" :style="{ opacity: index === centerCardOffset ? nopeOpacity : 0 }">NOPE</div>
 
           <div class="card-rank">#{{ card.globalIndex }}</div>
-          <img :src="card.avatarUrl || defaultAvatar" class="card-avatar" />
+          <img :src="getMediaUrl(card.avatarUrl) || defaultAvatar" class="card-avatar" />
           <div class="card-info">
             <div class="card-header">
               <div class="card-name">{{ card.nickname }}</div>
@@ -136,7 +136,7 @@ import { useUserStore } from '@/store/userStore'
 import { ElMessage } from 'element-plus'
 import { MATCH_DIMENSION_LABELS } from '@/constants/matchConst'
 import { useRouter } from 'vue-router'
-import { DEFAULT_AVATAR } from '@/utils/shared'
+import { DEFAULT_AVATAR, getMediaUrl } from '@/utils/shared'
 
 const router = useRouter()
 const followStore = useFollowStore()

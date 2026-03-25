@@ -112,8 +112,7 @@
               </div>
 
               <template v-if="!ageNoMatter">
-                <div class="score-panel__slider score-panel__slider--age">
-                  <span class="score-side">比我小 10 岁</span>
+                <div class="score-panel__slider score-panel__slider--age score-panel__slider--age-only">
                   <el-slider
                     v-model="ageRange"
                     range
@@ -123,7 +122,6 @@
                     :marks="ageRangeMarks"
                     show-stops
                   />
-                  <span class="score-side">比我大 10 岁</span>
                 </div>
                 <div class="age-panel__result">当前接受：{{ ageRangeLabel }}</div>
               </template>
@@ -774,6 +772,10 @@ $serif: 'Noto Serif SC', 'Songti SC', 'STSong', serif;
 
 .score-panel__slider--age {
   margin-top: 6px;
+}
+
+.score-panel__slider--age-only {
+  gap: 0;
 }
 
 .score-side {

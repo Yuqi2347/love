@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.campus.love.feed.mapper.FeedCommentMapper">
+
+    <!-- 列表页：一次查询多帖各自 TopN 评论（MySQL 8+ 窗口函数），避免每帖一条 SQL -->
+    <select id="selectTopNPerPostForList" resultType="com.campus.love.feed.entity.FeedComment">
+        SELECT id, post_id, user_id, content, images, parent_id, replied_user_id, deleted, like_count, created_at
+        FROM (
+            SELECT
+                id,
+                post_id,
+                user_id,
+                content,
+                images,
+                parent_id,
+                replied_user_id,
+                deleted,
+                like_count,
+                created_at,
+                ROW_NUMBER() OVER (
+                    PARTITION BY post_id
+                    ORDER BY
+                    <choose>
+                        <when test="sortHot">
+                            COALESCE(like_count, 0) DESC, id DESC
+                        </when>
+                        <otherwise>
+                            COALESCE(created_at, FROM_UNIXTIME(0)) DESC, id DESC
+                        </otherwise>
+                    </choose>
+                ) AS rn
+            FROM t_feed_comment
+            WHERE deleted = 0
+            AND post_id IN
+            <foreach collection="postIds" item="pid" open="(" separator="," close=")">
+                #{pid}
+            </foreach>
+        ) t
+        WHERE t.rn &lt;= #{limit}
+        ORDER BY t.post_id, t.rn
+    </select>
+</mapper>

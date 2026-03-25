@@ -213,7 +213,7 @@ public class FeedController {
     @PostMapping("/upload/image")
     public Result<String> uploadImage(@RequestParam("file") MultipartFile file) {
         try {
-            String url = fileUploadService.uploadImage(file, "feed_img_");
+            String url = fileUploadService.uploadImage(file, CurrentUser.getId(), "feed_img_");
             return Result.success("上传成功", url);
         } catch (IllegalArgumentException e) {
             return Result.error(ResultCode.BAD_REQUEST, e.getMessage());
@@ -226,7 +226,7 @@ public class FeedController {
     @PostMapping("/upload/video")
     public Result<String> uploadVideo(@RequestParam("file") MultipartFile file) {
         try {
-            String url = fileUploadService.uploadVideo(file, "feed_video_");
+            String url = fileUploadService.uploadVideo(file, CurrentUser.getId(), "feed_video_");
             return Result.success("上传成功", url);
         } catch (IllegalArgumentException e) {
             return Result.error(ResultCode.BAD_REQUEST, e.getMessage());

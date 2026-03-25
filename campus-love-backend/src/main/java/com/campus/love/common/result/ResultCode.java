@@ -35,6 +35,8 @@ public enum ResultCode {
 
     // 朋友圈模块 4xxx
     FEED_NOT_FOUND(4001, "动态不存在"),
+    /** 动态图片张数超过上限（当前为 8 张） */
+    FEED_IMAGES_LIMIT(4005, "动态图片最多8张"),
     ALREADY_LIKED(4002, "已点赞"),
     ALREADY_LIKED_COMMENT(4004, "已点赞该评论"),
     INSUFFICIENT_LEVEL(4003, "等级不足，需要达到Lv3才能发布动态"),

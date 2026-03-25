@@ -40,6 +40,7 @@ import java.math.BigDecimal;
 import java.time.LocalDate;
 import java.time.LocalTime;
 import java.time.Period;
+import java.time.ZoneId;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -323,7 +324,7 @@ public class UserService {
 
     public String uploadCover(MultipartFile file) throws IOException {
         Long userId = CurrentUser.getId();
-        String coverUrl = fileUploadService.uploadImage(file, "cover_" + userId + "_", 25L * 1024 * 1024);
+        String coverUrl = fileUploadService.uploadImage(file, userId, "cover_" + userId + "_", 25L * 1024 * 1024);
 
         User user = userMapper.selectById(userId);
         user.setCoverImageUrl(coverUrl);
@@ -427,6 +428,11 @@ public class UserService {
         String interestTags = portrait != null ? portrait.getInterestTags() : null;
         String interests = (interestTags != null && InterestTagConverter.isValidNonEmpty(interestTags))
                 ? null : user.getInterests();
+        Long avatarUpdatedAt = null;
+        UserAvatar avatarMeta = getAvatarMeta(userId);
+        if (avatarMeta != null && avatarMeta.getUpdatedAt() != null) {
+            avatarUpdatedAt = avatarMeta.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        }
         return UserProfileResponse.builder()
                 .id(user.getId())
                 .email(isSelf ? user.getEmail() : null)
@@ -449,6 +455,7 @@ public class UserService {
                 .bazi(bazi)
                 .baziUnknown(user.getBaziUnknown())
                 .avatarUrl(user.getAvatarUrl())
+                .avatarUpdatedAt(avatarUpdatedAt)
                 .coverImageUrl(user.getCoverImageUrl())
                 .bio(user.getBio())
                 .interests(interests)
@@ -458,6 +465,9 @@ public class UserService {
                 .feedVisibilityTime(user.getFeedVisibilityTime() != null ? user.getFeedVisibilityTime() : -1)
                 .iceBreakEnabled(isSelf ? user.getIceBreakEnabled() : null)
                 .aiDisclosureSettings(isSelf ? user.getAiDisclosureSettings() : null)
+                .followingCount(followService.countFollowing(userId))
+                .followerCount(followService.countFollowers(userId))
+                .mutualCount(followService.countMutualFriends(userId))
                 .build();
     }
 }

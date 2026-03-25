@@ -9,6 +9,12 @@ import { useChatStore } from './chatStore'
 export const useUserStore = defineStore('user', () => {
   const user = ref<UserProfile | null>(null)
   const isLoggedIn = ref(!!localStorage.getItem('access_token'))
+  /** 递增后拼到 /user/avatar/ 请求上，强制本端换图（与后端 no-store 配合） */
+  const avatarDisplayNonce = ref(0)
+
+  function bumpAvatarImageCache() {
+    avatarDisplayNonce.value = Date.now()
+  }
 
   async function setAuth(auth: AuthResponse) {
     const chatStore = useChatStore()
@@ -32,7 +38,12 @@ export const useUserStore = defineStore('user', () => {
   async function fetchProfile() {
     try {
       const res = await getMyProfile()
+      const prevAt = user.value?.avatarUpdatedAt
       user.value = res.data.data
+      const nextAt = user.value?.avatarUpdatedAt
+      if (nextAt != null && nextAt !== prevAt) {
+        bumpAvatarImageCache()
+      }
       if (user.value?.id != null) {
         localStorage.setItem('userId', String(user.value.id))
       }
@@ -57,5 +68,5 @@ export const useUserStore = defineStore('user', () => {
     useFollowStore().clear()
   }
 
-  return { user, isLoggedIn, setAuth, fetchProfile, logout }
+  return { user, isLoggedIn, avatarDisplayNonce, setAuth, fetchProfile, logout, bumpAvatarImageCache }
 })

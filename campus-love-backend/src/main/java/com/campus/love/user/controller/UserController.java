@@ -134,7 +134,7 @@ public class UserController {
             if (request.checkNotModified(etag)) {
                 return ResponseEntity.status(HttpStatus.NOT_MODIFIED)
                         .eTag(etag)
-                        .cacheControl(CacheControl.noCache().cachePrivate())
+                        .cacheControl(CacheControl.noStore())
                         .build();
             }
         }
@@ -148,7 +148,8 @@ public class UserController {
         return ResponseEntity.ok()
                 .eTag(etag)
                 .contentType(MediaType.parseMediaType(ct))
-                .cacheControl(CacheControl.noCache().cachePrivate())
+                // 避免 PC/手机端磁盘缓存长期持有旧图（URL 固定为 /user/avatar/{id}）
+                .cacheControl(CacheControl.noStore())
                 .header(HttpHeaders.CONTENT_DISPOSITION, "inline")
                 .body(avatar.getAvatarData());
     }

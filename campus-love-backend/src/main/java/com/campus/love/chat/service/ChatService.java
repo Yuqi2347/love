@@ -63,7 +63,7 @@ public class ChatService {
      * 上传聊天图片，返回可访问的 URL（供 msgType=3 图片消息使用，msgType=2 保留给邀约链接）
      */
     public String uploadChatImage(MultipartFile file) throws IOException {
-        return fileUploadService.uploadImage(file, "chat_");
+        return fileUploadService.uploadImage(file, CurrentUser.getId(), "chat_");
     }
 
     /**

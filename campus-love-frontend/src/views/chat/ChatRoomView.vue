@@ -123,44 +123,8 @@
       </div>
     </div>
 
-    <!-- 破冰话题面板 -->
-    <Transition name="ice-break-panel">
-      <div v-if="showIceBreakPanel" class="ice-break-panel">
-        <div class="ice-break-panel-header">
-          <span>💡 破冰灵感</span>
-          <button type="button" class="ice-break-close" @click="showIceBreakPanel = false" aria-label="关闭">
-            <el-icon :size="18"><Close /></el-icon>
-          </button>
-        </div>
-        <div v-if="iceBreakLoading" class="ice-break-loading">加载中...</div>
-        <template v-else>
-          <p v-if="iceBreakAnalysis" class="ice-break-analysis">{{ iceBreakAnalysis }}</p>
-          <div class="ice-break-topics">
-          <button
-            v-for="(t, i) in iceBreakTopics"
-            :key="i"
-            type="button"
-            class="ice-break-topic-btn"
-            @click="selectIceBreakTopic(t)"
-          >
-            {{ t }}
-          </button>
-          </div>
-        </template>
-      </div>
-    </Transition>
-
     <div class="chat-input-area">
       <div v-if="!canSend" class="chat-limit-hint">未回复前只能发送一条消息</div>
-      <!-- 允许对方获取破冰灵感（按好友单独设置） -->
-      <div v-if="iceBreakStatus?.canAllow" class="ice-break-allow-row">
-        <span class="ice-break-allow-label">允许TA获取破冰灵感</span>
-        <el-switch
-          :model-value="iceBreakStatus.allowedByMe"
-          :loading="iceBreakAllowLoading"
-          @update:model-value="handleIceBreakAllowChange"
-        />
-      </div>
       <input
         ref="imageInputRef"
         type="file"
@@ -169,16 +133,6 @@
         @change="handleMediaSelect"
       />
       <div class="input-row" :class="{ disabled: !canSend }">
-        <button
-          v-if="iceBreakStatus?.canShow"
-          type="button"
-          :class="['icon-btn', 'ice-break-btn', { disabled: !iceBreakStatus.targetEnabled }]"
-          :title="iceBreakStatus.targetEnabled ? '破冰灵感' : '对方暂未允许您获取破冰灵感（可开启下方开关）'"
-          :disabled="!iceBreakStatus.targetEnabled"
-          @click="iceBreakStatus.targetEnabled && handleIceBreakClick()"
-        >
-          💡
-        </button>
         <button type="button" class="icon-btn" title="图片/视频" :disabled="!canSend" @click="canSend && triggerImageInput()">
           <el-icon :size="20"><Picture /></el-icon>
         </button>
@@ -191,14 +145,64 @@
           </template>
         </el-input>
       </div>
+      <!-- 破冰：放在输入框下方，避免挤占消息区 / 挡气泡 -->
+      <div v-if="iceBreakStatus?.canShow || iceBreakStatus?.canAllow" class="ice-break-below-input">
+        <div v-if="iceBreakStatus?.canShow" class="ice-break-lamp-wrap">
+          <button
+            type="button"
+            :class="['icon-btn', 'ice-break-btn', { disabled: !iceBreakStatus.targetEnabled }]"
+            :title="iceBreakStatus.targetEnabled ? '破冰灵感' : '对方暂未允许您获取破冰灵感（可打开下方开关允许对方）'"
+            :disabled="!iceBreakStatus.targetEnabled"
+            @click="iceBreakStatus.targetEnabled && handleIceBreakClick()"
+          >
+            💡
+          </button>
+          <span class="ice-break-lamp-label">破冰灵感</span>
+        </div>
+        <div v-if="iceBreakStatus?.canAllow" class="ice-break-allow-row">
+          <span class="ice-break-allow-label">允许TA获取破冰灵感</span>
+          <el-switch
+            :model-value="iceBreakStatus.allowedByMe"
+            :loading="iceBreakAllowLoading"
+            @update:model-value="handleIceBreakAllowChange"
+          />
+        </div>
+      </div>
       <p
         v-if="iceBreakStatus?.canShow && !iceBreakStatus.targetEnabled"
         class="ice-break-disabled-hint"
         role="note"
       >
-        对方暂未允许您获取破冰灵感；请 TA 在上方打开「允许TA获取破冰灵感」后即可使用
+        对方暂未允许您获取破冰灵感；请 TA 打开「允许TA获取破冰灵感」后您可使用破冰灵感
       </p>
     </div>
+
+    <!-- 破冰话题面板：紧贴输入区下方展开，不插在消息列表与输入框之间 -->
+    <Transition name="ice-break-panel">
+      <div v-if="showIceBreakPanel" class="ice-break-panel">
+        <div class="ice-break-panel-header">
+          <span>💡 破冰灵感</span>
+          <button type="button" class="ice-break-close" @click="showIceBreakPanel = false" aria-label="关闭">
+            <el-icon :size="18"><Close /></el-icon>
+          </button>
+        </div>
+        <div v-if="iceBreakLoading" class="ice-break-loading">加载中...</div>
+        <template v-else>
+          <p v-if="iceBreakAnalysis" class="ice-break-analysis">{{ iceBreakAnalysis }}</p>
+          <div class="ice-break-topics">
+            <button
+              v-for="(t, i) in iceBreakTopics"
+              :key="i"
+              type="button"
+              class="ice-break-topic-btn"
+              @click="selectIceBreakTopic(t)"
+            >
+              {{ t }}
+            </button>
+          </div>
+        </template>
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -638,10 +642,25 @@ async function handleMediaSelect(e: Event) {
 </script>
 
 <style lang="scss" scoped>
+@use '@/styles/variables' as *;
+
+/* 与 MainLayout 移动端底部 Tab 预留的 padding-bottom（72px）一致，避免 100vh 整页超高、输入框被顶到屏外 */
+$mobile-tab-reserve: 72px;
+
 .chat-room {
   display: flex;
   flex-direction: column;
+  min-height: 0;
   height: 100vh;
+  max-height: 100vh;
+
+  @media (max-width: $bp-mobile) {
+    height: calc(100vh - #{$mobile-tab-reserve});
+    max-height: calc(100vh - #{$mobile-tab-reserve});
+    /* 动态视口：避免移动端地址栏伸缩导致高度错位 */
+    height: calc(100dvh - #{$mobile-tab-reserve});
+    max-height: calc(100dvh - #{$mobile-tab-reserve});
+  }
 }
 
 .chat-header {
@@ -667,7 +686,9 @@ async function handleMediaSelect(e: Event) {
 
 .message-list {
   flex: 1;
+  min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
   padding: 20px;
   display: flex;
   flex-direction: column;
@@ -854,14 +875,16 @@ async function handleMediaSelect(e: Event) {
   }
 }
 
-// 破冰话题面板
+// 破冰话题面板（在输入框下方）
 .ice-break-panel {
   padding: 12px 16px;
-  margin: 0 20px 8px;
+  margin: 0 16px 8px;
   background: linear-gradient(135deg, rgba($primary, 0.08), rgba($primary, 0.04));
   border: 1px solid rgba($primary, 0.2);
   border-radius: $radius-md;
   flex-shrink: 0;
+  max-height: min(42vh, 320px);
+  overflow-y: auto;
 
   .ice-break-panel-header {
     display: flex;
@@ -921,6 +944,26 @@ async function handleMediaSelect(e: Event) {
   transform: translateY(-8px);
 }
 
+.ice-break-below-input {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid rgba($border-light, 0.85);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ice-break-lamp-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+
+  .ice-break-lamp-label {
+    font-size: 13px;
+    color: $text-muted;
+  }
+}
+
 .ice-break-btn {
   font-size: 18px !important;
   &.disabled {
@@ -933,12 +976,13 @@ async function handleMediaSelect(e: Event) {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 0 12px;
+  padding: 4px 0 0;
   font-size: 13px;
   color: $text-secondary;
 
   .ice-break-allow-label {
     flex: 1;
+    padding-right: 8px;
   }
 }
 
@@ -957,7 +1001,8 @@ async function handleMediaSelect(e: Event) {
 }
 
 .chat-input-area {
-  padding: 12px 20px;
+  padding: 12px 16px;
+  padding-bottom: max(12px, env(safe-area-inset-bottom, 0px));
   border-top: 1px solid $border-light;
   background: $bg-primary;
   flex-shrink: 0;

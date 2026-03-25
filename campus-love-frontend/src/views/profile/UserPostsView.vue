@@ -47,10 +47,12 @@
         </div>
         <div v-if="post.images" class="feed-images" @click.stop>
           <img
-            v-for="(img, idx) in post.images.split(',')"
+            v-for="(img, idx) in feedCardImagePaths(post)"
             :key="idx"
             :src="getMediaUrl(img)"
             class="feed-image"
+            loading="lazy"
+            @error="onUserPostImgError($event, post, idx)"
             @click="goPostDetail(post.id)"
           />
         </div>
@@ -122,7 +124,7 @@ import { ElMessage, ElMessageBox } from 'element-plus'
 import { ArrowLeft, Delete } from '@element-plus/icons-vue'
 import ShareDialog from '@/components/ShareDialog.vue'
 import FeedInviteCard from '@/components/FeedInviteCard.vue'
-import { DEFAULT_AVATAR, getMediaUrl, formatRelativeTime } from '@/utils/shared'
+import { DEFAULT_AVATAR, getMediaUrl, formatRelativeTime, feedCardImagePaths } from '@/utils/shared'
 
 const defaultAvatar = DEFAULT_AVATAR
 
@@ -146,6 +148,21 @@ const currentSharePost = ref<FeedPost | null>(null)
 function openShareDialog(post: FeedPost) {
   currentSharePost.value = post
   showShareDialog.value = true
+}
+
+function onUserPostImgError(e: Event, post: FeedPost, idx: number) {
+  const el = e.target as HTMLImageElement
+  const parts = (post.images || '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+  const fallback = parts[idx]
+  if (!fallback) return
+  const next = getMediaUrl(fallback)
+  if (el.src !== next) {
+    el.onerror = null
+    el.src = next
+  }
 }
 
 function handleShareSuccess() {

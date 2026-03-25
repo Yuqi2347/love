@@ -16,7 +16,7 @@
       <div class="post-card">
         <div class="post-header">
           <el-image
-            :src="imageUrl(post.avatarUrl || '') || defaultAvatar"
+            :src="getMediaUrl(post.avatarUrl) || defaultAvatar"
             class="post-avatar"
             fit="cover"
             @click="$router.push(`/profile/${post.userId}`)"
@@ -67,12 +67,12 @@
           </button>
         </div>
 
-        <div v-if="post.images" class="post-images">
+        <div v-if="postImageFullList.length" class="post-images">
           <el-image
-            v-for="(img, idx) in post.images.split(',')"
+            v-for="(full, idx) in postImageFullList"
             :key="idx"
-            :src="imageUrl(img)"
-            :preview-src-list="post.images.split(',').map(i => imageUrl(i))"
+            :src="getMediaUrl(postImageDisplayList[idx] ?? full)"
+            :preview-src-list="postImageFullList.map((i) => getMediaUrl(i))"
             :initial-index="idx"
             fit="cover"
             class="post-image"
@@ -143,7 +143,7 @@
             <!-- 根评论 -->
             <div class="root-comment" :class="{ 'comment-deleted': thread.comment.deleted }">
               <el-image
-                :src="imageUrl(thread.comment.avatarUrl || '') || defaultAvatar"
+                :src="getMediaUrl(thread.comment.avatarUrl || '') || defaultAvatar"
                 class="comment-avatar"
                 fit="cover"
                 @click="$router.push(`/profile/${thread.comment.userId}`)"
@@ -158,14 +158,15 @@
                 <div class="comment-text">{{ thread.comment.content }}</div>
                 <div v-if="thread.comment.images && !thread.comment.deleted" class="comment-images">
                   <el-image
-                    v-for="(img, i) in thread.comment.images.split(',')"
+                    v-for="(img, i) in thread.comment.images.split(',').map((s) => s.trim()).filter(Boolean)"
                     :key="i"
-                    :src="imageUrl(img)"
-                    :preview-src-list="thread.comment.images.split(',').map(u => imageUrl(u))"
+                    :src="getMediaUrl(feedImageThumbPathOrSelf(img))"
+                    :preview-src-list="thread.comment.images.split(',').map((u) => getMediaUrl(u.trim())).filter(Boolean)"
                     :initial-index="i"
                     fit="cover"
                     class="comment-img"
                     preview-teleported
+                    loading="lazy"
                   />
                 </div>
                 <div class="comment-footer">
@@ -192,7 +193,7 @@
                 :class="{ 'comment-deleted': reply.deleted }"
               >
                 <el-image
-                  :src="imageUrl(reply.avatarUrl || '') || defaultAvatar"
+                  :src="getMediaUrl(reply.avatarUrl || '') || defaultAvatar"
                   class="reply-avatar"
                   fit="cover"
                   @click="$router.push(`/profile/${reply.userId}`)"
@@ -207,14 +208,15 @@
                     <span class="reply-text">{{ reply.deleted ? '' : '：' }}{{ reply.content }}</span>
                     <div v-if="reply.images && !reply.deleted" class="comment-images">
                       <el-image
-                        v-for="(img, i) in reply.images.split(',')"
+                        v-for="(img, i) in reply.images.split(',').map((s) => s.trim()).filter(Boolean)"
                         :key="i"
-                        :src="imageUrl(img)"
-                        :preview-src-list="reply.images.split(',').map(u => imageUrl(u))"
+                        :src="getMediaUrl(feedImageThumbPathOrSelf(img))"
+                        :preview-src-list="reply.images.split(',').map((u) => getMediaUrl(u.trim())).filter(Boolean)"
                         :initial-index="i"
                         fit="cover"
                         class="comment-img"
                         preview-teleported
+                        loading="lazy"
                       />
                     </div>
                   </div>
@@ -269,7 +271,7 @@
           </div>
           <div v-if="commentImages.length" class="comment-images-preview">
             <div v-for="(img, i) in commentImages" :key="i" class="comment-preview-item">
-              <img :src="imageUrl(img)" class="comment-preview-img" />
+              <img :src="getMediaUrl(img)" class="comment-preview-img" />
               <button type="button" class="comment-preview-remove" @click="removeCommentImage(i)">
                 <el-icon><Close /></el-icon>
               </button>
@@ -349,7 +351,7 @@ import EmojiPicker from '@/components/EmojiPicker.vue'
 import FeedTagConfirmBar from './components/FeedTagConfirmBar.vue'
 import FeedInviteCard from '@/components/FeedInviteCard.vue'
 import { uploadImage } from '@/api/feedApi'
-import { DEFAULT_AVATAR, formatRelativeTime } from '@/utils/shared'
+import { DEFAULT_AVATAR, feedCardImagePaths, feedImageThumbPathOrSelf, formatRelativeTime, getMediaUrl } from '@/utils/shared'
 import { compressImageFile } from '@/utils/mediaCompress'
 
 const defaultAvatar = DEFAULT_AVATAR
@@ -372,6 +374,17 @@ const retagging = ref(false)
 const commentInputRef = ref()
 const commentImageInputRef = ref<HTMLInputElement | null>(null)
 const commentSort = ref<'hot' | 'time'>('time')
+
+/** 详情页主帖图片：网格用缩略图，预览仍用原图 */
+const postImageFullList = computed(() => {
+  const imgs = post.value?.images
+  if (!imgs) return [] as string[]
+  return imgs.split(',').map((s) => s.trim()).filter(Boolean)
+})
+const postImageDisplayList = computed(() => {
+  if (!post.value) return [] as string[]
+  return feedCardImagePaths(post.value)
+})
 
 // 分享相关状态
 const showShareDialog = ref(false)
@@ -478,16 +491,8 @@ function toggleExpandReplies(threadId: number) {
   }
 }
 
-function imageUrl(url: string) {
-  if (!url) return ''
-  if (url.startsWith('http') || url.startsWith('/api')) return url
-  return '/api' + (url.startsWith('/') ? url : '/' + url)
-}
-
 function videoUrl(url: string) {
-  if (!url) return ''
-  if (url.startsWith('http') || url.startsWith('/api')) return url
-  return '/api' + (url.startsWith('/') ? url : '/' + url)
+  return getMediaUrl(url || null)
 }
 
 function formatTime(createdAt: string) {

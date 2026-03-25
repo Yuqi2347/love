@@ -63,6 +63,20 @@ RESOLVED_ENV_FILE="$(resolve_env_file "$ENV_FILE")"
 load_env_file "$RESOLVED_ENV_FILE"
 echo "Loaded ${LOADED_COUNT} environment variables from ${RESOLVED_ENV_FILE}"
 
+HTTP_PORT="${SERVER_PORT:-8082}"
+if command -v ss >/dev/null 2>&1; then
+  if ss -tlnp 2>/dev/null | grep -q ":${HTTP_PORT} "; then
+    echo "提示：端口 ${HTTP_PORT} 已有进程在监听（见下）。多数情况是后端已经在运行，不必再执行本脚本。" >&2
+    ss -tlnp 2>/dev/null | grep ":${HTTP_PORT} " >&2 || true
+    echo "" >&2
+    echo "若要重启后端，请先结束占用进程，例如：kill <上表中的 java PID>，或：fuser -k ${HTTP_PORT}/tcp" >&2
+    echo "然后再运行: ./start-backend.sh" >&2
+    echo "" >&2
+    echo "（若已确认端口空闲但启动仍失败，再查 MySQL/Redis 与 .env 里 DB_URL、REDIS_HOST。）" >&2
+    exit 1
+  fi
+fi
+
 if [[ "$SKIP_RUN" == "true" ]]; then
   echo "Skip backend run (SKIP_RUN=true)."
   exit 0
