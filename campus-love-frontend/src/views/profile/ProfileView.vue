@@ -33,7 +33,13 @@
                   <el-icon><Lock /></el-icon> 隐私设置
                 </el-dropdown-item>
                 <el-dropdown-item @click="showAccountSecurity = true">
-                  <el-icon><Lock /></el-icon> 账号安全
+                  <el-icon><Lock /></el-icon> 账号安全与信誉
+                </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/legal/user-agreement')">
+                  <el-icon><InfoFilled /></el-icon> 用户协议
+                </el-dropdown-item>
+                <el-dropdown-item @click="$router.push('/legal/privacy-policy')">
+                  <el-icon><InfoFilled /></el-icon> 隐私政策
                 </el-dropdown-item>
                 <el-dropdown-item divided class="text-danger" @click="handleLogout">
                   <el-icon><SwitchButton /></el-icon> 退出登录
@@ -189,16 +195,12 @@
         </div>
       </div>
 
-      <!-- 邀约成就 & 平均评分 -->
+      <!-- 口碑分 + 成长等级（对外统一口径） -->
       <div v-if="inviteStats || profile.inviteCount || profile.participateCount" class="invite-stats-card">
         <div class="invite-stats-header">
           <div>
-            <span class="invite-stats-title">{{ isMe ? '邀约成就' : `${profile?.nickname || 'TA'}的邀约成就` }}</span>
-            <span class="invite-stats-subtitle">展示邀约次数与平均评分</span>
-          </div>
-          <div class="invite-credit">
-            <span class="label">信用分</span>
-            <span class="value">{{ profile.creditScore ?? 100 }}</span>
+            <span class="invite-stats-title">{{ isMe ? '我的口碑与成长' : `${profile?.nickname || 'TA'}的口碑与成长` }}</span>
+            <span class="invite-stats-subtitle">统一展示口碑分与成长等级，履约分仅本人可见</span>
           </div>
         </div>
         <div class="invite-stats-body">
@@ -209,12 +211,17 @@
               </span>
               <span class="score-unit">/ 5.0</span>
             </div>
-            <div class="score-label">社交体验平均评分</div>
+            <div class="score-label">口碑分</div>
             <div class="score-desc">
               来自所有邀约中的他人评价
             </div>
           </div>
-          <div class="invite-count-block">
+          <div class="growth-score-block">
+            <div class="growth-level-value">Lv{{ profile.userLevel ?? 1 }}</div>
+            <div class="growth-level-label">成长等级</div>
+            <div class="growth-level-desc">持续参与、稳定履约会更快升级</div>
+          </div>
+          <div v-if="isMe" class="invite-count-block">
             <div class="count-item">
               <span class="count-label">发起邀约</span>
               <span class="count-value">{{ inviteStats?.inviteCount ?? profile.inviteCount ?? 0 }}</span>
@@ -435,8 +442,14 @@
   </BaseModalShell>
 
   <!-- 账号安全弹窗 -->
-  <BaseModalShell v-model="showAccountSecurity" title="账号安全" width="420px" max-body-height="70vh">
+  <BaseModalShell v-model="showAccountSecurity" title="账号安全与信誉" width="420px" max-body-height="70vh">
     <div class="security-settings-form">
+      <div class="security-fulfillment-section">
+        <div class="setting-label">履约分（仅自己可见）</div>
+        <div class="fulfillment-score">{{ profile?.creditScore ?? 100 }}</div>
+        <p class="security-hint">履约分用于邀约信用校验，不对外公开展示。</p>
+      </div>
+
       <div class="security-email-section">
         <div class="setting-label">绑定邮箱</div>
         <div class="email-display">{{ userStore.user?.email || '未绑定' }}</div>
@@ -1606,24 +1619,6 @@ function getLevelByScore(score: number): number {
   color: $text-secondary;
 }
 
-.invite-credit {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-}
-
-.invite-credit .label {
-  font-size: 12px;
-  color: $text-secondary;
-}
-
-.invite-credit .value {
-  font-size: 20px;
-  font-weight: 800;
-  color: $primary;
-}
-
 .invite-stats-body {
   display: flex;
   align-items: stretch;
@@ -1663,6 +1658,35 @@ function getLevelByScore(score: number): number {
 }
 
 .score-desc {
+  margin-top: 2px;
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.growth-score-block {
+  flex: 1;
+  padding: 10px 12px;
+  border-radius: $radius-md;
+  background: rgba(#ffffff, 0.6);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.growth-level-value {
+  font-size: 24px;
+  font-weight: 800;
+  color: $text-primary;
+}
+
+.growth-level-label {
+  margin-top: 4px;
+  font-size: 13px;
+  font-weight: 600;
+  color: $text-primary;
+}
+
+.growth-level-desc {
   margin-top: 2px;
   font-size: 12px;
   color: $text-secondary;
@@ -2373,6 +2397,33 @@ function getLevelByScore(score: number): number {
 // 账号安全样式
 .security-settings-form {
   padding: 10px 0;
+}
+
+.security-fulfillment-section {
+  padding: 12px 16px;
+  background: rgba($primary, 0.06);
+  border: 1px solid rgba($primary, 0.14);
+  border-radius: $radius-lg;
+  margin-bottom: 14px;
+
+  .setting-label {
+    font-size: 14px;
+    font-weight: 600;
+    color: $text-primary;
+    margin-bottom: 4px;
+  }
+
+  .fulfillment-score {
+    font-size: 28px;
+    line-height: 1.15;
+    font-weight: 800;
+    color: $primary;
+    margin-bottom: 6px;
+  }
+
+  .security-hint {
+    margin: 0;
+  }
 }
 
 .security-email-section {

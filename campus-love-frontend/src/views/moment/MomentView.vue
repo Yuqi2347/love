@@ -1,14 +1,13 @@
 <template>
   <div class="moment-page">
-    <!-- 加载中 -->
     <div v-if="loading" class="loading-state">
       <div class="pulse-ring" />
-      <p>加载中...</p>
+      <p>感知心动信号中...</p>
     </div>
 
     <template v-else>
       <header class="moment-head">
-        <p class="moment-eyebrow">MOMENT</p>
+        <p class="moment-eyebrow">WEEKLY MOMENT</p>
         <h1 class="moment-title">
           遇见<span class="moment-title__accent">真正契合</span>你的人
         </h1>
@@ -16,13 +15,13 @@
           匿名问卷 + 多维度匹配，专为不善主动的你设计；<br />
           那个人也许就在这周，你不来就真的错过了。
         </p>
-        <div class="moment-week-pill">{{ weekBadgeText }}</div>
+        <div class="moment-week-pill glass-pill">{{ weekBadgeText }}</div>
       </header>
 
-      <div class="moment-countdown" aria-label="心动揭晓倒计时" role="timer">
+      <div class="moment-countdown glass-panel" aria-label="心动揭晓倒计时" role="timer">
         <p class="moment-countdown__title">心动揭晓倒计时</p>
         <template v-if="resultPublished">
-          <p class="moment-countdown__done">本期结果已公布</p>
+          <p class="moment-countdown__done text-gradient-warm">本期结果已公布</p>
         </template>
         <template v-else-if="showRevealOverdueWait">
           <p class="moment-countdown__wait">预计本期揭晓时刻已过，请等待系统发布结果</p>
@@ -31,22 +30,22 @@
           <div class="moment-countdown__digits" aria-live="polite">
             <span v-if="countdownParts.days > 0" class="moment-countdown__unit">
               <strong>{{ countdownParts.days }}</strong>
-              <small>天</small>
+              <small>DAYS</small>
             </span>
             <span class="moment-countdown__sep" aria-hidden="true" />
             <span class="moment-countdown__unit moment-countdown__unit--time">
               <strong>{{ pad2(countdownParts.hours) }}</strong>
-              <small>时</small>
+              <small>HOURS</small>
             </span>
             <span class="moment-countdown__colon">:</span>
             <span class="moment-countdown__unit moment-countdown__unit--time">
               <strong>{{ pad2(countdownParts.minutes) }}</strong>
-              <small>分</small>
+              <small>MINS</small>
             </span>
             <span class="moment-countdown__colon">:</span>
             <span class="moment-countdown__unit moment-countdown__unit--time">
               <strong>{{ pad2(countdownParts.seconds) }}</strong>
-              <small>秒</small>
+              <small>SECS</small>
             </span>
           </div>
           <p class="moment-countdown__hint">
@@ -59,134 +58,135 @@
         <p v-else class="moment-countdown__wait">预计每周五中午揭晓，请留意页面更新</p>
       </div>
 
-      <div class="moment-tabs" role="tablist" aria-label="活动阶段">
+      <div class="moment-tabs tuner-capsule glass-panel" role="tablist" aria-label="活动阶段">
         <span
           v-for="(tab, i) in phaseTabs"
           :key="tab.key"
-          class="moment-tab"
-          :class="{ 'moment-tab--on': phaseTabIndex === i }"
+          class="moment-tab tuner-btn"
+          :class="{ 'active': phaseTabIndex === i }"
         >
           {{ tab.label }}
         </span>
       </div>
 
-      <div class="moment-card">
-        <!-- 未报名 -->
+      <div class="moment-card glass-panel">
+        
         <div v-if="status === 'NOT_ENROLLED'" class="moment-panel">
-          <div class="moment-panel__icon" aria-hidden="true">💗</div>
-          <p class="moment-panel__tag">{{ enrollmentOpen ? '本周报名开放中' : '本周报名已截止' }}</p>
+          <div class="moment-panel__icon float-anim" aria-hidden="true">💌</div>
+          <p class="moment-panel__tag text-gradient-warm">{{ enrollmentOpen ? '本周报名通道开放中' : '本周报名已截止' }}</p>
           <h2 class="moment-panel__h">参加本周心动时刻</h2>
           <div class="moment-mini-grid">
-            <div class="moment-mini-cell">
+            <div class="moment-mini-cell glass-pill-light">
               <span class="moment-mini-cell__n">{{ participantCount }}</span>
               <span class="moment-mini-cell__t">人已报名</span>
             </div>
-            <div class="moment-mini-cell">
+            <div class="moment-mini-cell glass-pill-light">
               <span class="moment-mini-cell__n">周四</span>
               <span class="moment-mini-cell__t">截止参考</span>
             </div>
-            <div class="moment-mini-cell">
+            <div class="moment-mini-cell glass-pill-light">
               <span class="moment-mini-cell__n">周五</span>
               <span class="moment-mini-cell__t">匹配揭晓</span>
             </div>
           </div>
           <button
-            class="moment-btn-outline"
+            class="glow-btn-warm w-full mt-4"
             :disabled="!enrollmentOpen || !profileComplete"
             :title="!profileComplete ? '请先完善个人信息后进行分析' : ''"
             @click="profileComplete ? $router.push('/moment/enroll') : null"
           >
-            {{ enrollmentOpen ? '参加本周活动' : '本周报名已截止' }}
+            {{ enrollmentOpen ? '立即参加本周活动' : '本周报名已截止' }}
           </button>
           <p v-if="!profileComplete" class="moment-footnote moment-footnote--warn">请先完善个人信息后进行分析</p>
-          <p v-else class="moment-footnote">问卷约 5 分钟，提交前可随时修改或撤回报名。</p>
+          <p v-else class="moment-footnote">仅需 5 分钟填写问卷，提交前可随时修改或撤回。</p>
         </div>
 
-        <!-- 已报名等待中 -->
-        <div v-else-if="status === 'WAITING'" class="moment-panel moment-panel--soft">
+        <div v-else-if="status === 'WAITING'" class="moment-panel">
           <div class="orbit-container">
-            <div class="orbit orbit-1"><span class="orbit-dot">💗</span></div>
-            <div class="orbit orbit-2"><span class="orbit-dot">💫</span></div>
-            <div class="orbit orbit-3"><span class="orbit-dot">✨</span></div>
-            <div class="center-icon">🔮</div>
+            <div class="orbit orbit-1"><span class="orbit-dot dot-pink"></span></div>
+            <div class="orbit orbit-2"><span class="orbit-dot dot-blue"></span></div>
+            <div class="orbit orbit-3"><span class="orbit-dot dot-orange"></span></div>
+            <div class="center-icon pulse-anim">🔮</div>
           </div>
-          <h2 class="moment-panel__h">正在为你寻找...</h2>
-          <p class="moment-panel__p">你的心动档案已提交，系统将为你匹配更契合的人</p>
-          <div class="participant-badge">
+          <h2 class="moment-panel__h">宇宙正在为你调频...</h2>
+          <p class="moment-panel__p">你的心动档案已接入引力场，AI 正在计算最契合的星轨</p>
+          <div class="participant-badge glass-pill">
             <span class="badge-icon">👥</span>
-            <span>本周已有 <strong>{{ participantCount }}</strong> 人参与</span>
+            <span>本周已有 <strong class="text-gradient-warm">{{ participantCount }}</strong> 人发出信号</span>
           </div>
-          <p class="moment-footnote">匹配结果将在管理员触发后揭晓，请耐心等待</p>
+          <p class="moment-footnote mt-4">当两颗星交汇时，我们会第一时间通知你</p>
         </div>
 
-        <!-- 匹配成功 -->
         <div v-else-if="status === 'MATCHED'" class="moment-panel">
           <div v-if="resultPublished" class="confetti-wrap">
             <span v-for="i in 12" :key="i" class="confetti" :style="confettiStyle(i)" />
           </div>
-          <div class="moment-panel__icon" aria-hidden="true">💘</div>
-          <h2 class="moment-panel__h">{{ matchedTitle || '恭喜！找到你的心动对象' }}</h2>
+          <div class="moment-panel__icon heartbeat-anim" aria-hidden="true">💘</div>
+          <h2 class="moment-panel__h text-gradient-warm">{{ matchedTitle || '恭喜！信号捕捉成功' }}</h2>
           <p class="moment-panel__p">
-            <template v-if="resultPublished">本周有人和你特别契合，快去看看吧！</template>
-            <template v-else>匹配已完成，请等待管理员公布本周结果后再查看详情。</template>
+            <template v-if="resultPublished">本周有人和你处于同一频段，快去查收专属匹配报告吧！</template>
+            <template v-else>星轨交汇已完成。等待管理员发布最终结果后即可查看详情。</template>
           </p>
           <button
             type="button"
-            class="moment-btn-solid"
+            class="glow-btn-warm w-full mt-4"
             :disabled="!resultPublished"
             @click="$router.push('/moment/result')"
           >
-            {{ resultPublished ? '查看匹配结果' : '匹配完成，等待系统发布结果' }}
+            {{ resultPublished ? '查看心动对象' : '等待系统揭晓' }}
           </button>
         </div>
 
-        <!-- 未匹配 -->
-        <div v-else-if="status === 'UNMATCHED'" class="moment-panel moment-panel--soft">
-          <div class="moon-icon">🌙</div>
-          <h2 class="moment-panel__h">本周暂未找到最佳匹配</h2>
+        <div v-else-if="status === 'UNMATCHED'" class="moment-panel">
+          <div class="moment-panel__icon float-anim">🌙</div>
+          <h2 class="moment-panel__h">本周星轨暂未交汇</h2>
           <p class="moment-panel__p">
-            这周暂时没有找到和你完美契合的人，心动档案已保留，下周继续帮你寻找。
+            这周的引力场中暂未发现与你完美同频的信号。你的档案已安全保留，下周我们继续寻找。
           </p>
-          <div class="encouragement">
-            <span class="encourage-icon">💪</span>
-            <span>缘分总会在最好的时刻降临</span>
+          <div class="encouragement glass-pill">
+            <span class="encourage-icon">✨</span>
+            <span>最对的人，往往需要一点时间</span>
           </div>
         </div>
       </div>
 
-      <section class="moment-flow" aria-labelledby="moment-flow-title">
-        <h2 id="moment-flow-title" class="moment-section-title">活动流程</h2>
-        <ol class="moment-flow-list">
-          <li>
-            <span class="moment-flow-list__i">1</span>
-            <div>
-              <strong>填写匿名问卷</strong>
-              <p>约 5 分钟，信息仅用于匹配算法，身份默认匿名。</p>
-            </div>
-          </li>
-          <li>
-            <span class="moment-flow-list__i">2</span>
-            <div>
-              <strong>算法深度匹配</strong>
-              <p>报名截止后多维度打分，在契合与安全之间做平衡。</p>
-            </div>
-          </li>
-          <li>
-            <span class="moment-flow-list__i">3</span>
-            <div>
-              <strong>揭晓与选择</strong>
-              <p>结果公布后可查看报告，并选择与 TA 的下一步节奏。</p>
-            </div>
-          </li>
-        </ol>
-      </section>
+      <div class="info-sections-wrapper">
+        <section class="moment-flow glass-card-light" aria-labelledby="moment-flow-title">
+          <h2 id="moment-flow-title" class="moment-section-title">运作机制</h2>
+          <ol class="moment-flow-list">
+            <li>
+              <span class="moment-flow-list__i">1</span>
+              <div>
+                <strong>提交匿名档案</strong>
+                <p>约 5 分钟，信息仅喂给匹配算法，对人类保持绝对匿名。</p>
+              </div>
+            </li>
+            <li>
+              <span class="moment-flow-list__i">2</span>
+              <div>
+                <strong>AI 深度演算</strong>
+                <p>多维度偏好打分，在三观契合与校园安全之间找到最佳平衡。</p>
+              </div>
+            </li>
+            <li>
+              <span class="moment-flow-list__i">3</span>
+              <div>
+                <strong>揭晓与破冰</strong>
+                <p>解锁匹配报告，由你决定是否要与 TA 开启真实的校园相遇。</p>
+              </div>
+            </li>
+          </ol>
+        </section>
 
-      <section class="moment-shield" aria-labelledby="moment-shield-title">
-        <h2 id="moment-shield-title" class="moment-section-title">匿名保护</h2>
-        <p class="moment-shield__p">
-          在双方确认前，个人敏感信息不会向对方展示；匹配与展示规则遵循平台隐私说明。
-        </p>
-      </section>
+        <section class="moment-shield glass-card-light" aria-labelledby="moment-shield-title">
+          <h2 id="moment-shield-title" class="moment-section-title">
+            <el-icon><Lock /></el-icon> 绝对隐私保护
+          </h2>
+          <p class="moment-shield__p">
+            在双方点击“确认破冰”前，你的姓名、专业等敏感身份信息将被完全隐藏。Campal 采用加密逻辑，确保你的每一次心动都安全无虞。
+          </p>
+        </section>
+      </div>
     </template>
   </div>
 </template>
@@ -195,7 +195,11 @@
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { getMomentStatus } from '@/api/momentApi'
 import { useUserStore } from '@/store/userStore'
+import { Lock } from '@element-plus/icons-vue' // 新增的小图标
 
+// ==========================================
+// 核心业务逻辑 100% 保持原封不动
+// ==========================================
 const userStore = useUserStore()
 const profileComplete = computed(() => !!userStore.user?.profileComplete)
 
@@ -235,7 +239,6 @@ const weekBadgeText = computed(() => {
   return `Week ${Number(m[2])} · ${m[1]}年`
 })
 
-/** ISO 周周一（UTC 日历日），与 Java WeekFields.ISO + Jan 4 锚点一致 */
 function isoWeekMondayUtc(isoYear: number, week: number): Date {
   const jan4 = new Date(Date.UTC(isoYear, 0, 4))
   const jan4Dow = jan4.getUTCDay() || 7
@@ -246,7 +249,6 @@ function isoWeekMondayUtc(isoYear: number, week: number): Date {
   return monday
 }
 
-/** 与 PairDateTimeUtils.revealFriday + 周五 12:00 Asia/Shanghai 对齐（无夏令时，+8） */
 function revealEpochFromWeekTag(weekTag: string): number | null {
   const m = weekTag.match(/^(\d{4})-W(\d{1,2})$/i)
   if (!m) return null
@@ -258,7 +260,6 @@ function revealEpochFromWeekTag(weekTag: string): number | null {
   return Date.UTC(fr.getUTCFullYear(), fr.getUTCMonth(), fr.getUTCDate(), 4, 0, 0)
 }
 
-/** 本期周标签对应的周五 12:00（与后端一致） */
 const baseRevealAt = computed(() => {
   if (revealAtEpochMillis.value != null) return revealAtEpochMillis.value
   const tag = currentWeek.value
@@ -266,10 +267,6 @@ const baseRevealAt = computed(() => {
   return revealEpochFromWeekTag(tag)
 })
 
-/**
- * 展示用揭晓时刻：未报名且「本期」周五已过 → 顺推到**下一场**周五 12:00，避免周末仍显示「时刻已到」却无倒计时。
- * 已报名/匹配中等仍看本期，过期则走 showRevealOverdueWait。
- */
 const displayRevealAt = computed(() => {
   const t0 = baseRevealAt.value
   if (t0 == null || resultPublished.value) return null
@@ -284,7 +281,6 @@ const displayRevealAt = computed(() => {
   return t
 })
 
-/** 未使用下期顺推时，hint 仍显示「预计 x月x日」 */
 const countdownIsNextFridayHint = computed(() => {
   const b = baseRevealAt.value
   const d = displayRevealAt.value
@@ -292,7 +288,6 @@ const countdownIsNextFridayHint = computed(() => {
   return d > b
 })
 
-/** 已参与本期流程的用户：本期周五已过且仍未发布 → 提示等待发布（不顺推到下期） */
 const showRevealOverdueWait = computed(() => {
   if (resultPublished.value) return false
   const t0 = baseRevealAt.value
@@ -327,9 +322,7 @@ const revealHintText = computed(() => {
   return `${mm}月${dd}日 ${pad2(hh)}:${pad2(min)}`
 })
 
-function pad2(n: number) {
-  return n < 10 ? `0${n}` : `${n}`
-}
+function pad2(n: number) { return n < 10 ? `0${n}` : `${n}` }
 
 let countdownTimer: ReturnType<typeof setInterval> | null = null
 
@@ -345,10 +338,7 @@ async function fetchStatus() {
       currentWeek.value = data.currentWeek
       matchedTitle.value = data.matchedTitle || ''
       weekStatus.value = data.weekStatus ?? null
-      revealAtEpochMillis.value =
-        data.revealAtEpochMillis != null && data.revealAtEpochMillis !== undefined
-          ? Number(data.revealAtEpochMillis)
-          : null
+      revealAtEpochMillis.value = data.revealAtEpochMillis != null && data.revealAtEpochMillis !== undefined ? Number(data.revealAtEpochMillis) : null
     }
   } catch {
     status.value = 'NOT_ENROLLED'
@@ -360,31 +350,29 @@ async function fetchStatus() {
   }
 }
 
+// 修改了纸屑颜色的生成，更契合晨曦极光主题
 function confettiStyle(i: number) {
-  const hue = (i * 30) % 360
+  const colors = ['#FF3366', '#FF7B54', '#4f8cff', '#a78bfa'];
+  const color = colors[i % colors.length];
   const left = 10 + (i * 7) % 80
-  const delay = (i * 0.3) % 2
-  const duration = 2 + (i * 0.2) % 1.5
+  const delay = (i * 0.2) % 1.5
+  const duration = 2.5 + (i * 0.2) % 1.5
   return {
     left: `${left}%`,
     animationDelay: `${delay}s`,
     animationDuration: `${duration}s`,
-    background: `hsl(${hue}, 80%, 65%)`,
+    background: color,
   }
 }
 
 function onVisibilityChange() {
-  if (document.visibilityState === 'visible') {
-    fetchStatus()
-  }
+  if (document.visibilityState === 'visible') fetchStatus()
 }
 
 onMounted(() => {
   fetchStatus()
   document.addEventListener('visibilitychange', onVisibilityChange)
-  countdownTimer = setInterval(() => {
-    nowMs.value = Date.now()
-  }, 1000)
+  countdownTimer = setInterval(() => { nowMs.value = Date.now() }, 1000)
 })
 
 onUnmounted(() => {
@@ -394,529 +382,181 @@ onUnmounted(() => {
 </script>
 
 <style lang="scss" scoped>
-$burgundy: #5c2a38;
-$rose: #c76b7e;
-$bg: #faf6f7;
-$card: #ffffff;
-$muted: #8a7080;
+/* ==========================================
+   晨曦极光 (Light Glassmorphism) 心动时刻 UI
+   ========================================== */
+$bg-aurora: #f8fafc; 
+$accent-pink: #FF3366;
+$accent-orange: #FF7B54;
+$accent-blue: #4f8cff;
+$text-main: #1e293b; 
+$text-sub: #64748b;  
+$border-light: rgba(255, 255, 255, 0.8);
 
 .moment-page {
-  box-sizing: border-box;
-  width: 100%;
-  min-height: 100vh;
-  padding: 28px 20px 100px;
-  margin: 0;
-  background:
-    radial-gradient(ellipse 120% 80% at 50% -20%, rgba(255, 230, 240, 0.65), transparent 55%),
-    linear-gradient(180deg, $bg 0%, #fff 45%, #fffefc 100%);
-}
-
-.loading-state {
-  text-align: center;
-  padding-top: 100px;
-  color: $muted;
-
-  .pulse-ring {
-    width: 48px;
-    height: 48px;
-    margin: 0 auto 16px;
-    border-radius: 50%;
-    border: 3px solid #ffd6ea;
-    border-top-color: #ff88bd;
-    animation: spin 1s linear infinite;
+  box-sizing: border-box; width: 100%; min-height: 100vh;
+  padding: 24px 20px 100px; margin: 0; position: relative;
+  background: $bg-aurora; color: $text-main;
+  
+  // 晨曦极光弥散背景
+  &::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none;
+    background: 
+      radial-gradient(circle at 15% 10%, rgba(255, 51, 102, 0.08), transparent 45%),
+      radial-gradient(circle at 85% 30%, rgba(79, 140, 255, 0.06), transparent 45%),
+      radial-gradient(circle at 50% 80%, rgba(255, 123, 84, 0.05), transparent 50%);
+    z-index: 0;
   }
 }
+.moment-page > * { position: relative; z-index: 1; max-width: 600px; margin-left: auto; margin-right: auto; }
 
-.moment-head {
-  text-align: center;
-  margin-bottom: 20px;
+// --- 通用组件 ---
+.glass-panel {
+  background: rgba(255, 255, 255, 0.65); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border: 1px solid $border-light; box-shadow: 0 8px 32px rgba(31, 38, 135, 0.05); border-radius: 20px;
+}
+.glass-pill {
+  background: rgba(255, 255, 255, 0.6); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.8); border-radius: 999px;
+}
+.glass-pill-light {
+  background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(255, 255, 255, 0.5); border-radius: 12px;
+}
+.glass-card-light {
+  background: rgba(255, 255, 255, 0.4); backdrop-filter: blur(12px); border: 1px solid #fff; border-radius: 18px;
 }
 
-.moment-eyebrow {
-  margin: 0 0 10px;
-  font-size: 11px;
-  letter-spacing: 0.42em;
-  color: #b0909c;
-  font-weight: 600;
+// 文本高光渐变
+.text-gradient-warm {
+  background: linear-gradient(135deg, $accent-pink, $accent-orange);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800;
 }
 
-.moment-title {
-  margin: 0 0 12px;
-  font-size: 1.65rem;
-  font-weight: 800;
-  line-height: 1.35;
-  color: $burgundy;
-  font-family: 'Noto Serif SC', 'Songti SC', 'STSong', serif;
+// 通用流光暖色按钮
+.glow-btn-warm {
+  height: 52px; border-radius: 999px; border: none;
+  background: linear-gradient(135deg, $accent-pink, $accent-orange); color: white;
+  font-size: 16px; font-weight: 700; cursor: pointer; letter-spacing: 1px;
+  box-shadow: 0 8px 25px rgba(255, 51, 102, 0.3); transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  
+  &:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(255, 51, 102, 0.4); }
+  &:disabled { background: #cbd5e1; box-shadow: none; cursor: not-allowed; opacity: 0.8; color: #fff; }
 }
+.w-full { width: 100%; }
+.mt-4 { margin-top: 16px; }
 
-.moment-title__accent {
-  color: #8b2942;
-  background: linear-gradient(120deg, #8b2942, #c76b7e);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
+// --- 加载与动画 ---
+.loading-state { text-align: center; padding-top: 120px; color: $text-sub; }
+.pulse-ring { width: 48px; height: 48px; margin: 0 auto 16px; border-radius: 50%; border: 3px solid rgba(255,51,102,0.2); border-top-color: $accent-pink; animation: spin 1s linear infinite; }
+.float-anim { animation: float 3s ease-in-out infinite; }
+.pulse-anim { animation: scale-pulse 2s ease-in-out infinite; }
+.heartbeat-anim { animation: heartbeat 1.5s ease-in-out infinite; }
+
+// --- 头部 ---
+.moment-head { text-align: center; margin-bottom: 24px; }
+.moment-eyebrow { margin: 0 0 8px; font-size: 11px; letter-spacing: 0.2em; color: $accent-blue; font-weight: 700; }
+.moment-title { margin: 0 0 12px; font-size: 28px; font-weight: 800; color: $text-main; }
+.moment-title__accent { @extend .text-gradient-warm; }
+.moment-lead { margin: 0 auto 16px; font-size: 14px; line-height: 1.6; color: $text-sub; }
+.moment-week-pill { display: inline-block; padding: 6px 16px; font-size: 12px; font-weight: 600; color: $text-main; }
+
+// --- 倒计时 ---
+.moment-countdown { margin-bottom: 20px; padding: 20px 16px; text-align: center; position: relative; overflow: hidden; }
+// 倒计时内部微妙光晕
+.moment-countdown::before {
+  content: ''; position: absolute; top: -50%; left: 50%; width: 100%; height: 100%;
+  background: radial-gradient(ellipse at center, rgba(255, 51, 102, 0.05), transparent 70%);
+  transform: translateX(-50%); pointer-events: none;
 }
-
-.moment-lead {
-  margin: 0 auto 16px;
-  max-width: 400px;
-  font-size: 0.88rem;
-  line-height: 1.65;
-  color: $muted;
-}
-
-.moment-week-pill {
-  display: inline-block;
-  padding: 8px 18px;
-  border-radius: 999px;
-  font-size: 0.78rem;
-  color: #7a4e5c;
-  background: rgba(255, 200, 215, 0.35);
-  border: 1px solid rgba(200, 140, 160, 0.25);
-}
-
-.moment-countdown {
-  margin-bottom: 18px;
-  padding: 16px 18px;
-  border-radius: 16px;
-  text-align: center;
-  background: rgba(255, 255, 255, 0.75);
-  border: 1px solid rgba(200, 160, 175, 0.22);
-  box-shadow: 0 4px 18px rgba(90, 40, 55, 0.05);
-}
-
-.moment-countdown__title {
-  margin: 0 0 12px;
-  font-size: 0.85rem;
-  font-weight: 700;
-  color: $burgundy;
-  letter-spacing: 0.06em;
-}
-
-.moment-countdown__done {
-  margin: 0;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: $rose;
-}
-
-.moment-countdown__wait {
-  margin: 0;
-  font-size: 0.82rem;
-  line-height: 1.55;
-  color: $muted;
-}
-
-.moment-countdown__digits {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  justify-content: center;
-  gap: 6px 10px;
-  margin-bottom: 10px;
-}
-
+.moment-countdown__title { margin: 0 0 12px; font-size: 13px; font-weight: 700; color: $text-sub; letter-spacing: 1px; }
+.moment-countdown__done { margin: 0; font-size: 18px; }
+.moment-countdown__wait { margin: 0; font-size: 14px; color: $text-sub; }
+.moment-countdown__digits { display: flex; align-items: baseline; justify-content: center; gap: 8px; margin-bottom: 8px; }
 .moment-countdown__unit {
-  display: inline-flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 2.2rem;
-
-  strong {
-    font-size: 1.5rem;
-    font-weight: 800;
-    font-variant-numeric: tabular-nums;
-    color: $rose;
-    line-height: 1.1;
-  }
-
-  small {
-    font-size: 0.62rem;
-    color: #9a7d88;
-    margin-top: 2px;
-  }
+  display: flex; flex-direction: column; align-items: center; min-width: 48px;
+  strong { font-size: 32px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1; @extend .text-gradient-warm; }
+  small { font-size: 10px; color: #94a3b8; margin-top: 4px; font-weight: 700; letter-spacing: 1px; }
 }
+.moment-countdown__sep { width: 4px; }
+.moment-countdown__colon { font-size: 24px; font-weight: 800; color: #cbd5e1; transform: translateY(-8px); }
+.moment-countdown__hint { margin: 0; font-size: 12px; color: #94a3b8; }
 
-.moment-countdown__unit--time strong {
-  font-size: 1.35rem;
-}
-
-.moment-countdown__sep {
-  width: 8px;
-}
-
-.moment-countdown__colon {
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: #c9a8b4;
-  align-self: center;
-  padding: 0 2px;
-}
-
-.moment-countdown__hint {
-  margin: 0;
-  font-size: 0.72rem;
-  line-height: 1.5;
-  color: #a898a0;
-}
-
-.moment-tabs {
-  display: flex;
-  gap: 4px;
-  margin-bottom: 14px;
-  padding: 4px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.55);
-  border: 1px solid rgba(200, 160, 175, 0.2);
-}
-
-.moment-tab {
-  flex: 1;
-  text-align: center;
-  padding: 10px 4px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  color: #a08894;
-  border-radius: 10px;
-  transition: background 0.2s, color 0.2s;
-}
-
-.moment-tab--on {
-  background: #fff;
-  color: $burgundy;
-  box-shadow: 0 2px 10px rgba(80, 40, 55, 0.08);
-}
-
-.moment-card {
-  border-radius: 18px;
-  background: $card;
-  border: 1px solid rgba(200, 170, 185, 0.28);
-  box-shadow: 0 12px 40px rgba(70, 35, 50, 0.07);
-  overflow: hidden;
-}
-
-.moment-panel {
-  position: relative;
-  padding: 28px 22px 26px;
-  text-align: center;
-}
-
-.moment-panel--soft {
-  background: linear-gradient(180deg, #fffefb 0%, #fff9fb 100%);
-}
-
-.moment-panel__icon {
-  font-size: 2.5rem;
-  margin-bottom: 8px;
-}
-
-.moment-panel__tag {
-  margin: 0 0 6px;
-  font-size: 0.8rem;
-  font-weight: 600;
-  color: $rose;
-}
-
-.moment-panel__h {
-  margin: 0 0 10px;
-  font-size: 1.2rem;
-  font-weight: 700;
-  color: $burgundy;
-}
-
-.moment-panel__p {
-  margin: 0 0 16px;
-  font-size: 0.88rem;
-  line-height: 1.65;
-  color: $muted;
-}
-
-.moment-mini-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-  margin: 18px 0 20px;
-}
-
-.moment-mini-cell {
-  padding: 10px 6px;
-  border-radius: 12px;
-  background: #fdf8f9;
-  border: 1px solid rgba(220, 190, 200, 0.35);
-}
-
-.moment-mini-cell__n {
-  display: block;
-  font-size: 0.95rem;
-  font-weight: 700;
-  color: $burgundy;
-}
-
-.moment-mini-cell__t {
-  font-size: 0.65rem;
-  color: #a09098;
-  margin-top: 4px;
-  display: block;
-}
-
-.moment-btn-outline {
-  width: 100%;
-  max-width: 280px;
-  height: 50px;
-  margin: 0 auto;
-  display: block;
-  border-radius: 999px;
-  border: 1.5px solid rgba(180, 120, 145, 0.55);
-  background: #fff;
-  color: $burgundy;
-  font-size: 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  transition: transform 0.15s, box-shadow 0.15s;
-
-  &:hover:not(:disabled) {
-    transform: translateY(-1px);
-    box-shadow: 0 6px 20px rgba(90, 40, 55, 0.1);
-  }
-
-  &:disabled {
-    opacity: 0.55;
-    cursor: not-allowed;
+// --- 阶段胶囊 (Tuner) ---
+.tuner-capsule { display: flex; padding: 6px; gap: 4px; margin-bottom: 24px; }
+.tuner-btn {
+  flex: 1; padding: 10px 0; border-radius: 999px; text-align: center; font-size: 14px; font-weight: 600;
+  color: $text-sub; transition: all 0.3s;
+  &.active {
+    color: $accent-pink; background: linear-gradient(135deg, rgba(79, 140, 255, 0.08), rgba(255, 51, 102, 0.08));
+    box-shadow: 0 2px 8px rgba(255, 51, 102, 0.05), inset 0 0 0 1px rgba(255, 255, 255, 0.8);
   }
 }
 
-.moment-btn-solid {
-  width: 100%;
-  max-width: 280px;
-  height: 50px;
-  margin: 0 auto;
-  display: block;
-  border: none;
-  border-radius: 999px;
-  background: linear-gradient(135deg, #e08ba0 0%, #c76b7e 100%);
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 700;
-  cursor: pointer;
-  box-shadow: 0 6px 22px rgba(180, 90, 110, 0.35);
-  transition: transform 0.15s, opacity 0.15s;
+// --- 核心状态卡片 ---
+.moment-card { padding: 32px 24px; text-align: center; position: relative; overflow: hidden; }
+.moment-panel__icon { font-size: 48px; margin-bottom: 12px; line-height: 1; }
+.moment-panel__tag { margin: 0 0 8px; font-size: 13px; }
+.moment-panel__h { margin: 0 0 12px; font-size: 22px; font-weight: 800; color: $text-main; }
+.moment-panel__p { margin: 0; font-size: 15px; line-height: 1.6; color: $text-sub; }
 
-  &:hover:not(:disabled) {
-    transform: translateY(-2px);
-  }
+.moment-mini-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 24px 0; }
+.moment-mini-cell { padding: 12px 4px; text-align: center; }
+.moment-mini-cell__n { display: block; font-size: 18px; font-weight: 800; color: $text-main; }
+.moment-mini-cell__t { display: block; font-size: 11px; color: $text-sub; margin-top: 4px; font-weight: 600; }
+.moment-footnote { margin-top: 16px; font-size: 12px; color: #94a3b8; }
+.moment-footnote--warn { color: #f56c6c; }
 
-  &:disabled {
-    opacity: 0.85;
-    cursor: not-allowed;
-    background: linear-gradient(135deg, #c4b8bc 0%, #b5a9ae 100%);
-    box-shadow: none;
-  }
-}
-
-.moment-footnote {
-  margin-top: 14px;
-  font-size: 0.75rem;
-  color: #a898a0;
-  line-height: 1.5;
-}
-
-.moment-footnote--warn {
-  color: var(--el-color-warning);
-}
-
-.orbit-container {
-  position: relative;
-  width: 140px;
-  height: 140px;
-  margin: 0 auto 24px;
-}
-
-.center-icon {
-  position: absolute;
-  top: 50%;
-  left: 50%;
-  transform: translate(-50%, -50%);
-  font-size: 36px;
-  animation: pulse 2s ease-in-out infinite;
-}
-
+// --- 等待中动画 (科技浪漫系引力轨道) ---
+.orbit-container { position: relative; width: 160px; height: 160px; margin: 0 auto 32px; }
+.center-icon { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); font-size: 42px; text-shadow: 0 0 20px rgba(167, 139, 250, 0.5); }
 .orbit {
-  position: absolute;
-  border: 1px dashed rgba(200, 160, 175, 0.45);
-  border-radius: 50%;
-  animation: spin 6s linear infinite;
-
-  &-1 {
-    inset: 18px;
-  }
-  &-2 {
-    inset: 4px;
-    animation-duration: 8s;
-    animation-direction: reverse;
-  }
-  &-3 {
-    inset: -8px;
-    animation-duration: 10s;
-  }
+  position: absolute; border-radius: 50%; border: 1px solid rgba(79, 140, 255, 0.2);
+  animation: spin linear infinite;
+  &-1 { inset: 20px; animation-duration: 4s; }
+  &-2 { inset: 0px; border-color: rgba(255, 51, 102, 0.15); animation-duration: 7s; animation-direction: reverse; }
+  &-3 { inset: -20px; border-color: rgba(255, 123, 84, 0.15); animation-duration: 12s; }
 }
-
 .orbit-dot {
-  position: absolute;
-  top: -8px;
-  left: 50%;
-  transform: translateX(-50%);
-  font-size: 16px;
+  position: absolute; top: -6px; left: 50%; transform: translateX(-50%); width: 10px; height: 10px; border-radius: 50%;
+  &.dot-pink { background: $accent-pink; box-shadow: 0 0 12px $accent-pink; }
+  &.dot-blue { background: $accent-blue; box-shadow: 0 0 12px $accent-blue; width: 8px; height: 8px; top: -4px;}
+  &.dot-orange { background: $accent-orange; box-shadow: 0 0 12px $accent-orange; width: 6px; height: 6px; top: -3px;}
 }
+.participant-badge { display: inline-flex; align-items: center; gap: 8px; padding: 10px 20px; font-size: 14px; color: $text-sub; margin-top: 24px; }
 
-.participant-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 18px;
-  background: rgba(255, 200, 215, 0.25);
-  border-radius: 999px;
-  font-size: 0.85rem;
-  color: $muted;
+// --- 纸屑特效 ---
+.confetti-wrap { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.confetti { position: absolute; top: -10px; width: 6px; height: 12px; border-radius: 4px; opacity: 0; animation: confettiFall ease-in infinite; }
 
-  .badge-icon {
-    font-size: 16px;
-  }
-  strong {
-    color: $rose;
-    font-weight: 700;
-  }
-}
+.encouragement { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; font-size: 14px; color: $text-main; font-weight: 600; margin-top: 24px; }
 
-.confetti-wrap {
-  position: absolute;
-  inset: 0;
-  pointer-events: none;
-}
-
-.confetti {
-  position: absolute;
-  top: -10px;
-  width: 8px;
-  height: 8px;
-  border-radius: 2px;
-  opacity: 0;
-  animation: confettiFall 3s ease-in infinite;
-}
-
-.moon-icon {
-  font-size: 52px;
-  margin-bottom: 8px;
-}
-
-.encouragement {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 12px 20px;
-  background: rgba(255, 210, 225, 0.25);
-  border-radius: 999px;
-  font-size: 0.85rem;
-  color: $muted;
-}
-
-.moment-flow {
-  margin-top: 28px;
-  padding: 22px 18px;
-  border-radius: 18px;
-  background: rgba(255, 255, 255, 0.65);
-  border: 1px solid rgba(200, 170, 185, 0.22);
-}
-
-.moment-section-title {
-  margin: 0 0 14px;
-  font-size: 1rem;
-  font-weight: 700;
-  color: $burgundy;
-}
+// --- 底部信息区 ---
+.info-sections-wrapper { display: flex; flex-direction: column; gap: 16px; margin-top: 24px; }
+.moment-flow, .moment-shield { padding: 24px 20px; }
+.moment-section-title { margin: 0 0 16px; font-size: 16px; font-weight: 800; color: $text-main; display: flex; align-items: center; gap: 6px;}
 
 .moment-flow-list {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-
-  li {
-    display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
-    &:last-child {
-      margin-bottom: 0;
-    }
-    strong {
-      display: block;
-      font-size: 0.9rem;
-      color: #4a3038;
-      margin-bottom: 4px;
-    }
-    p {
-      margin: 0;
-      font-size: 0.8rem;
-      line-height: 1.55;
-      color: $muted;
-    }
-  }
+  margin: 0; padding: 0; list-style: none;
+  li { display: flex; gap: 14px; margin-bottom: 20px; &:last-child { margin-bottom: 0; } }
 }
-
 .moment-flow-list__i {
-  flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.75rem;
-  font-weight: 800;
-  color: #fff;
-  background: linear-gradient(145deg, #e8a0b0, #c76b7e);
+  flex-shrink: 0; width: 28px; height: 28px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: #fff; background: linear-gradient(135deg, $accent-pink, $accent-orange);
+  box-shadow: 0 4px 10px rgba(255, 51, 102, 0.3);
 }
+.moment-flow-list p { margin: 4px 0 0; font-size: 13px; line-height: 1.6; color: $text-sub; }
+.moment-flow-list strong { font-size: 15px; color: $text-main; }
+.moment-shield__p { margin: 0; font-size: 13px; line-height: 1.6; color: $text-sub; }
 
-.moment-shield {
-  margin-top: 16px;
-  padding: 18px 18px 20px;
-  border-radius: 18px;
-  background: rgba(255, 250, 252, 0.9);
-  border: 1px dashed rgba(200, 160, 175, 0.35);
-}
+// --- Keyframes ---
+@keyframes spin { 100% { transform: rotate(360deg); } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-8px); } }
+@keyframes scale-pulse { 0%, 100% { transform: translate(-50%, -50%) scale(1); } 50% { transform: translate(-50%, -50%) scale(1.1); } }
+@keyframes heartbeat { 0% { transform: scale(1); } 15% { transform: scale(1.15); } 30% { transform: scale(1); } 45% { transform: scale(1.15); } 60%, 100% { transform: scale(1); } }
+@keyframes confettiFall { 0% { transform: translateY(0) rotate(0deg); opacity: 1; } 100% { transform: translateY(500px) rotate(720deg); opacity: 0; } }
 
-.moment-shield__p {
-  margin: 0;
-  font-size: 0.8rem;
-  line-height: 1.6;
-  color: #9a8890;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
-}
-
-@keyframes pulse {
-  0%,
-  100% {
-    transform: translate(-50%, -50%) scale(1);
-  }
-  50% {
-    transform: translate(-50%, -50%) scale(1.08);
-  }
-}
-
-@keyframes confettiFall {
-  0% {
-    transform: translateY(0) rotate(0deg);
-    opacity: 1;
-  }
-  100% {
-    transform: translateY(400px) rotate(720deg);
-    opacity: 0;
-  }
+@media (max-width: 480px) {
+  .moment-countdown__unit strong { font-size: 28px; }
+  .moment-title { font-size: 24px; }
 }
 </style>
-
-
-

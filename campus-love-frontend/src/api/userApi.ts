@@ -19,6 +19,10 @@ export interface UserProfile {
   creditScore: number
   inviteCount: number
   participateCount: number
+  inviteConcurrentLimit?: number
+  invitePublicConcurrentLimit?: number
+  invitePrivateConcurrentLimit?: number
+  inviteDailyLimit?: number
   mbti: string | null
   zodiac: string | null
   bazi: string | null

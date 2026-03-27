@@ -35,12 +35,7 @@
         <div class="invite-meta">
           <div class="meta-row meta-row-clickable" @click="$router.push(`/profile/${invite.creatorId}`)">
             <span class="meta-label">发起人:</span>
-            <span class="meta-value">
-              {{ invite.creator?.nickname || '未知' }}
-              <span v-if="invite.creator?.creditScore !== null" class="meta-tag">
-                信用分 {{ invite.creator!.creditScore }}
-              </span>
-            </span>
+            <span class="meta-value">{{ invite.creator?.nickname || '未知' }}</span>
           </div>
           <div class="meta-row">
             <span class="meta-label">时间:</span>
@@ -89,10 +84,13 @@
             再次发起
           </button>
         </div>
-        <!-- 已结束：评价入口（置顶显示，避免被聊天区遮挡） -->
+        <!-- 已结束：评价入口（仅结束后24小时内开放） -->
         <div v-if="invite.status === 'ENDED' && (isCreator || hasJoined)" class="rating-entry-bar">
-          <span class="rating-entry-label">邀约已结束，快来评价吧</span>
-          <button class="btn-primary" @click="openRatingDialog">
+          <div class="rating-entry-copy">
+            <span class="rating-entry-label">{{ canRateNow ? '邀约已结束，评价窗口已开启' : '评价窗口已关闭' }}</span>
+            <span class="rating-entry-sub">{{ canRateNow ? `剩余 ${ratingTimeLeftText}` : '仅在邀约结束后24小时内可评价' }}</span>
+          </div>
+          <button class="btn-primary rating-entry-btn" :disabled="!canRateNow" @click="openRatingDialog">
             评价本次邀约
           </button>
         </div>
@@ -272,9 +270,10 @@
           <button
             v-if="invite.status === 'ENDED' && (isCreator || hasJoined)"
             class="btn-primary"
+            :disabled="!canRateNow"
             @click="openRatingDialog"
           >
-            评价本次邀约
+            {{ canRateNow ? '评价本次邀约' : '评价窗口已关闭' }}
           </button>
 
           <!-- 进行中的报名/退出操作 -->
@@ -306,10 +305,10 @@
       </div>
 
       <!-- Rating Dialog -->
-      <el-dialog v-model="showRatingDialog" :title="ratingDialogTitle" width="400px" :close-on-click-modal="false" destroy-on-close @closed="resetRatingForm">
+      <el-dialog v-model="showRatingDialog" :title="ratingDialogTitle" width="460px" :close-on-click-modal="false" destroy-on-close @closed="resetRatingForm">
         <!-- 发起人：先选择要评价的参与者 -->
         <div v-if="isCreator && !ratingForm.ratedUserId" class="rating-participant-list">
-          <p class="rating-hint">选择要评价的参与者</p>
+          <p class="rating-hint">选择要评价的参与者，系统将用于更新口碑分</p>
           <div
             v-for="p in participantsToRate"
             :key="p.userId"
@@ -323,14 +322,19 @@
         </div>
         <!-- 评价表单（参与者评价发起人 / 发起人已选参与者） -->
         <div v-else-if="ratingForm.ratedUserId" class="rating-form">
-          <p v-if="ratingTargetNickname" class="rating-target">评价 {{ ratingTargetNickname }}</p>
-          <div class="rating-item">
+          <div v-if="ratingTargetNickname" class="rating-target-card">
+            <span class="rating-target-label">本次评价对象</span>
+            <span class="rating-target-name">{{ ratingTargetNickname }}</span>
+          </div>
+          <div class="rating-item rating-item--panel">
             <label>社交体验</label>
             <el-rate v-model="ratingForm.socialRating" :max="5" allow-half />
+            <span class="rating-score">{{ ratingForm.socialRating.toFixed(1) }} / 5.0</span>
           </div>
-          <div v-if="ratingForm.ratedUserId === invite?.creatorId" class="rating-item">
+          <div v-if="ratingForm.ratedUserId === invite?.creatorId" class="rating-item rating-item--panel">
             <label>组织能力</label>
             <el-rate v-model="ratingForm.orgRating" :max="5" allow-half />
+            <span class="rating-score">{{ Number(ratingForm.orgRating || 0).toFixed(1) }} / 5.0</span>
           </div>
           <div class="rating-item">
             <label>评价内容</label>
@@ -442,6 +446,8 @@ const ratingForm = ref<InviteRatingCreateRequest>({
   orgRating: 5,
   content: '',
 })
+const RATING_WINDOW_HOURS = 24
+const DEFAULT_EVENT_DURATION_HOURS = 4
 
 // 是否是发起人
 const isCreator = computed(() => {
@@ -520,6 +526,40 @@ const showChatPanel = computed(() => {
 })
 
 const myId = computed(() => userStore.user?.id ?? 0)
+
+function resolveInviteEndAt(raw: Invite | null): Date | null {
+  if (!raw) return null
+  const endRaw = raw.inviteEndTime || raw.inviteTime
+  if (!endRaw) return null
+  const base = new Date(endRaw)
+  if (Number.isNaN(base.getTime())) return null
+  if (raw.inviteEndTime) return base
+  return new Date(base.getTime() + DEFAULT_EVENT_DURATION_HOURS * 60 * 60 * 1000)
+}
+
+const canRateNow = computed(() => {
+  if (!invite.value) return false
+  if (invite.value.status !== 'ENDED') return false
+  if (!isCreator.value && !hasJoined.value) return false
+  const endAt = resolveInviteEndAt(invite.value)
+  if (!endAt) return false
+  return Date.now() <= endAt.getTime() + RATING_WINDOW_HOURS * 60 * 60 * 1000
+})
+
+const ratingTimeLeftText = computed(() => {
+  if (!invite.value) return '0分钟'
+  const endAt = resolveInviteEndAt(invite.value)
+  if (!endAt) return '0分钟'
+  const deadline = endAt.getTime() + RATING_WINDOW_HOURS * 60 * 60 * 1000
+  const diff = deadline - Date.now()
+  if (diff <= 0) return '0分钟'
+  const totalMinutes = Math.ceil(diff / (60 * 1000))
+  const hours = Math.floor(totalMinutes / 60)
+  const minutes = totalMinutes % 60
+  if (hours <= 0) return `${minutes}分钟`
+  if (minutes === 0) return `${hours}小时`
+  return `${hours}小时${minutes}分钟`
+})
 
 // 只要有 chatGroupId 就使用群聊通道（公开/私密均可）
 const isGroupChat = computed(() => {
@@ -766,6 +806,10 @@ const ratingDialogTitle = computed(() => {
 // 打开评价弹窗
 function openRatingDialog() {
   if (!invite.value) return
+  if (!canRateNow.value) {
+    ElMessage.warning('评价入口已关闭，仅在邀约结束后24小时内开放')
+    return
+  }
   ratingForm.value.inviteId = invite.value.id
   ratingForm.value.ratedUserId = 0
   ratingForm.value.socialRating = 5
@@ -1232,10 +1276,28 @@ onMounted(loadInvite)
   border-radius: $radius-md;
 }
 
+.rating-entry-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .rating-entry-label {
   font-size: 14px;
   color: $text-primary;
-  font-weight: 500;
+  font-weight: 600;
+}
+
+.rating-entry-sub {
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.rating-entry-btn {
+  flex: 0 0 auto;
+  min-width: 132px;
+  height: 40px;
+  font-size: 14px;
 }
 
 .rating-participant-list {
@@ -1277,6 +1339,27 @@ onMounted(loadInvite)
   color: $text-primary;
   margin-bottom: 12px;
   font-weight: 600;
+}
+
+.rating-target-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border: 1px solid rgba($primary, 0.24);
+  background: linear-gradient(135deg, rgba($primary, 0.1), rgba($primary, 0.02));
+  border-radius: $radius-md;
+  padding: 10px 12px;
+}
+
+.rating-target-label {
+  font-size: 12px;
+  color: $text-secondary;
+}
+
+.rating-target-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: $text-primary;
 }
 
 .participants-section {
@@ -1696,5 +1779,17 @@ onMounted(loadInvite)
     font-weight: 600;
     color: $text-primary;
   }
+}
+
+.rating-item--panel {
+  border: 1px solid $border-light;
+  background: $bg-secondary;
+  border-radius: $radius-md;
+  padding: 12px;
+}
+
+.rating-score {
+  font-size: 12px;
+  color: $text-secondary;
 }
 </style>

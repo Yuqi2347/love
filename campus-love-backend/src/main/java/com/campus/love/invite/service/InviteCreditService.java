@@ -7,6 +7,7 @@ import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.invite.entity.Invite;
 import com.campus.love.invite.entity.InviteParticipant;
+import com.campus.love.invite.enums.InviteModeEnum;
 import com.campus.love.invite.enums.InviteStatusEnum;
 import com.campus.love.invite.mapper.InviteMapper;
 import com.campus.love.invite.mapper.InviteParticipantMapper;
@@ -16,12 +17,11 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
+import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
-
-import static java.util.stream.Collectors.toMap;
 
 /**
  * 邀约信用分、等级限制与用户邀约统计（发起/参与次数）的校验与更新。
@@ -30,9 +30,26 @@ import static java.util.stream.Collectors.toMap;
 @RequiredArgsConstructor
 public class InviteCreditService {
 
+    private static final List<String> ACTIVE_INVITE_STATUSES = List.of(
+            InviteStatusEnum.RECRUITING.name(),
+            InviteStatusEnum.FULL.name(),
+            InviteStatusEnum.CONFIRMED.name(),
+            InviteStatusEnum.IN_PROGRESS.name()
+    );
+
     private final UserMapper userMapper;
     private final InviteMapper inviteMapper;
     private final InviteParticipantMapper participantMapper;
+
+    private record ActiveInviteCounts(int publicCount, int privateCount) {
+        int countForMode(String inviteMode) {
+            return InviteModeEnum.PRIVATE.name().equals(inviteMode) ? privateCount : publicCount;
+        }
+
+        int total() {
+            return publicCount + privateCount;
+        }
+    }
 
     /**
      * 检查用户信用分是否不低于 minScore
@@ -50,14 +67,14 @@ public class InviteCreditService {
     /**
      * 检查今日邀约次数与同时进行数
      */
-    public void checkInviteCreateLimit(Long userId) {
+    public void checkInviteCreateLimit(Long userId, String inviteMode) {
         User user = userMapper.selectById(userId);
         if (user == null) {
             throw new BusinessException(ResultCode.USER_NOT_FOUND);
         }
 
-        int level = user.getUserLevel() != null ? user.getUserLevel() : 1;
-        InviteLevelLimit limit = InviteLevelLimit.fromLevel(level);
+        String normalizedMode = normalizeInviteMode(inviteMode);
+        InviteLevelLimit limit = resolveLevelLimit(user);
 
         LocalDateTime todayStart = LocalDateTime.now().withHour(0).withMinute(0).withSecond(0);
 
@@ -71,63 +88,129 @@ public class InviteCreditService {
             throw new BusinessException(ResultCode.INVITE_LIMIT_EXCEEDED);
         }
 
-        long concurrentCount = inviteMapper.selectCount(
-                new LambdaQueryWrapper<Invite>()
-                        .eq(Invite::getCreatorId, userId)
-                        .eq(Invite::getDeleted, false)
-                        .in(Invite::getStatus,
-                                InviteStatusEnum.RECRUITING.name(),
-                                InviteStatusEnum.FULL.name(),
-                                InviteStatusEnum.CONFIRMED.name(),
-                                InviteStatusEnum.IN_PROGRESS.name()));
-
-        if (concurrentCount >= limit.getConcurrentLimit()) {
-            throw new BusinessException(ResultCode.CONFLICT, "同时进行的邀约已达上限");
+        ActiveInviteCounts activeCounts = countActiveInviteInvolvementByMode(userId);
+        int modeLimit = resolveModeLimit(limit, normalizedMode);
+        int modeCount = activeCounts.countForMode(normalizedMode);
+        if (modeCount >= modeLimit) {
+            throw new BusinessException(ResultCode.CONFLICT,
+                    "当前最多可同时参与" + modeLimit + "场" + resolveModeLabel(normalizedMode) + "邀约");
         }
+    }
+
+    /** 兼容旧调用：默认按公共邀约限额校验。 */
+    public void checkInviteCreateLimit(Long userId) {
+        checkInviteCreateLimit(userId, InviteModeEnum.PUBLIC.name());
     }
 
     /**
      * 检查用户当前同时参与的邀约数量是否超过上限
      */
+    public void checkParticipateLimit(Long userId, String inviteMode) {
+        User user = userMapper.selectById(userId);
+        if (user == null) {
+            throw new BusinessException(ResultCode.USER_NOT_FOUND);
+        }
+        String normalizedMode = normalizeInviteMode(inviteMode);
+        InviteLevelLimit limit = resolveLevelLimit(user);
+        ActiveInviteCounts activeCounts = countActiveInviteInvolvementByMode(userId);
+        int modeLimit = resolveModeLimit(limit, normalizedMode);
+        int modeCount = activeCounts.countForMode(normalizedMode);
+        if (modeCount >= modeLimit) {
+            throw new BusinessException(ResultCode.PARTICIPATE_LIMIT_EXCEEDED,
+                    "当前最多可同时参与" + modeLimit + "场" + resolveModeLabel(normalizedMode) + "邀约");
+        }
+    }
+
+    /** 兼容旧调用：默认按公共邀约限额校验。 */
     public void checkParticipateLimit(Long userId) {
+        checkParticipateLimit(userId, InviteModeEnum.PUBLIC.name());
+    }
+
+    private InviteLevelLimit resolveLevelLimit(User user) {
+        int level = user.getUserLevel() != null ? user.getUserLevel() : 1;
+        return InviteLevelLimit.fromLevel(level);
+    }
+
+    private String normalizeInviteMode(String inviteMode) {
+        if (InviteModeEnum.PRIVATE.name().equalsIgnoreCase(inviteMode)) {
+            return InviteModeEnum.PRIVATE.name();
+        }
+        return InviteModeEnum.PUBLIC.name();
+    }
+
+    private int resolveModeLimit(InviteLevelLimit limit, String inviteMode) {
+        if (InviteModeEnum.PRIVATE.name().equals(inviteMode)) {
+            return limit.getPrivateConcurrentLimit();
+        }
+        return limit.getPublicConcurrentLimit();
+    }
+
+    private String resolveModeLabel(String inviteMode) {
+        return InviteModeEnum.PRIVATE.name().equals(inviteMode) ? "私密" : "公共";
+    }
+
+    private static boolean isActiveInvite(Invite invite) {
+        return invite != null
+                && invite.getId() != null
+                && !Boolean.TRUE.equals(invite.getDeleted())
+                && ACTIVE_INVITE_STATUSES.contains(invite.getStatus());
+    }
+
+    private static boolean isPrivateInvite(Invite invite) {
+        return invite != null && InviteModeEnum.PRIVATE.name().equals(invite.getInviteMode());
+    }
+
+    /**
+     * 统计用户当前“同时参与”的邀约数（发起 + 参与，去重，并区分公共/私密）。
+     */
+    private ActiveInviteCounts countActiveInviteInvolvementByMode(Long userId) {
+        Set<Long> activeInviteIds = new HashSet<>();
+        int publicCount = 0;
+        int privateCount = 0;
+
+        List<Invite> activeCreatedInvites = inviteMapper.selectList(
+                new LambdaQueryWrapper<Invite>()
+                        .eq(Invite::getCreatorId, userId)
+                        .eq(Invite::getDeleted, false)
+                        .in(Invite::getStatus, ACTIVE_INVITE_STATUSES));
+        if (activeCreatedInvites != null) {
+            for (Invite invite : activeCreatedInvites) {
+                if (!isActiveInvite(invite) || !activeInviteIds.add(invite.getId())) {
+                    continue;
+                }
+                if (isPrivateInvite(invite)) {
+                    privateCount++;
+                } else {
+                    publicCount++;
+                }
+            }
+        }
+
         List<InviteParticipant> participants = participantMapper.selectList(
                 new LambdaQueryWrapper<InviteParticipant>()
                         .eq(InviteParticipant::getUserId, userId));
-        if (participants.isEmpty()) {
-            return;
-        }
-        List<Long> inviteIds = participants.stream()
+        List<Long> participantInviteIds = participants.stream()
                 .map(InviteParticipant::getInviteId)
                 .filter(Objects::nonNull)
                 .distinct()
                 .collect(Collectors.toList());
-        if (inviteIds.isEmpty()) {
-            return;
-        }
-        List<Invite> invites = inviteMapper.selectBatchIds(inviteIds);
-        Map<Long, Invite> inviteMap = invites != null ? invites.stream()
-                .filter(Objects::nonNull)
-                .filter(inv -> !Boolean.TRUE.equals(inv.getDeleted()))
-                .collect(toMap(Invite::getId, inv -> inv, (a, b) -> a)) : Map.of();
-
-        int activeCount = 0;
-        for (InviteParticipant participant : participants) {
-            Invite invite = inviteMap.get(participant.getInviteId());
-            if (invite == null) {
-                continue;
-            }
-            String status = invite.getStatus();
-            if (InviteStatusEnum.RECRUITING.name().equals(status)
-                    || InviteStatusEnum.FULL.name().equals(status)
-                    || InviteStatusEnum.CONFIRMED.name().equals(status)
-                    || InviteStatusEnum.IN_PROGRESS.name().equals(status)) {
-                activeCount++;
+        if (!participantInviteIds.isEmpty()) {
+            List<Invite> invites = inviteMapper.selectBatchIds(participantInviteIds);
+            if (invites != null) {
+                for (Invite invite : invites) {
+                    if (!isActiveInvite(invite) || !activeInviteIds.add(invite.getId())) {
+                        continue;
+                    }
+                    if (isPrivateInvite(invite)) {
+                        privateCount++;
+                    } else {
+                        publicCount++;
+                    }
+                }
             }
         }
 
-        if (activeCount >= InviteCreditConstants.MAX_CONCURRENT_PARTICIPATES) {
-            throw new BusinessException(ResultCode.PARTICIPATE_LIMIT_EXCEEDED);
-        }
+        return new ActiveInviteCounts(publicCount, privateCount);
     }
 
     /**

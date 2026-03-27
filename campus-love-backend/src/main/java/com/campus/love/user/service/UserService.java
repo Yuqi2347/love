@@ -1,6 +1,7 @@
 package com.campus.love.user.service;
 
 import com.campus.love.auth.security.CurrentUser;
+import com.campus.love.common.constants.InviteLevelLimit;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
 import com.campus.love.common.service.FileUploadService;
@@ -28,6 +29,7 @@ import com.campus.love.user.mapper.UserAvatarMapper;
 import com.campus.love.user.mapper.UserIceBreakAllowMapper;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
+import org.springframework.util.StringUtils;
 import org.springframework.web.multipart.MultipartFile;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
@@ -433,6 +435,8 @@ public class UserService {
         if (avatarMeta != null && avatarMeta.getUpdatedAt() != null) {
             avatarUpdatedAt = avatarMeta.getUpdatedAt().atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
         }
+        int userLevel = user.getUserLevel() != null ? user.getUserLevel() : 1;
+        InviteLevelLimit inviteLevelLimit = InviteLevelLimit.fromLevel(userLevel);
         return UserProfileResponse.builder()
                 .id(user.getId())
                 .email(isSelf ? user.getEmail() : null)
@@ -445,11 +449,15 @@ public class UserService {
                 .major(user.getMajor())
                 .grade(user.getGrade())
                 .activityScore(user.getActivityScore() != null ? user.getActivityScore() : 0)
-                .userLevel(user.getUserLevel() != null ? user.getUserLevel() : 1)
+                .userLevel(userLevel)
                 .isAdmin(isSelf ? (user.getIsAdmin() != null ? user.getIsAdmin() : false) : null)
                 .creditScore(user.getCreditScore() != null ? user.getCreditScore() : 100)
                 .inviteCount(user.getInviteCount() != null ? user.getInviteCount() : 0)
                 .participateCount(user.getParticipateCount() != null ? user.getParticipateCount() : 0)
+                .inviteConcurrentLimit(inviteLevelLimit.getConcurrentLimit())
+                .invitePublicConcurrentLimit(inviteLevelLimit.getPublicConcurrentLimit())
+                .invitePrivateConcurrentLimit(inviteLevelLimit.getPrivateConcurrentLimit())
+                .inviteDailyLimit(inviteLevelLimit.getDailyLimit())
                 .mbti(user.getMbti())
                 .zodiac(user.getZodiac())
                 .bazi(bazi)
@@ -461,6 +469,7 @@ public class UserService {
                 .interests(interests)
                 .interestTags(interestTags)
                 .profileComplete(user.getProfileComplete())
+                .wechatBound(isSelf ? StringUtils.hasText(user.getWechatOpenid()) : null)
                 .feedVisibility(user.getFeedVisibility() != null ? user.getFeedVisibility() : VisibilityConstants.ALL)
                 .feedVisibilityTime(user.getFeedVisibilityTime() != null ? user.getFeedVisibilityTime() : -1)
                 .iceBreakEnabled(isSelf ? user.getIceBreakEnabled() : null)

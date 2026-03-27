@@ -146,6 +146,7 @@
               :disabled-hours="disabledHours"
               :disabled-minutes="disabledMinutes"
               class="full-width"
+              popper-class="campal-date-popper"
             />
           </div>
 
@@ -161,6 +162,7 @@
               :disabled-minutes="disabledEndMinutes"
               class="full-width"
               clearable
+              popper-class="campal-date-popper"
             />
           </div>
 

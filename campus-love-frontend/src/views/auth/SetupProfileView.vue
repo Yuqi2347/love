@@ -33,8 +33,13 @@ v-for="g in genderOptions" :key="g.value"
           </el-form-item>
           <el-form-item label="生日">
             <el-date-picker
-v-model="form.birthDate" type="date" placeholder="选择生日"
-                            value-format="YYYY-MM-DD" style="width:100%" />
+              v-model="form.birthDate"
+              type="date"
+              placeholder="选择生日"
+              value-format="YYYY-MM-DD"
+              style="width:100%"
+              popper-class="campal-date-popper"
+            />
           </el-form-item>
           <el-form-item label="出生时间（可选，用于八字精确计算）">
             <el-time-picker
@@ -44,6 +49,7 @@ v-model="form.birthDate" type="date" placeholder="选择生日"
               format="HH:mm"
               :disabled="form.baziUnknown"
               style="width:100%"
+              popper-class="campal-date-popper"
             />
             <el-checkbox v-model="form.baziUnknown" class="bazi-unknown-check">
               我不清楚出生时辰
@@ -194,48 +200,47 @@ onMounted(async () => {
   // 初始化昵称为当前用户昵称，学校从注册带入
   form.nickname = userStore.user?.nickname ?? ''
   form.school = userStore.user?.school ?? sessionStorage.getItem('register_school') ?? ''
-  if (userStore.user?.profileComplete) {
-    isEditMode.value = true
-    try {
-      const res = await getMyProfile()
-      const data = res.data.data
-      if (data) {
-        form.nickname = data.nickname ?? userStore.user?.nickname ?? ''
-        form.gender = data.gender ?? 0
-        form.birthDate = data.birthDate ?? ''
-        form.birthTime = data.birthTime ?? ''
-        form.baziUnknown = data.baziUnknown ?? false
-        form.school = data.school ?? ''
-        form.major = data.major ?? ''
-        majorCascaderValue.value = getMajorCascaderPath(data.major)
-        form.grade = data.grade ?? ''
-        form.mbti = data.mbti ?? ''
-        form.bio = data.bio ?? ''
-        if (data.interestTags) {
-          // 新格式 JSON: { dimension: [{code, sharing, intensity}] }
-          try {
-            const parsed = typeof data.interestTags === 'string' ? JSON.parse(data.interestTags) : data.interestTags
-            const codes = new Set<string>()
-            for (const arr of Object.values(parsed) as { code: string }[][]) {
-              if (Array.isArray(arr)) arr.forEach((t) => t?.code && codes.add(t.code))
-            }
-            selectedTagCodes.value = codes
-          } catch {
-            selectedTagCodes.value = new Set()
-          }
-        } else if (data.interests) {
-          // 旧格式逗号分隔：映射到新 code
+  isEditMode.value = !!userStore.user?.profileComplete
+  try {
+    const res = await getMyProfile()
+    const data = res.data.data
+    if (data) {
+      isEditMode.value = !!data.profileComplete
+      form.nickname = data.nickname ?? userStore.user?.nickname ?? ''
+      form.gender = data.gender ?? 0
+      form.birthDate = data.birthDate ?? ''
+      form.birthTime = data.birthTime ?? ''
+      form.baziUnknown = data.baziUnknown ?? false
+      form.school = data.school ?? form.school ?? ''
+      form.major = data.major ?? ''
+      majorCascaderValue.value = getMajorCascaderPath(data.major)
+      form.grade = data.grade ?? ''
+      form.mbti = data.mbti ?? ''
+      form.bio = data.bio ?? ''
+      if (data.interestTags) {
+        // 新格式 JSON: { dimension: [{code, sharing, intensity}] }
+        try {
+          const parsed = typeof data.interestTags === 'string' ? JSON.parse(data.interestTags) : data.interestTags
           const codes = new Set<string>()
-          data.interests.split(/[,，、]/).forEach((t) => {
-            const trimmed = t.trim()
-            if (LEGACY_INTEREST_TO_CODE[trimmed]) codes.add(LEGACY_INTEREST_TO_CODE[trimmed])
-          })
+          for (const arr of Object.values(parsed) as { code: string }[][]) {
+            if (Array.isArray(arr)) arr.forEach((t) => t?.code && codes.add(t.code))
+          }
           selectedTagCodes.value = codes
+        } catch {
+          selectedTagCodes.value = new Set()
         }
+      } else if (data.interests) {
+        // 旧格式逗号分隔：映射到新 code
+        const codes = new Set<string>()
+        data.interests.split(/[,，、]/).forEach((t) => {
+          const trimmed = t.trim()
+          if (LEGACY_INTEREST_TO_CODE[trimmed]) codes.add(LEGACY_INTEREST_TO_CODE[trimmed])
+        })
+        selectedTagCodes.value = codes
       }
-    } catch {
-      // 加载失败，使用空表单
     }
+  } catch {
+    // 加载失败，保留当前已有回填
   }
 })
 

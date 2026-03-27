@@ -50,7 +50,7 @@ public class InviteService {
         Long currentUserId = CurrentUser.getId();
 
         creditService.checkUserCredit(currentUserId, InviteCreditConstants.CREDIT_CREATE_THRESHOLD);
-        creditService.checkInviteCreateLimit(currentUserId);
+        creditService.checkInviteCreateLimit(currentUserId, request.getInviteMode());
 
         if (InviteModeEnum.PRIVATE.name().equals(request.getInviteMode())) {
             if (request.getTargetUserId() == null) {

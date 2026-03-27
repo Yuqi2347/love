@@ -5,6 +5,8 @@ import com.campus.love.auth.dto.LoginRequest;
 import com.campus.love.auth.dto.PublicStatsResponse;
 import com.campus.love.auth.dto.RegisterRequest;
 import com.campus.love.auth.dto.SchoolItem;
+import com.campus.love.auth.dto.WechatCodeRequest;
+import com.campus.love.auth.dto.WechatCompleteRequest;
 import com.campus.love.auth.service.AuthService;
 import com.campus.love.common.service.PublicStatsService;
 import com.campus.love.auth.service.EmailVerifyService;
@@ -63,5 +65,17 @@ public class AuthController {
     @PostMapping("/login")
     public Result<AuthResponse> login(@Valid @RequestBody LoginRequest request) {
         return Result.success(authService.login(request));
+    }
+
+    @Operation(summary = "微信小程序一键登录")
+    @PostMapping("/wechat/login")
+    public Result<AuthResponse> loginByWechat(@Valid @RequestBody WechatCodeRequest request) {
+        return Result.success(authService.loginByWechatCode(request.getCode()));
+    }
+
+    @Operation(summary = "微信登录补全（邮箱验证码绑定；邮箱未注册则自动注册并绑定）")
+    @PostMapping("/wechat/complete")
+    public Result<AuthResponse> completeWechat(@Valid @RequestBody WechatCompleteRequest request) {
+        return Result.success(authService.completeWechatWithEmail(request));
     }
 }

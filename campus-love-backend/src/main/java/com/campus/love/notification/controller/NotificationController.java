@@ -2,7 +2,9 @@ package com.campus.love.notification.controller;
 
 import com.campus.love.common.result.Result;
 import com.campus.love.notification.dto.NotificationResponse;
+import com.campus.love.notification.dto.WechatSubscribeConfigResponse;
 import com.campus.love.notification.service.NotificationService;
+import com.campus.love.notification.service.WechatSubscribeMessageService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import java.util.List;
 public class NotificationController {
 
     private final NotificationService notificationService;
+    private final WechatSubscribeMessageService wechatSubscribeMessageService;
 
     @Operation(summary = "获取当前用户的通知列表")
     @GetMapping
@@ -34,5 +37,10 @@ public class NotificationController {
         notificationService.markAsRead(id);
         return Result.success();
     }
-}
 
+    @Operation(summary = "获取小程序微信订阅消息配置")
+    @GetMapping("/wechat-subscribe-config")
+    public Result<WechatSubscribeConfigResponse> getWechatSubscribeConfig() {
+        return Result.success(wechatSubscribeMessageService.getClientSubscribeConfig());
+    }
+}

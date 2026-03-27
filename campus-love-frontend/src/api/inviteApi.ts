@@ -108,7 +108,7 @@ export interface InviteRatingCreateRequest {
 export interface InviteStats {
   inviteCount: number
   participateCount: number
-  successRate: number
+  formedInviteCount: number
   avgSocialRating: number | null
   avgOrgRating: number | null
   receivedSocialRating: number | null

@@ -57,3 +57,25 @@ pnpm-debug.log*
 .env.*.local
 *.pem
 frpc.toml
+
+# === Python / 本地生成文件 ===
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+*.egg-info/
+.eggs/
+
+# img2img 等脚本生成的输出
+output/
+output_0/
+output_doubao/
+
+# 本地测试图片（可选，若需提交测试图可删除此行）
+test*.jpg
+test*.png
+
+.claude/
+.cursor/
+img2img.py

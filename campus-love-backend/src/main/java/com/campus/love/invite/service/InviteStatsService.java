@@ -22,6 +22,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.math.RoundingMode;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -32,6 +33,10 @@ import java.util.stream.Collectors;
 @Service
 @RequiredArgsConstructor
 public class InviteStatsService {
+    /** 评价窗口：活动结束后 24 小时内可评价 */
+    private static final int RATING_WINDOW_HOURS = 24;
+    /** 默认活动时长（与邀约状态调度保持一致） */
+    private static final int DEFAULT_EVENT_DURATION_HOURS = 4;
 
     private final InviteMapper inviteMapper;
     private final InviteRatingMapper ratingMapper;
@@ -55,6 +60,10 @@ public class InviteStatsService {
         if (!InviteStatusEnum.ENDED.name().equals(invite.getStatus())) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "邀约未结束，无法评价");
         }
+        LocalDateTime inviteEndTime = resolveInviteEndTime(invite);
+        if (inviteEndTime == null || LocalDateTime.now().isAfter(inviteEndTime.plusHours(RATING_WINDOW_HOURS))) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "评价入口已关闭（仅在邀约结束后24小时内开放）");
+        }
 
         InviteParticipant participant = participantMapper.selectOne(
                 new LambdaQueryWrapper<InviteParticipant>()
@@ -63,6 +72,9 @@ public class InviteStatsService {
         boolean isCreator = currentUserId.equals(invite.getCreatorId());
         if (participant == null && !isCreator) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "未参与该邀约，无法评价");
+        }
+        if (currentUserId.equals(request.getRatedUserId())) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "不能评价自己");
         }
         // 被评价人必须是发起人或邀约参与者
         if (!request.getRatedUserId().equals(invite.getCreatorId())) {
@@ -137,11 +149,11 @@ public class InviteStatsService {
                 new LambdaQueryWrapper<Invite>()
                         .eq(Invite::getCreatorId, userId)
                         .eq(Invite::getDeleted, false));
-        long completedInvites = inviteMapper.selectCount(
+        long formedInvites = inviteMapper.selectCount(
                 new LambdaQueryWrapper<Invite>()
                         .eq(Invite::getCreatorId, userId)
-                        .eq(Invite::getStatus, InviteStatusEnum.ENDED.name())
-                        .eq(Invite::getDeleted, false));
+                        .eq(Invite::getDeleted, false)
+                        .gt(Invite::getParticipantCount, 0));
         List<InviteRating> receivedRatings = ratingMapper.selectList(
                 new LambdaQueryWrapper<InviteRating>()
                         .eq(InviteRating::getRatedUserId, userId));
@@ -164,9 +176,7 @@ public class InviteStatsService {
         return InviteStatsResponse.builder()
                 .inviteCount((int) totalInvites)
                 .participateCount(user.getParticipantCountOrDefault())
-                .successRate(totalInvites > 0 ? BigDecimal.valueOf(completedInvites)
-                        .multiply(BigDecimal.valueOf(100))
-                        .divide(BigDecimal.valueOf(totalInvites), 1, RoundingMode.HALF_UP) : BigDecimal.ZERO)
+                .formedInviteCount((int) formedInvites)
                 .avgSocialRating(avgSocialRating.compareTo(BigDecimal.ZERO) == 0 && !receivedRatings.isEmpty() ? null : avgSocialRating)
                 .avgOrgRating(avgOrgRating.compareTo(BigDecimal.ZERO) == 0 && receivedRatings.stream().noneMatch(rating -> rating.getOrgRating() != null) ? null : avgOrgRating)
                 .receivedSocialRating(avgSocialRating.compareTo(BigDecimal.ZERO) == 0 && !receivedRatings.isEmpty() ? null : avgSocialRating)
@@ -223,5 +233,18 @@ public class InviteStatsService {
             invite.setRatingCount(ratings.size());
             inviteMapper.updateById(invite);
         }
+    }
+
+    private LocalDateTime resolveInviteEndTime(Invite invite) {
+        if (invite == null) {
+            return null;
+        }
+        if (invite.getInviteEndTime() != null) {
+            return invite.getInviteEndTime();
+        }
+        if (invite.getInviteTime() != null) {
+            return invite.getInviteTime().plusHours(DEFAULT_EVENT_DURATION_HOURS);
+        }
+        return null;
     }
 }

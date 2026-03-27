@@ -13,6 +13,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -28,6 +30,7 @@ import java.util.stream.Collectors;
 public class NotificationService {
 
     private final NotificationMapper notificationMapper;
+    private final WechatSubscribeMessageService wechatSubscribeMessageService;
 
     /**
      * 获取当前用户的通知列表
@@ -118,6 +121,7 @@ public class NotificationService {
         notification.setContent(content);
         notification.setIsRead(false);
         notificationMapper.insert(notification);
+        dispatchWechatSubscribe(notification);
     }
 
     /**
@@ -411,5 +415,23 @@ public class NotificationService {
                 .readAt(notification.getReadAt())
                 .build();
     }
-}
 
+    /**
+     * 微信订阅消息与站内通知并联，且保证在事务提交后异步发送，避免回滚时误推。
+     */
+    private void dispatchWechatSubscribe(Notification notification) {
+        if (notification == null) {
+            return;
+        }
+        if (TransactionSynchronizationManager.isSynchronizationActive()) {
+            TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+                @Override
+                public void afterCommit() {
+                    wechatSubscribeMessageService.pushByNotificationAsync(notification);
+                }
+            });
+            return;
+        }
+        wechatSubscribeMessageService.pushByNotificationAsync(notification);
+    }
+}

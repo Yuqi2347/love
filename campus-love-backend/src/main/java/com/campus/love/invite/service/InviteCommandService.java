@@ -137,10 +137,10 @@ public class InviteCommandService {
     public void joinInvite(Long inviteId) {
         Long currentUserId = CurrentUser.getId();
 
-        creditService.checkUserCredit(currentUserId, InviteCreditConstants.CREDIT_JOIN_THRESHOLD);
-        creditService.checkParticipateLimit(currentUserId);
-
         Invite invite = queryService.getInviteOrThrow(inviteId);
+
+        creditService.checkUserCredit(currentUserId, InviteCreditConstants.CREDIT_JOIN_THRESHOLD);
+        creditService.checkParticipateLimit(currentUserId, invite.getInviteMode());
 
         if (!InviteStatusEnum.RECRUITING.name().equals(invite.getStatus())) {
             throw new BusinessException(ResultCode.BAD_REQUEST, "邀约不在招募中");

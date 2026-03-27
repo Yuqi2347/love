@@ -18,8 +18,8 @@ public class InviteStatsResponse {
     // 参与的邀约数
     private Integer participateCount;
 
-    // 成功率（已完成/已发起）
-    private BigDecimal successRate;
+    // 成行场次（已有人参加的邀约场次）
+    private Integer formedInviteCount;
 
     // 平均社交体验评分
     private BigDecimal avgSocialRating;

@@ -40,6 +40,12 @@ public class User {
     private String interests;
     private Boolean profileComplete;
     private Integer status;
+    /** 微信小程序 openid（唯一） */
+    private String wechatOpenid;
+    /** 微信开放平台 unionid（可为空） */
+    private String wechatUnionid;
+    /** 绑定微信时间 */
+    private LocalDateTime wechatBoundAt;
 
     /** 邀约模块：发起邀约次数 */
     private Integer inviteCount;

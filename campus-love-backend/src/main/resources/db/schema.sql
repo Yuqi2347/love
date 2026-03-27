@@ -36,6 +36,9 @@ CREATE TABLE IF NOT EXISTS t_user (
     interests       VARCHAR(512)    DEFAULT NULL COMMENT '兴趣标签，逗号分隔',
     profile_complete TINYINT(1)     DEFAULT 0 COMMENT '资料是否完善',
     status          TINYINT         DEFAULT 1 COMMENT '1=正常 0=禁用',
+    wechat_openid   VARCHAR(96)     DEFAULT NULL COMMENT '微信小程序openid（V59）',
+    wechat_unionid  VARCHAR(96)     DEFAULT NULL COMMENT '微信开放平台unionid（V59）',
+    wechat_bound_at DATETIME        DEFAULT NULL COMMENT '微信绑定时间（V59）',
     invite_count    INT             DEFAULT 0 COMMENT '发起邀约次数',
     participate_count INT           DEFAULT 0 COMMENT '参与邀约次数',
     credit_score    INT             DEFAULT 100 COMMENT '信用分',
@@ -56,7 +59,8 @@ CREATE TABLE IF NOT EXISTS t_user (
     cover_image_url                VARCHAR(512) DEFAULT NULL COMMENT '个人主页背景图URL（V19）',
     deleted_at                     DATETIME     DEFAULT NULL COMMENT 'NULL=正常，有值=已注销（V30）',
     delete_reason                  TINYINT      DEFAULT NULL COMMENT '注销原因枚举（V30）',
-    UNIQUE KEY uk_email (email)
+    UNIQUE KEY uk_email (email),
+    UNIQUE KEY uk_wechat_openid (wechat_openid)
 ) COMMENT '用户基础信息';
 
 -- 关注关系表（含 V16 备注名）

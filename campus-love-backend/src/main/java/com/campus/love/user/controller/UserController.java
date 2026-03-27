@@ -1,6 +1,8 @@
 package com.campus.love.user.controller;
 
 import com.campus.love.auth.security.CurrentUser;
+import com.campus.love.auth.dto.WechatCodeRequest;
+import com.campus.love.auth.service.AuthService;
 import com.campus.love.auth.service.EmailVerifyService;
 import com.campus.love.common.result.Result;
 import com.campus.love.common.result.ResultCode;
@@ -42,6 +44,7 @@ public class UserController {
 
     private final UserService userService;
     private final EmailVerifyService emailVerifyService;
+    private final AuthService authService;
 
     @Operation(summary = "获取当前用户信息")
     @GetMapping("/me")
@@ -174,6 +177,12 @@ public class UserController {
         }
     }
 
+    @Operation(summary = "上传个人主页背景图（兼容小程序 uploadFile 默认 POST）")
+    @PostMapping("/cover")
+    public Result<String> uploadCoverByPost(@RequestParam("file") MultipartFile file) {
+        return uploadCover(file);
+    }
+
     @Operation(summary = "清除个人主页背景图")
     @DeleteMapping("/cover")
     public Result<Void> clearCover() {
@@ -208,6 +217,13 @@ public class UserController {
             return Result.error(ResultCode.BAD_REQUEST, "验证码错误或已过期");
         }
         userService.updatePassword(userId, newPassword);
+        return Result.success();
+    }
+
+    @Operation(summary = "绑定微信小程序账号")
+    @PostMapping("/wechat/bind")
+    public Result<Void> bindWechat(@Valid @RequestBody WechatCodeRequest request) {
+        authService.bindWechat(CurrentUser.getId(), request.getCode());
         return Result.success();
     }
 }

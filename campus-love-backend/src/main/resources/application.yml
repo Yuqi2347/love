@@ -5,6 +5,9 @@ server:
     context-path: /api
 
 spring:
+  config:
+    # 允许直接从 .env 读取 key=value（IDE / 不同工作目录启动都尽量兼容）
+    import: optional:file:.env[.properties],optional:file:./campus-love-backend/.env[.properties]
   application:
     name: campus-love
 
@@ -89,6 +92,23 @@ app:
     enforce-secrets: ${APP_ENFORCE_SECRETS:true}
     allowed-origins: ${APP_ALLOWED_ORIGINS:http://localhost:5179,http://127.0.0.1:5179,http://localhost:5174,http://127.0.0.1:5174}
     ws-allowed-origins: ${APP_WS_ALLOWED_ORIGINS:http://localhost:5179,http://127.0.0.1:5179,http://localhost:5174,http://127.0.0.1:5174}
+  wechat:
+    mini-app-id: ${WECHAT_MINI_APP_ID:}
+    mini-app-secret: ${WECHAT_MINI_APP_SECRET:}
+    code2session-url: ${WECHAT_CODE2SESSION_URL:https://api.weixin.qq.com/sns/jscode2session}
+    subscribe:
+      enabled: ${WECHAT_SUBSCRIBE_ENABLED:false}
+      access-token-url: ${WECHAT_ACCESS_TOKEN_URL:https://api.weixin.qq.com/cgi-bin/token}
+      send-url: ${WECHAT_SUBSCRIBE_SEND_URL:https://api.weixin.qq.com/cgi-bin/message/subscribe/send}
+      tmpl-pair-date-result-ready: ${WECHAT_SUBSCRIBE_TMPL_PAIR_DATE_RESULT_READY:}
+      tmpl-invite-new-participant: ${WECHAT_SUBSCRIBE_TMPL_INVITE_NEW_PARTICIPANT:}
+      tmpl-invite-match-found: ${WECHAT_SUBSCRIBE_TMPL_INVITE_MATCH_FOUND:}
+      page-pair-date-result-ready: ${WECHAT_SUBSCRIBE_PAGE_PAIR_DATE_RESULT_READY:pages/moment/result/result}
+      page-invite-new-participant: ${WECHAT_SUBSCRIBE_PAGE_INVITE_NEW_PARTICIPANT:pages/invite/index/index}
+      page-invite-match-found: ${WECHAT_SUBSCRIBE_PAGE_INVITE_MATCH_FOUND:pages/invite/wait/wait}
+      data-key-title: ${WECHAT_SUBSCRIBE_DATA_KEY_TITLE:thing1}
+      data-key-time: ${WECHAT_SUBSCRIBE_DATA_KEY_TIME:time2}
+      data-key-remark: ${WECHAT_SUBSCRIBE_DATA_KEY_REMARK:thing3}
 
 ai:
   api-key: ${AI_API_KEY:}

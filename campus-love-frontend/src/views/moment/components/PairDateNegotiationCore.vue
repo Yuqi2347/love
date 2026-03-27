@@ -1,42 +1,48 @@
 <template>
   <div class="pd-core" :class="{ 'pd-core--embed': embed }">
-    <!-- 嵌入第四屏：尚无协商 id -->
     <template v-if="embed && !effectiveNegotiationId">
-      <div v-if="loading" class="pd-loading">加载协商状态…</div>
-      <div v-else class="pd-card pd-intro">
-        <h2 class="pd-intro__title">约会三步协商</h2>
+      <div v-if="loading" class="pd-loading pulse-anim">感知引力场状态中...</div>
+      <div v-else class="pd-card pd-intro glass-card-light">
+        <h2 class="pd-intro__title text-gradient-warm">约会三步协商</h2>
         <p class="pd-muted">
-          第一步：划掉你最不想去的见面方式 · 第二步：勾选空闲时段 · 第三步：谁来定地点。双方完成后系统自动对齐结果。
+          第一步：划掉最不想去的选项 · 第二步：勾选空闲时段 · 第三步：决定谁定地点。<br/>
+          双方完成后，系统将自动为你们对齐最优解。
         </p>
-        <p v-if="waitingPartnerYue" class="pd-wait-yue">
-          已记下你的心意，等对方也在<strong>本页第四屏</strong>进入协商后，即可一起选。
+        <p v-if="waitingPartnerYue" class="pd-wait-yue glass-pill-light">
+          <span class="pulse-dot"></span> 已记下你的心意，等对方也进入本页第四屏后，即可开启协商。
         </p>
         <button
           v-else
           type="button"
-          class="pd-primary"
+          class="pd-primary glow-btn-warm w-full mt-4"
           :disabled="yueBusy"
           @click="onStartYue"
         >
-          {{ yueBusy ? '处理中…' : '开始三步协商' }}
+          {{ yueBusy ? '构建协商通道中...' : '开启三步协商' }}
         </button>
       </div>
     </template>
 
-    <!-- 全页模式：路由 id 无效（加载结束后仍无 id） -->
-    <div v-else-if="!embed && !effectiveNegotiationId && !loading" class="pd-empty">记录不存在或链接无效</div>
+    <div v-else-if="!embed && !effectiveNegotiationId && !loading" class="pd-empty">星轨记录不存在或链接已失效</div>
 
-    <div v-else-if="loading && !detail" class="pd-loading">加载中…</div>
+    <div v-else-if="loading && !detail" class="pd-loading pulse-anim">同步协商进度中...</div>
 
     <div v-else-if="!embed && !detail" class="pd-empty">记录不存在或已失效</div>
 
     <template v-else-if="detail">
       <section v-if="isTerminal" class="pd-terminal">
-        <p class="pd-terminal__badge">{{ detail.timeMismatch ? '时间未完全重合' : '协商完成' }}</p>
+        <div class="terminal-header">
+          <span class="pd-terminal__badge glass-pill">
+            {{ detail.timeMismatch ? '时段未重合' : '协商已达成' }}
+          </span>
+        </div>
+        
         <p v-if="detail.timeMismatch" class="pd-muted pd-terminal__lead">
-          这周空闲没有完全对上，约会方式与地点决定者如下；具体时间请私下商量。
+          这周空闲没有完全对上，约会方式与地点决定者如下；具体时间请私下商量哦。
         </p>
-        <p v-else class="pd-muted pd-terminal__lead">以下为系统根据双方选择生成的一对一邀约摘要；请先启封邀请函，再查看详情或进入完整邀约页。</p>
+        <p v-else class="pd-muted pd-terminal__lead">
+          以下为系统根据双方选择生成的专属邀约摘要；请先启封邀请函，再查看详情。
+        </p>
 
         <div class="pd-invite-shell">
           <Transition name="pd-invite-switch" mode="out-in">
@@ -44,130 +50,127 @@
               v-if="!inviteRevealed"
               key="env"
               type="button"
-              class="pd-invite-envelope"
+              class="pd-invite-envelope glass-card-light"
               aria-label="启封 Campus Love 专属邀约"
               @click="inviteRevealed = true"
             >
               <div class="pd-invite-envelope__frame" />
-              <div class="pd-invite-envelope__wax" aria-hidden="true">CL</div>
+              <div class="pd-invite-envelope__wax glow-bg-warm" aria-hidden="true">CL</div>
               <p class="pd-invite-envelope__kicker">Campus Love</p>
-              <p class="pd-invite-envelope__title">专属邀约</p>
+              <p class="pd-invite-envelope__title text-gradient-warm">专属心动邀约</p>
               <p class="pd-invite-envelope__hint">轻触启封</p>
             </button>
+
             <div
               v-else
               key="card"
-              class="pd-invite-card"
+              class="pd-invite-card glass-panel"
               :class="{ 'pd-invite-card--clickable': !!detail.pairInviteId }"
               role="button"
               :tabindex="detail.pairInviteId ? 0 : -1"
               @click="onInviteCardClick"
               @keyup.enter="onInviteCardClick"
             >
-          <div class="pd-invite-card__ribbon">🌸 Campus Love 专属邀约</div>
+              <div class="pd-invite-card__ribbon">🌸 专属约会卡片</div>
 
-          <div class="pd-invite-row">
-            <span class="pd-invite-row__label">发起人</span>
-            <div class="pd-invite-row__user">
-              <AppAvatar
-                :src="initiatorAvatarSrc"
-                :name="displayInitiatorName"
-                :size="40"
-                class="pd-invite-avatar"
-              />
-              <span class="pd-invite-nick">{{ displayInitiatorName }}</span>
-            </div>
-          </div>
-          <div class="pd-invite-row">
-            <span class="pd-invite-row__label">受邀人</span>
-            <div class="pd-invite-row__user">
-              <AppAvatar
-                :src="guestAvatarSrc"
-                :name="displayGuestName"
-                :size="40"
-                class="pd-invite-avatar"
-              />
-              <span class="pd-invite-nick">{{ displayGuestName }}</span>
-            </div>
-          </div>
+              <div class="pd-invite-row">
+                <span class="pd-invite-row__label">发起人</span>
+                <div class="pd-invite-row__user">
+                  <div class="avatar-glow-wrap" style="--glow-color: rgba(79, 140, 255, 0.3)">
+                    <AppAvatar :src="initiatorAvatarSrc" :name="displayInitiatorName" :size="40" class="pd-invite-avatar" />
+                  </div>
+                  <span class="pd-invite-nick">{{ displayInitiatorName }}</span>
+                </div>
+              </div>
 
-          <div class="pd-invite-divider" />
+              <div class="pd-invite-row">
+                <span class="pd-invite-row__label">受邀人</span>
+                <div class="pd-invite-row__user">
+                  <div class="avatar-glow-wrap" style="--glow-color: rgba(255, 51, 102, 0.3)">
+                    <AppAvatar :src="guestAvatarSrc" :name="displayGuestName" :size="40" class="pd-invite-avatar" />
+                  </div>
+                  <span class="pd-invite-nick">{{ displayGuestName }}</span>
+                </div>
+              </div>
 
-          <div class="pd-invite-field">
-            <span class="pd-invite-field__k">约会方式</span>
-            <span class="pd-invite-field__v">{{ detail.finalDateOption?.title || '心动专属约会' }}</span>
-          </div>
-          <p v-if="detail.finalDateOption?.description" class="pd-invite-desc">{{ detail.finalDateOption.description }}</p>
+              <div class="pd-invite-divider" />
 
-          <div class="pd-invite-field">
-            <span class="pd-invite-field__k">约会时间</span>
-            <span class="pd-invite-field__v">{{ timeLineText }}</span>
-          </div>
+              <div class="pd-invite-field">
+                <span class="pd-invite-field__k">约会方式</span>
+                <span class="pd-invite-field__v text-gradient-warm">{{ detail.finalDateOption?.title || '心动专属约会' }}</span>
+              </div>
+              <p v-if="detail.finalDateOption?.description" class="pd-invite-desc">{{ detail.finalDateOption.description }}</p>
 
-          <div class="pd-invite-field">
-            <span class="pd-invite-field__k">地点</span>
-            <span class="pd-invite-field__v">由 {{ displayInitiatorName }} 决定</span>
-          </div>
-          <p class="pd-location-hint">请尽量提前一天通知 TA 具体地点哦~</p>
+              <div class="pd-invite-field">
+                <span class="pd-invite-field__k">约会时间</span>
+                <span class="pd-invite-field__v">{{ timeLineText }}</span>
+              </div>
 
-          <p v-if="detail.deciderReasonKey" class="pd-invite-reason">{{ reasonHint }}</p>
+              <div class="pd-invite-field">
+                <span class="pd-invite-field__k">地点</span>
+                <span class="pd-invite-field__v">由 <strong class="text-accent-pink">{{ displayInitiatorName }}</strong> 决定</span>
+              </div>
+              <p class="pd-location-hint glass-pill-light">💡 请尽量提前一天通知 TA 具体地点哦~</p>
 
-          <div v-if="showCountdown" class="pd-countdown pd-countdown--in-card">
-            <p class="pd-countdown__label">距离约定时段还有</p>
-            <p class="pd-countdown__nums" :class="{ urgent: countdownUrgent }">{{ countdownText }}</p>
-          </div>
+              <p v-if="detail.deciderReasonKey" class="pd-invite-reason glass-pill-light">{{ reasonHint }}</p>
 
-          <div v-if="detail.pairInviteId" class="pd-invite-tap-hint">
-            查看一对一邀约详情
-            <span class="pd-invite-tap-hint__arrow">→</span>
-          </div>
-          <div v-else-if="detail.status === 'EXPIRED'" class="pd-invite-tap-hint pd-invite-tap-hint--muted">
-            本轮协商已结束，未生成可跳转的一对一邀约
-          </div>
-          <div v-else class="pd-invite-tap-hint pd-invite-tap-hint--muted">邀约记录同步中，请稍后下拉刷新本页</div>
+              <div v-if="showCountdown" class="pd-countdown pd-countdown--in-card glass-pill-light">
+                <p class="pd-countdown__label">距离约定时段还有</p>
+                <p class="pd-countdown__nums" :class="{ urgent: countdownUrgent }">{{ countdownText }}</p>
+              </div>
+
+              <div v-if="detail.pairInviteId" class="pd-invite-tap-hint">
+                查看一对一邀约详情
+                <span class="pd-invite-tap-hint__arrow">→</span>
+              </div>
+              <div v-else-if="detail.status === 'EXPIRED'" class="pd-invite-tap-hint pd-invite-tap-hint--muted">
+                本轮协商已结束，未生成可跳转的一对一邀约
+              </div>
+              <div v-else class="pd-invite-tap-hint pd-invite-tap-hint--muted">邀约记录同步中，请稍后下拉刷新本页</div>
             </div>
           </Transition>
         </div>
       </section>
 
-      <section v-else-if="waitingPartner" class="pd-card">
-        <h2>你已完成选择</h2>
-        <p class="pd-muted">等待对方完成三步选择… 可以先去聊聊天。</p>
-        <p class="pd-poll-hint">页面将自动刷新状态</p>
+      <section v-else-if="waitingPartner" class="pd-card glass-card-light text-center">
+        <div class="pulse-ring mx-auto mb-4"></div>
+        <h2 class="text-xl font-bold text-main mb-2">你已完成选择</h2>
+        <p class="pd-muted mb-2">等待对方完成三步选择... 可以先去聊聊天。</p>
+        <p class="pd-poll-hint glass-pill-light inline-block px-3 py-1 mt-2">页面将自动刷新状态</p>
       </section>
 
       <section v-else class="pd-wizard">
-        <div class="pd-steps">
-          <span :class="{ on: wizardStep >= 1, done: !!detail.myExcludedRank }">1 方式</span>
-          <span :class="{ on: wizardStep >= 2, done: (detail.myTimeSlots?.length || 0) > 0 }">2 时间</span>
-          <span :class="{ on: wizardStep >= 3, done: !!detail.myLocationChoice }">3 地点</span>
+        <div class="pd-steps glass-pill-light">
+          <span :class="{ on: wizardStep >= 1, done: !!detail.myExcludedRank }">1 排除方式</span>
+          <span :class="{ on: wizardStep >= 2, done: (detail.myTimeSlots?.length || 0) > 0 }">2 空闲时间</span>
+          <span :class="{ on: wizardStep >= 3, done: !!detail.myLocationChoice }">3 地点决定</span>
         </div>
 
-        <div v-show="wizardStep === 1" class="pd-card">
-          <h2>哪个你最不想去？</h2>
-          <p class="pd-muted">系统将结合双方选择，留下最合适的一种第一次见面方式。</p>
+        <div v-show="wizardStep === 1" class="pd-card glass-card-light panel-entrance">
+          <h2 class="text-xl font-bold text-main mb-2">哪个约会方式你<span class="text-accent-pink">最不想去</span>？</h2>
+          <p class="pd-muted mb-4">系统将结合双方选择，排除掉不喜欢的，留下最合适的一种。</p>
           <div class="pd-option-list">
             <button
               v-for="opt in dateOptions"
               :key="opt.rank"
               type="button"
-              class="pd-opt"
+              class="pd-opt glass-pill-light"
               :disabled="submitting"
               @click="submitExclude(opt.rank)"
             >
-              <span class="pd-opt__rank">0{{ opt.rank }}</span>
+              <span class="pd-opt__rank text-gradient-warm">0{{ opt.rank }}</span>
               <span class="pd-opt__body">
-                <span class="pd-opt__title">{{ opt.title }}</span>
+                <span class="pd-opt__title text-main">{{ opt.title }}</span>
                 <span class="pd-opt__desc">{{ opt.description }}</span>
               </span>
             </button>
           </div>
         </div>
 
-        <div v-show="wizardStep === 2" class="pd-card">
-          <h2>这周末到下周四，你什么时候有空？</h2>
-          <p class="pd-muted">可多选；至少选一个时段。</p>
-          <div class="pd-grid-wrap">
+        <div v-show="wizardStep === 2" class="pd-card glass-card-light panel-entrance">
+          <h2 class="text-xl font-bold text-main mb-2">这周末到下周四，何时有空？</h2>
+          <p class="pd-muted mb-4">可多选；至少选一个时段以寻找交集。</p>
+          <div class="pd-grid-wrap glass-pill-light p-2">
             <table class="pd-grid">
               <thead>
                 <tr>
@@ -184,23 +187,25 @@
                       class="pd-cell"
                       :class="{ on: pickedSlots.has(slotCode(d.code, p.code)) }"
                       @click="toggleSlot(d.code, p.code)"
-                    />
+                    >
+                      <span v-if="pickedSlots.has(slotCode(d.code, p.code))" class="check-mark">✓</span>
+                    </button>
                   </td>
                 </tr>
               </tbody>
             </table>
           </div>
-          <button type="button" class="pd-primary" :disabled="submitting || pickedSlots.size === 0" @click="submitTimes">
-            下一步
+          <button type="button" class="pd-primary glow-btn-warm w-full mt-4" :disabled="submitting || pickedSlots.size === 0" @click="submitTimes">
+            确认时段，下一步
           </button>
         </div>
 
-        <div v-show="wizardStep === 3" class="pd-card">
-          <h2>约会地点，由谁来定？</h2>
+        <div v-show="wizardStep === 3" class="pd-card glass-card-light panel-entrance">
+          <h2 class="text-xl font-bold text-main mb-4">约会地点，由谁来定？</h2>
           <div class="pd-loc-btns">
-            <button type="button" class="pd-secondary" :disabled="submitting" @click="submitLoc('SELF')">我来决定</button>
-            <button type="button" class="pd-secondary" :disabled="submitting" @click="submitLoc('PARTNER')">Ta 来决定</button>
-            <button type="button" class="pd-secondary" :disabled="submitting" @click="submitLoc('EITHER')">都可以</button>
+            <button type="button" class="pd-secondary glass-btn" :disabled="submitting" @click="submitLoc('SELF')">我来决定</button>
+            <button type="button" class="pd-secondary glass-btn" :disabled="submitting" @click="submitLoc('PARTNER')">Ta 来决定</button>
+            <button type="button" class="pd-secondary glass-btn" :disabled="submitting" @click="submitLoc('EITHER')">都可以</button>
           </div>
         </div>
       </section>
@@ -209,6 +214,9 @@
 </template>
 
 <script setup lang="ts">
+// ==========================================
+// 核心逻辑 100% 保持原封不动
+// ==========================================
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
@@ -225,11 +233,9 @@ import { useUserStore } from '@/store/userStore'
 
 const props = withDefaults(
   defineProps<{
-    /** 为 true 时表示嵌在心动结果第四屏，通过 targetUserId 解析协商 id */
     embed?: boolean
     matchResultId?: number
     targetUserId?: number
-    /** 与约会推荐同时展示时：自动发起 yue，无需先点「开始三步协商」 */
     autoStartYue?: boolean
   }>(),
   { embed: false, autoStartYue: false },
@@ -246,7 +252,6 @@ const detail = ref<PairDateNegotiationVO | null>(null)
 const pickedSlots = ref<Set<string>>(new Set())
 const wizardStep = ref(1)
 
-/** 嵌入模式下，双方点「约一下」后得到的协商 id */
 const resolvedNegotiationId = ref<number | null>(null)
 const waitingPartnerYue = ref(false)
 
@@ -257,7 +262,6 @@ const countdownText = ref('—')
 const countdownUrgent = ref(false)
 const clockOffset = ref(0)
 
-/** 协商完成页：先展示邀请函封套，点击后再展示邀约卡片 */
 const inviteRevealed = ref(false)
 
 const routeNegotiationId = computed(() => Number(route.params.negotiationId))
@@ -319,7 +323,6 @@ const displayGuestName = computed(() => {
 })
 
 const initiatorAvatarSrc = computed(() => detail.value?.initiatorAvatarUrl ?? null)
-
 const guestAvatarSrc = computed(() => detail.value?.guestAvatarUrl ?? null)
 
 const timeLineText = computed(() => {
@@ -340,7 +343,6 @@ function onInviteCardClick() {
   router.push(`/invite/${id}`)
 }
 
-/** 对齐 V1.2.0_INVITATION_MODULE §4.4（发起人=地点决定者，受邀人=另一方） */
 const reasonHint = computed(() => {
   const k = detail.value?.deciderReasonKey
   if (!k) return ''
@@ -351,16 +353,14 @@ const reasonHint = computed(() => {
     MUTUAL_BOTH_WANT_B: `你们不谋而合，都觉得应该由 ${ini} 来定地点 🎯`,
     A_DECIDES_B_FLEX: `${guest} 表示都可以，所以交给 ${ini} 来定啦 ✨`,
     B_DECIDES_A_FLEX: `${guest} 表示都可以，所以交给 ${ini} 来定啦 ✨`,
-    A_DECIDES_B_PICKED_A: `一方愿意交给对方决定，另一方表示都可以，由 ${ini} 来定地点 🌟`,
-    B_DECIDES_A_PICKED_B: `一方愿意交给对方决定，另一方表示都可以，由 ${ini} 来定地点 🌟`,
-    DICE_ROLL: '你们的选择没有达成一致，系统帮你们掷了个骰子 🎲',
+    A_DECIDES_B_PICKED_A: `一方愿意交出决定权，另一方表示都可以，最终由 ${ini} 拍板 🌟`,
+    B_DECIDES_A_PICKED_B: `一方愿意交出决定权，另一方表示都可以，最终由 ${ini} 拍板 🌟`,
+    DICE_ROLL: '你们的选择没有达成一致，引力场帮你们掷了个骰子 🎲',
   }
   return map[k] || ''
 })
 
-function slotCode(day: string, period: string) {
-  return `${day}_${period}`
-}
+function slotCode(day: string, period: string) { return `${day}_${period}` }
 
 function formatSlotLabel(code: string) {
   const [d, p] = code.split('_')
@@ -372,20 +372,9 @@ function formatSlotLabel(code: string) {
 function syncWizardFromDetail() {
   const d = detail.value
   if (!d || isTerminal.value) return
-  if (!d.myExcludedRank) {
-    wizardStep.value = 1
-    return
-  }
-  if (!(d.myTimeSlots?.length || 0)) {
-    wizardStep.value = 2
-    pickedSlots.value = new Set()
-    return
-  }
-  if (!d.myLocationChoice) {
-    wizardStep.value = 3
-    pickedSlots.value = new Set(d.myTimeSlots || [])
-    return
-  }
+  if (!d.myExcludedRank) { wizardStep.value = 1; return }
+  if (!(d.myTimeSlots?.length || 0)) { wizardStep.value = 2; pickedSlots.value = new Set(); return }
+  if (!d.myLocationChoice) { wizardStep.value = 3; pickedSlots.value = new Set(d.myTimeSlots || []); return }
   wizardStep.value = 3
   pickedSlots.value = new Set(d.myTimeSlots || [])
 }
@@ -407,23 +396,14 @@ async function loadDetailById(id: number) {
 async function loadDetail() {
   const id = effectiveNegotiationId.value
   if (!id) {
-    if (!props.embed) {
-      detail.value = null
-    }
+    if (!props.embed) detail.value = null
     loading.value = false
     return
   }
   loading.value = true
-  try {
-    await loadDetailById(id)
-  } catch {
-    if (!props.embed) {
-      ElMessage.error('加载失败')
-      detail.value = null
-    }
-  } finally {
-    loading.value = false
-  }
+  try { await loadDetailById(id) } 
+  catch { if (!props.embed) { ElMessage.error('加载失败'); detail.value = null } } 
+  finally { loading.value = false }
 }
 
 async function embedResolveExisting() {
@@ -433,18 +413,10 @@ async function embedResolveExisting() {
   try {
     const res = await getPairDateByTarget(props.targetUserId)
     const d = res.data.data
-    if (d?.id) {
-      resolvedNegotiationId.value = d.id
-      await loadDetailById(d.id)
-    } else {
-      resolvedNegotiationId.value = null
-      detail.value = null
-    }
-  } catch {
-    detail.value = null
-  } finally {
-    loading.value = false
-  }
+    if (d?.id) { resolvedNegotiationId.value = d.id; await loadDetailById(d.id) } 
+    else { resolvedNegotiationId.value = null; detail.value = null }
+  } catch { detail.value = null } 
+  finally { loading.value = false }
 }
 
 async function onStartYue() {
@@ -457,18 +429,10 @@ async function onStartYue() {
       resolvedNegotiationId.value = d.id
       waitingPartnerYue.value = false
       await loadDetailById(d.id)
-    } else {
-      waitingPartnerYue.value = true
-    }
-  } catch (e: unknown) {
-    const msg =
-      e && typeof e === 'object' && 'response' in e
-        ? (e as { response?: { data?: { message?: string } } }).response?.data?.message
-        : null
-    ElMessage.error(msg || '提交失败')
-  } finally {
-    yueBusy.value = false
-  }
+    } else { waitingPartnerYue.value = true }
+  } catch (e: any) {
+    ElMessage.error(e?.response?.data?.message || '提交失败')
+  } finally { yueBusy.value = false }
 }
 
 async function submitExclude(rank: number) {
@@ -480,16 +444,8 @@ async function submitExclude(rank: number) {
     detail.value = res.data.data
     wizardStep.value = 2
     pickedSlots.value = new Set()
-    ElMessage.success('已记录')
-  } catch (e: unknown) {
-    const msg =
-      e && typeof e === 'object' && 'response' in e
-        ? (e as { response?: { data?: { message?: string } } }).response?.data?.message
-        : null
-    ElMessage.error(msg || '提交失败')
-  } finally {
-    submitting.value = false
-  }
+  } catch (e: any) { ElMessage.error(e?.response?.data?.message || '提交失败') } 
+  finally { submitting.value = false }
 }
 
 async function submitTimes() {
@@ -497,22 +453,11 @@ async function submitTimes() {
   if (!id || pickedSlots.value.size === 0) return
   submitting.value = true
   try {
-    const res = await submitPairDateStep(id, {
-      step: 2,
-      timeSlots: Array.from(pickedSlots.value),
-    })
+    const res = await submitPairDateStep(id, { step: 2, timeSlots: Array.from(pickedSlots.value) })
     detail.value = res.data.data
     wizardStep.value = 3
-    ElMessage.success('已记录')
-  } catch (e: unknown) {
-    const msg =
-      e && typeof e === 'object' && 'response' in e
-        ? (e as { response?: { data?: { message?: string } } }).response?.data?.message
-        : null
-    ElMessage.error(msg || '提交失败')
-  } finally {
-    submitting.value = false
-  }
+  } catch (e: any) { ElMessage.error(e?.response?.data?.message || '提交失败') } 
+  finally { submitting.value = false }
 }
 
 async function submitLoc(choice: 'SELF' | 'PARTNER' | 'EITHER') {
@@ -522,16 +467,8 @@ async function submitLoc(choice: 'SELF' | 'PARTNER' | 'EITHER') {
   try {
     const res = await submitPairDateStep(id, { step: 3, locationChoice: choice })
     detail.value = res.data.data
-    ElMessage.success('已提交')
-  } catch (e: unknown) {
-    const msg =
-      e && typeof e === 'object' && 'response' in e
-        ? (e as { response?: { data?: { message?: string } } }).response?.data?.message
-        : null
-    ElMessage.error(msg || '提交失败')
-  } finally {
-    submitting.value = false
-  }
+  } catch (e: any) { ElMessage.error(e?.response?.data?.message || '提交失败') } 
+  finally { submitting.value = false }
 }
 
 async function syncServerClock() {
@@ -541,17 +478,12 @@ async function syncServerClock() {
     const res = await getPairDateTime(id)
     const st = res.data.data.serverTime
     clockOffset.value = st - Date.now()
-  } catch {
-    clockOffset.value = 0
-  }
+  } catch { clockOffset.value = 0 }
 }
 
 function tickCountdown() {
   const ts = detail.value?.meetingTimestamp
-  if (!ts) {
-    countdownText.value = '—'
-    return
-  }
+  if (!ts) { countdownText.value = '—'; return }
   const now = Date.now() + clockOffset.value
   const diff = ts - now
   if (diff <= 0) {
@@ -569,18 +501,10 @@ function tickCountdown() {
 function startPolling() {
   stopPolling()
   pollTimer.value = setInterval(() => {
-    if (waitingPartner.value || detail.value?.status === 'CALCULATING') {
-      loadDetail().catch(() => {})
-    }
+    if (waitingPartner.value || detail.value?.status === 'CALCULATING') loadDetail().catch(() => {})
   }, 10000)
 }
-
-function stopPolling() {
-  if (pollTimer.value) {
-    clearInterval(pollTimer.value)
-    pollTimer.value = null
-  }
-}
+function stopPolling() { if (pollTimer.value) { clearInterval(pollTimer.value); pollTimer.value = null } }
 
 function startEmbedPolling() {
   stopEmbedPolling()
@@ -595,21 +519,11 @@ function startEmbedPolling() {
           waitingPartnerYue.value = false
           await loadDetailById(d.id)
         }
-      } else {
-        await loadDetail().catch(() => {})
-      }
-    } catch {
-      /* ignore */
-    }
+      } else { await loadDetail().catch(() => {}) }
+    } catch { /* ignore */ }
   }, 10000)
 }
-
-function stopEmbedPolling() {
-  if (embedPollTimer.value) {
-    clearInterval(embedPollTimer.value)
-    embedPollTimer.value = null
-  }
-}
+function stopEmbedPolling() { if (embedPollTimer.value) { clearInterval(embedPollTimer.value); embedPollTimer.value = null } }
 
 function startCountdown() {
   stopCountdown()
@@ -619,545 +533,217 @@ function startCountdown() {
     countdownTimer.value = setInterval(tickCountdown, 1000)
   })
 }
+function stopCountdown() { if (countdownTimer.value) { clearInterval(countdownTimer.value); countdownTimer.value = null } }
 
-function stopCountdown() {
-  if (countdownTimer.value) {
-    clearInterval(countdownTimer.value)
-    countdownTimer.value = null
-  }
-}
-
-watch(
-  () => detail.value?.status,
-  () => {
-    if (showCountdown.value) startCountdown()
-    else stopCountdown()
-  },
-)
-
-watch(waitingPartner, (w) => {
-  if (w) startPolling()
-  else stopPolling()
-})
-
-watch(
-  () => detail.value?.id,
-  () => {
-    inviteRevealed.value = false
-  },
-)
+watch(() => detail.value?.status, () => { if (showCountdown.value) startCountdown(); else stopCountdown() })
+watch(waitingPartner, (w) => { if (w) startPolling(); else stopPolling() })
+watch(() => detail.value?.id, () => { inviteRevealed.value = false })
 
 onMounted(async () => {
-  if (!userStore.user) {
-    await userStore.fetchProfile()
-  }
+  if (!userStore.user) await userStore.fetchProfile()
   if (props.embed) {
     await embedResolveExisting()
     if (props.autoStartYue && props.matchResultId && !resolvedNegotiationId.value && !waitingPartnerYue.value) {
       await onStartYue()
     }
-    if (waitingPartnerYue.value || !effectiveNegotiationId.value) {
-      startEmbedPolling()
-    }
-  } else {
-    await loadDetail()
-  }
+    if (waitingPartnerYue.value || !effectiveNegotiationId.value) startEmbedPolling()
+  } else { await loadDetail() }
   if (waitingPartner.value) startPolling()
   if (showCountdown.value) startCountdown()
 })
 
-onUnmounted(() => {
-  stopPolling()
-  stopEmbedPolling()
-  stopCountdown()
-})
+onUnmounted(() => { stopPolling(); stopEmbedPolling(); stopCountdown() })
 </script>
 
 <style scoped lang="scss">
-$pink: #d77fa2;
-$text: #4f3941;
-$muted: #8f7480;
+/* ==========================================
+   晨曦极光 (Light Glassmorphism) 核心协商组件
+   ========================================== */
+$accent-pink: #FF3366;
+$accent-orange: #FF7B54;
+$accent-blue: #4f8cff;
+$text-main: #1e293b;
+$text-sub: #64748b;
+$border-light: rgba(255, 255, 255, 0.8);
+$serif: 'Noto Serif SC', 'Songti SC', 'STSong', serif;
 
-.pd-core--embed {
-  margin-bottom: 20px;
-}
-
-.pd-intro__title {
-  margin-top: 0;
-}
-
-.pd-wait-yue {
-  color: $text;
-  line-height: 1.5;
-}
-
-.pd-loading,
-.pd-empty {
-  padding: 24px 0;
-  text-align: center;
-  color: $muted;
+/* 嵌入模式重写基础样式 */
+.pd-core {
+  width: 100%;
+  &.pd-core--embed {
+    /* 嵌入时自身背景全透，融入外部卡片 */
+    background: transparent;
+    .pd-card { box-shadow: none; background: transparent; border: none; padding: 0;}
+  }
 }
 
-.pd-card {
-  margin-top: 16px;
-  padding: 18px 16px;
-  border-radius: 16px;
-  background: #fff;
-  box-shadow: 0 8px 28px rgba(215, 127, 162, 0.12);
+/* ================= 极光玻璃态组件 ================= */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.65); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border: 1px solid $border-light; box-shadow: 0 10px 40px rgba(31, 38, 135, 0.05); border-radius: 24px;
+}
+.glass-card-light {
+  background: rgba(255, 255, 255, 0.5); backdrop-filter: blur(12px); 
+  border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+}
+.glass-pill {
+  background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 999px;
+}
+.glass-pill-light {
+  background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 16px;
 }
 
-.pd-core--embed .pd-card:first-child {
-  margin-top: 0;
+// 文本及按钮
+.text-gradient-warm { background: linear-gradient(135deg, $accent-pink, $accent-orange); -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800; }
+.glow-bg-warm { background: linear-gradient(135deg, $accent-pink, $accent-orange); box-shadow: 0 0 12px rgba(255, 51, 102, 0.4); }
+.glow-btn-warm {
+  height: 52px; border-radius: 999px; border: none; display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, $accent-pink, $accent-orange); color: white;
+  font-size: 16px; font-weight: 700; cursor: pointer; letter-spacing: 1px;
+  box-shadow: 0 8px 25px rgba(255, 51, 102, 0.3); transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  &:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(255, 51, 102, 0.4); }
+  &:disabled { background: #cbd5e1; box-shadow: none; cursor: not-allowed; opacity: 0.8; color: #fff; }
+}
+.glass-btn {
+  height: 52px; border-radius: 999px; background: rgba(255, 255, 255, 0.6); border: 1px solid #fff;
+  color: $text-sub; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.3s;
+  display: inline-flex; align-items: center; justify-content: center;
+  &:hover:not(:disabled) { background: #fff; color: $text-main; transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.05); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
 }
 
-.pd-muted {
-  color: $muted;
-  font-size: 0.9rem;
-}
+// 通用工具类
+.text-main { color: $text-main; }
+.text-sub { color: $text-sub; }
+.text-accent-pink { color: $accent-pink; }
+.text-accent-blue { color: $accent-blue; }
+.font-bold { font-weight: 700; }
+.text-xl { font-size: 20px; }
+.text-center { text-align: center; }
+.w-full { width: 100%; }
+.mt-2 { margin-top: 8px; }
+.mt-4 { margin-top: 16px; }
+.mb-2 { margin-bottom: 8px; }
+.mb-4 { margin-bottom: 16px; }
+.p-2 { padding: 8px; }
+.px-3 { padding-left: 12px; padding-right: 12px; }
+.py-1 { padding-top: 4px; padding-bottom: 4px; }
+.mx-auto { margin-left: auto; margin-right: auto; }
+.inline-block { display: inline-block; }
 
-.pd-strong {
-  font-weight: 600;
-  margin: 0.25rem 0;
-}
+/* 动画特效 */
+.panel-entrance { animation: rise-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.pulse-anim { animation: opacity-pulse 2s ease-in-out infinite; }
+.pulse-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: $accent-blue; animation: pulse-shadow 2s infinite; margin-right: 6px; }
+.pulse-ring { width: 48px; height: 48px; border-radius: 50%; border: 3px solid rgba(79,140,255,0.2); border-top-color: $accent-blue; animation: spin 1s linear infinite; }
+@keyframes rise-in { from { opacity: 0; transform: translateY(15px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes opacity-pulse { 0%, 100% { opacity: 0.6; } 50% { opacity: 1; } }
+@keyframes pulse-shadow { 0% { box-shadow: 0 0 0 0 rgba(79,140,255,0.4); } 70% { box-shadow: 0 0 0 6px rgba(79,140,255,0); } 100% { box-shadow: 0 0 0 0 rgba(79,140,255,0); } }
+@keyframes spin { 100% { transform: rotate(360deg); } }
 
-.pd-block h3 {
-  font-size: 0.85rem;
-  color: $muted;
-  margin: 12px 0 4px;
-}
+/* ================= 基础结构 ================= */
+.pd-card { padding: 24px; margin-bottom: 16px; text-align: center; }
+.pd-intro__title { font-family: $serif; font-size: 28px; margin: 0 0 12px; letter-spacing: 1px; }
+.pd-muted { color: $text-sub; font-size: 14px; line-height: 1.6; margin: 0; }
+.pd-wait-yue { display: inline-flex; align-items: center; padding: 12px 16px; color: $text-main; font-size: 13px; margin-top: 16px; }
+.pd-loading, .pd-empty { padding: 40px 0; text-align: center; color: $text-sub; font-weight: 600; }
 
-.pd-terminal__badge {
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: $pink;
-  letter-spacing: 0.04em;
-  margin: 0 0 8px;
-}
+/* ================= 终端态/邀请函 ================= */
+.pd-terminal { text-align: center; }
+.terminal-header { margin-bottom: 16px; }
+.pd-terminal__badge { display: inline-block; padding: 6px 16px; font-size: 13px; font-weight: 800; color: $accent-pink; }
+.pd-terminal__lead { margin-bottom: 24px; max-width: 400px; margin-left: auto; margin-right: auto; }
 
-.pd-terminal__lead {
-  margin: 0 0 16px;
-  line-height: 1.55;
-}
+.pd-invite-shell { min-height: 160px; perspective: 1000px; }
+.pd-invite-switch-enter-active, .pd-invite-switch-leave-active { transition: all 0.4s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.pd-invite-switch-enter-from { opacity: 0; transform: rotateX(-10deg) translateY(20px); }
+.pd-invite-switch-leave-to { opacity: 0; transform: scale(0.95) translateY(-10px); }
 
-.pd-invite-shell {
-  min-height: 120px;
-}
-
-.pd-invite-switch-enter-active,
-.pd-invite-switch-leave-active {
-  transition: opacity 0.35s ease, transform 0.35s ease;
-}
-.pd-invite-switch-enter-from {
-  opacity: 0;
-  transform: scale(0.96) translateY(8px);
-}
-.pd-invite-switch-leave-to {
-  opacity: 0;
-  transform: scale(0.98) translateY(-6px);
-}
-
+/* 水晶信封 */
 .pd-invite-envelope {
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  min-height: 220px;
-  padding: 28px 20px;
-  border: none;
-  border-radius: 20px;
-  cursor: pointer;
-  text-align: center;
-  color: #4a2c34;
-  background:
-    linear-gradient(165deg, rgba(255, 252, 248, 0.98) 0%, rgba(250, 236, 240, 0.96) 45%, rgba(245, 228, 234, 0.98) 100%);
-  box-shadow:
-    0 10px 36px rgba(120, 60, 80, 0.14),
-    inset 0 1px 0 rgba(255, 255, 255, 0.85),
-    inset 0 -2px 0 rgba(180, 120, 140, 0.08);
-  border: 1px solid rgba(180, 130, 150, 0.35);
-  transition: transform 0.2s ease, box-shadow 0.2s ease;
-  font-family: inherit;
+  position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center;
+  width: 100%; min-height: 240px; padding: 32px 20px; border: none; cursor: pointer; text-align: center;
+  background: linear-gradient(135deg, rgba(255,255,255,0.9) 0%, rgba(255,245,248,0.8) 100%);
+  box-shadow: 0 15px 35px rgba(255, 51, 102, 0.1), inset 0 2px 5px #fff;
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
+  &:hover { transform: translateY(-4px); box-shadow: 0 20px 45px rgba(255, 51, 102, 0.15); }
 }
-
-.pd-invite-envelope:hover {
-  transform: translateY(-3px);
-  box-shadow:
-    0 16px 44px rgba(120, 60, 80, 0.2),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-}
-
-.pd-invite-envelope:focus-visible {
-  outline: 2px solid rgba(215, 127, 162, 0.85);
-  outline-offset: 3px;
-}
-
-.pd-invite-envelope__frame {
-  position: absolute;
-  inset: 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(200, 150, 165, 0.25);
-  pointer-events: none;
-}
-
+.pd-invite-envelope__frame { position: absolute; inset: 12px; border-radius: 12px; border: 1px dashed rgba(255,51,102,0.3); pointer-events: none; }
 .pd-invite-envelope__wax {
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  color: #f5e6dc;
-  background: radial-gradient(circle at 30% 28%, #c76b7e 0%, #7d2f3f 55%, #4f1f2c 100%);
-  box-shadow:
-    0 4px 12px rgba(80, 30, 45, 0.35),
-    inset 0 2px 0 rgba(255, 255, 255, 0.2);
-  margin-bottom: 14px;
-  z-index: 1;
+  width: 56px; height: 56px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+  font-size: 14px; font-weight: 800; color: #fff; margin-bottom: 16px; z-index: 1;
 }
+.pd-invite-envelope__kicker { margin: 0; font-size: 12px; letter-spacing: 0.3em; text-transform: uppercase; color: $text-sub; z-index: 1; }
+.pd-invite-envelope__title { margin: 8px 0 4px; font-size: 26px; font-family: $serif; z-index: 1; }
+.pd-invite-envelope__hint { margin: 12px 0 0; font-size: 13px; color: $accent-pink; font-weight: 700; z-index: 1; animation: opacity-pulse 2s infinite; }
 
-.pd-invite-envelope__kicker {
-  margin: 0;
-  font-size: 0.72rem;
-  letter-spacing: 0.35em;
-  text-transform: uppercase;
-  color: #8a5a66;
-  z-index: 1;
-}
-
-.pd-invite-envelope__title {
-  margin: 8px 0 4px;
-  font-size: 1.35rem;
-  font-weight: 700;
-  font-family: 'Noto Serif SC', 'Songti SC', serif;
-  color: #5c2a38;
-  z-index: 1;
-}
-
-.pd-invite-envelope__hint {
-  margin: 12px 0 0;
-  font-size: 0.82rem;
-  color: #9a6b78;
-  z-index: 1;
-}
-
-.pd-location-hint {
-  margin: 8px 0 0;
-  font-size: 0.8rem;
-  color: #a07082;
-  line-height: 1.45;
-}
-
+/* 展开后的邀约卡片 */
 .pd-invite-card {
-  position: relative;
-  padding: 20px 18px 16px;
-  border-radius: 20px;
-  background: linear-gradient(155deg, #fffefb 0%, #fff8fb 42%, #ffeef5 100%);
-  border: 1px solid rgba(215, 127, 162, 0.38);
-  box-shadow:
-    0 14px 40px rgba(215, 127, 162, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
+  padding: 24px 20px; text-align: left; position: relative;
+  &--clickable { cursor: pointer; transition: all 0.3s; &:hover { transform: translateY(-3px); box-shadow: 0 15px 40px rgba(255, 51, 102, 0.15); border-color: rgba(255, 51, 102, 0.4); } }
 }
+.pd-invite-card__ribbon { text-align: center; font-weight: 800; font-size: 14px; color: $accent-pink; padding-bottom: 16px; margin-bottom: 8px; border-bottom: 1px solid rgba(0,0,0,0.05); }
 
-.pd-invite-card--clickable {
-  cursor: pointer;
-  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-}
+.pd-invite-row { display: flex; align-items: center; gap: 16px; margin-top: 16px; }
+.pd-invite-row__label { flex: 0 0 60px; font-size: 13px; color: $text-sub; font-weight: 600; }
+.pd-invite-row__user { display: flex; align-items: center; gap: 12px; }
+.avatar-glow-wrap { position: relative; border-radius: 50%; padding: 2px; background: var(--glow-color); box-shadow: 0 0 10px var(--glow-color); }
+.pd-invite-avatar { border-radius: 50%; border: 2px solid #fff; }
+.pd-invite-nick { font-weight: 700; color: $text-main; font-size: 16px; }
 
-.pd-invite-card--clickable:hover {
-  transform: translateY(-2px);
-  border-color: rgba(215, 127, 162, 0.55);
-  box-shadow:
-    0 18px 48px rgba(215, 127, 162, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.95);
-}
+.pd-invite-divider { height: 1px; margin: 20px 0; background: linear-gradient(90deg, transparent, rgba(255,51,102,0.2), transparent); }
 
-.pd-invite-card--clickable:focus-visible {
-  outline: 2px solid rgba(215, 127, 162, 0.85);
-  outline-offset: 3px;
-}
+.pd-invite-field { display: flex; flex-direction: column; gap: 6px; margin-top: 16px; }
+.pd-invite-field__k { font-size: 12px; letter-spacing: 1px; color: $text-sub; font-weight: 700; text-transform: uppercase;}
+.pd-invite-field__v { font-size: 18px; font-weight: 800; color: $text-main; }
+.pd-invite-desc { margin: 6px 0 0; font-size: 14px; color: $text-sub; line-height: 1.6; }
+.pd-location-hint { display: inline-block; margin: 12px 0 0; padding: 6px 12px; font-size: 12px; color: $accent-pink; font-weight: 600; }
+.pd-invite-reason { margin: 16px 0 0; font-size: 13px; color: $text-main; padding: 12px 16px; font-weight: 500;}
 
-.pd-invite-card__ribbon {
-  text-align: center;
-  font-weight: 700;
-  font-size: 0.92rem;
-  color: #9c3d62;
-  padding-bottom: 14px;
-  margin-bottom: 4px;
-  border-bottom: 2px solid rgba(215, 127, 162, 0.28);
-  letter-spacing: 0.06em;
-}
+.pd-countdown { margin-top: 20px; padding: 16px; text-align: center; }
+.pd-countdown__label { margin: 0 0 8px; font-size: 12px; color: $text-sub; font-weight: 700; }
+.pd-countdown__nums { margin: 0; font-size: 24px; font-weight: 800; color: $accent-pink; font-variant-numeric: tabular-nums; }
+.pd-countdown__nums.urgent { color: #f56c6c; animation: opacity-pulse 1s infinite; }
 
-.pd-invite-row {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-top: 12px;
-}
+.pd-invite-tap-hint { margin-top: 20px; padding-top: 16px; border-top: 1px dashed rgba(255,51,102,0.3); text-align: center; font-size: 14px; font-weight: 800; color: $accent-pink; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.pd-invite-tap-hint__arrow { font-size: 18px; transition: transform 0.3s; }
+.pd-invite-card--clickable:hover .pd-invite-tap-hint__arrow { transform: translateX(4px); }
+.pd-invite-tap-hint--muted { color: $text-sub; font-weight: 600; }
 
-.pd-invite-row__label {
-  flex: 0 0 3.2rem;
-  font-size: 0.78rem;
-  color: $muted;
-  font-weight: 500;
-}
-
-.pd-invite-row__user {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-}
-
-.pd-invite-avatar {
-  flex-shrink: 0;
-  border-radius: 50%;
-  box-shadow: 0 2px 8px rgba(215, 127, 162, 0.2);
-}
-
-.pd-invite-nick {
-  font-weight: 600;
-  color: $text;
-  font-size: 0.95rem;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.pd-invite-divider {
-  height: 1px;
-  margin: 16px 0 14px;
-  background: linear-gradient(90deg, transparent, rgba(215, 127, 162, 0.35), transparent);
-}
-
-.pd-invite-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin-top: 10px;
-}
-
-.pd-invite-field__k {
-  font-size: 0.72rem;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: $muted;
-  font-weight: 600;
-}
-
-.pd-invite-field__v {
-  font-size: 0.95rem;
-  font-weight: 600;
-  color: #5c3545;
-  line-height: 1.4;
-}
-
-.pd-invite-desc {
-  margin: 6px 0 0;
-  font-size: 0.85rem;
-  color: $muted;
-  line-height: 1.45;
-}
-
-.pd-invite-reason {
-  margin: 14px 0 0;
-  font-size: 0.85rem;
-  color: $muted;
-  line-height: 1.5;
-  padding: 10px 12px;
-  border-radius: 12px;
-  background: rgba(255, 255, 255, 0.65);
-  border: 1px solid rgba(215, 127, 162, 0.15);
-}
-
-.pd-countdown--in-card {
-  margin-top: 16px;
-}
-
-.pd-invite-tap-hint {
-  margin-top: 14px;
-  padding-top: 12px;
-  border-top: 1px dashed rgba(215, 127, 162, 0.25);
-  text-align: center;
-  font-size: 0.88rem;
-  font-weight: 600;
-  color: #c44b7a;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-}
-
-.pd-invite-tap-hint__arrow {
-  font-size: 1.1rem;
-}
-
-.pd-invite-tap-hint--muted {
-  font-weight: 500;
-  color: $muted;
-  border-top-style: solid;
-}
-
-.pd-steps {
-  display: flex;
-  gap: 8px;
-  margin: 12px 0;
-  font-size: 0.8rem;
-  color: $muted;
-}
-
+/* ================= 协商向导 (Wizard) ================= */
+.pd-steps { display: flex; padding: 6px; margin: 0 0 24px; border-radius: 999px; }
 .pd-steps span {
-  flex: 1;
-  text-align: center;
-  padding: 6px 4px;
-  border-radius: 999px;
-  background: rgba(215, 127, 162, 0.08);
+  flex: 1; text-align: center; padding: 8px 4px; border-radius: 999px; font-size: 13px; font-weight: 600; color: $text-sub; transition: all 0.3s;
+  &.on { color: $accent-pink; background: rgba(255,51,102,0.1); }
+  &.done { color: $text-main; background: transparent; }
 }
 
-.pd-steps span.on {
-  color: $pink;
-  font-weight: 600;
-}
-
-.pd-steps span.done {
-  background: rgba(215, 127, 162, 0.2);
-}
-
-.pd-option-list {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 14px;
-}
-
+/* Step 1: 选项 */
+.pd-option-list { display: flex; flex-direction: column; gap: 12px; }
 .pd-opt {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  text-align: left;
-  padding: 12px;
-  border-radius: 14px;
-  border: 1px solid rgba(215, 127, 162, 0.25);
-  background: #fffafb;
-  cursor: pointer;
+  display: flex; gap: 16px; align-items: center; text-align: left; padding: 16px; border: 1px solid rgba(255,255,255,0.6);
+  cursor: pointer; transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  &:hover:not(:disabled) { transform: translateY(-2px); background: rgba(255,255,255,0.8); border-color: rgba(255,51,102,0.3); box-shadow: 0 8px 20px rgba(255,51,102,0.08); }
 }
+.pd-opt__rank { font-size: 24px; font-weight: 800; font-family: $serif; opacity: 0.8; }
+.pd-opt__body { display: flex; flex-direction: column; gap: 4px; }
+.pd-opt__title { font-weight: 700; font-size: 16px; }
+.pd-opt__desc { font-size: 13px; color: $text-sub; }
 
-.pd-opt__rank {
-  font-weight: 700;
-  color: $pink;
-}
-
-.pd-opt__body {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.pd-opt__title {
-  font-weight: 600;
-}
-
-.pd-opt__desc {
-  font-size: 0.85rem;
-  color: $muted;
-}
-
-.pd-grid-wrap {
-  overflow-x: auto;
-  margin: 14px 0;
-}
-
-.pd-grid {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 0.75rem;
-}
-
-.pd-grid th {
-  padding: 6px 4px;
-  font-weight: 500;
-  color: $muted;
-}
-
+/* Step 2: 时段网格 */
+.pd-grid-wrap { overflow-x: auto; border-radius: 20px; }
+.pd-grid { width: 100%; border-collapse: separate; border-spacing: 4px; font-size: 13px; }
+.pd-grid th { padding: 8px 4px; font-weight: 700; color: $text-sub; }
 .pd-cell {
-  width: 28px;
-  height: 28px;
-  margin: 4px auto;
-  display: block;
-  border-radius: 8px;
-  border: 1px solid rgba(215, 127, 162, 0.35);
-  background: #fff;
-  cursor: pointer;
+  width: 100%; height: 40px; border-radius: 12px; background: rgba(255,255,255,0.6); border: 1px solid #fff;
+  cursor: pointer; transition: all 0.2s; display: flex; align-items: center; justify-content: center;
+  &:hover { background: #fff; box-shadow: 0 4px 10px rgba(0,0,0,0.05); }
+  &.on { background: linear-gradient(135deg, $accent-pink, $accent-orange); border-color: transparent; box-shadow: 0 4px 15px rgba(255,51,102,0.3); }
+  .check-mark { color: #fff; font-weight: 800; font-size: 16px; }
 }
 
-.pd-cell.on {
-  background: $pink;
-  border-color: $pink;
-}
-
-.pd-primary,
-.pd-secondary {
-  margin-top: 12px;
-  width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  border: none;
-  font-size: 1rem;
-  cursor: pointer;
-}
-
-.pd-primary {
-  background: linear-gradient(135deg, #e8a0bf, $pink);
-  color: #fff;
-}
-
-.pd-primary:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.pd-loc-btns {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-top: 12px;
-}
-
-.pd-secondary {
-  background: #fff;
-  border: 1px solid rgba(215, 127, 162, 0.35);
-  color: $text;
-}
-
-.pd-poll-hint {
-  font-size: 0.8rem;
-  color: $muted;
-}
-
-.pd-countdown {
-  margin-top: 16px;
-  padding: 14px;
-  border-radius: 12px;
-  background: rgba(215, 127, 162, 0.1);
-  text-align: center;
-}
-
-.pd-countdown__nums {
-  font-size: 1.35rem;
-  font-weight: 700;
-  color: $pink;
-  margin: 6px 0 0;
-}
-
-.pd-countdown__nums.urgent {
-  color: #e14d6e;
-}
-
-.pd-reason {
-  margin-top: 6px;
-}
+/* Step 3: 地点决定 */
+.pd-loc-btns { display: flex; flex-direction: column; gap: 12px; margin-top: 24px; }
 </style>

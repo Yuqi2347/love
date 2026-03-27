@@ -108,6 +108,19 @@
             </button>
           </el-form-item>
         </el-form>
+        <div class="auth-agreement">
+          <el-checkbox v-model="agreed">
+            我已阅读并同意
+            <router-link class="auth-legal-link" to="/legal/user-agreement" target="_blank">《用户协议》</router-link>
+            与
+            <router-link class="auth-legal-link" to="/legal/privacy-policy" target="_blank">《隐私政策》</router-link>
+          </el-checkbox>
+          <div class="auth-legal-links">
+            <router-link class="auth-legal-link" to="/legal/personal-info-list" target="_blank">个人信息收集清单</router-link>
+            <router-link class="auth-legal-link" to="/legal/third-party-sharing" target="_blank">第三方信息共享清单</router-link>
+            <router-link class="auth-legal-link" to="/legal/feature-description" target="_blank">功能说明</router-link>
+          </div>
+        </div>
         <div class="auth-footer">
           已有账号？<router-link to="/login" class="auth-link">立即登录</router-link>
         </div>
@@ -130,6 +143,7 @@ const formRef = ref<FormInstance>()
 const loading = ref(false)
 const sendCodeCooldown = ref(0)
 const activeUserCount = ref(0)
+const agreed = ref(false)
 
 const activeUserCountDisplay = computed(() => {
   const n = activeUserCount.value
@@ -356,6 +370,10 @@ async function handleSendCode() {
 async function handleRegister() {
   const valid = await formRef.value?.validate().catch(() => false)
   if (!valid) return
+  if (!agreed.value) {
+    ElMessage.warning('请先阅读并同意用户协议与隐私政策')
+    return
+  }
 
   loading.value = true
   try {
@@ -736,6 +754,29 @@ onBeforeUnmount(() => {
     transition: color $transition-fast;
 
     &:hover { color: $primary-dark; }
+  }
+}
+
+.auth-agreement {
+  margin-top: 6px;
+  font-size: 13px;
+  color: $text-muted;
+}
+
+.auth-legal-links {
+  margin-top: 8px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  padding-left: 24px;
+}
+
+.auth-legal-link {
+  color: $primary;
+  text-decoration: none;
+
+  &:hover {
+    color: $primary-dark;
   }
 }
 

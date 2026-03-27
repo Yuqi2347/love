@@ -22,6 +22,12 @@ const router = createRouter({
       meta: { public: true },
     },
     {
+      path: '/legal/:docType',
+      name: 'LegalDoc',
+      component: () => import('@/views/legal/LegalDocView.vue'),
+      meta: { public: true },
+    },
+    {
       path: '/welcome',
       name: 'Welcome',
       component: () => import('@/views/auth/SchoolWelcomeView.vue'),

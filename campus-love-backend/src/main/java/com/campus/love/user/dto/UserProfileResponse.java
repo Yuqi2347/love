@@ -25,6 +25,14 @@ public class UserProfileResponse {
     private Integer creditScore;
     private Integer inviteCount;
     private Integer participateCount;
+    /** 邀约策略：等级对应的同时参与上限 */
+    private Integer inviteConcurrentLimit;
+    /** 邀约策略：等级对应的公共邀约同时参与上限 */
+    private Integer invitePublicConcurrentLimit;
+    /** 邀约策略：等级对应的私密邀约同时参与上限 */
+    private Integer invitePrivateConcurrentLimit;
+    /** 邀约策略：等级对应的每日发起上限 */
+    private Integer inviteDailyLimit;
     private String mbti;
     private String zodiac;
     private String bazi;
@@ -41,6 +49,8 @@ public class UserProfileResponse {
     /** 新格式 JSON 字符串 */
     private String interestTags;
     private Boolean profileComplete;
+    /** 是否已绑定微信小程序（仅本人） */
+    private Boolean wechatBound;
     /** 朋友圈展示设置：ALL=所有人可见，FOLLOWERS=粉丝可见，SELF=仅自己可见 */
     private String feedVisibility;
     /** 动态可见时间(天)：3=近三天，30=近一月，180=近半年，-1=全部 */

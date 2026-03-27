@@ -288,6 +288,45 @@ img {
   overflow: hidden;
 }
 
+@media (max-width: 640px) {
+  .campal-date-popper {
+    width: calc(100vw - 24px) !important;
+    max-width: calc(100vw - 24px) !important;
+  }
+
+  .campal-date-popper .el-picker-panel {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+
+  .campal-date-popper .el-date-range-picker {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .campal-date-popper .el-date-range-picker__content {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  .campal-date-popper .el-date-range-picker__content.is-left,
+  .campal-date-popper .el-date-range-picker__content.is-right {
+    float: none !important;
+    display: block !important;
+  }
+
+  .campal-date-popper .el-date-range-picker__content.is-right {
+    border-left: 0 !important;
+    border-top: 1px solid var(--el-border-color-lighter, #ebeef5) !important;
+  }
+
+  .campal-date-popper .el-date-table,
+  .campal-date-popper .el-date-range-picker__header,
+  .campal-date-popper .el-picker-panel__body {
+    width: 100% !important;
+  }
+}
+
 // === 间距工具类 ===
 .mt-sm { margin-top: $space-sm; }
 .mt-md { margin-top: $space-md; }

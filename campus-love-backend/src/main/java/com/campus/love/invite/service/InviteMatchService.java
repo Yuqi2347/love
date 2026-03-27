@@ -179,6 +179,7 @@ public class InviteMatchService {
      */
     public void doAutoJoinInvite(Invite invite, Long userId) {
         creditService.checkUserCredit(userId, InviteCreditConstants.CREDIT_JOIN_THRESHOLD);
+        creditService.checkParticipateLimit(userId, invite != null ? invite.getInviteMode() : null);
         InviteParticipant participant = new InviteParticipant();
         participant.setInviteId(invite.getId());
         participant.setUserId(userId);

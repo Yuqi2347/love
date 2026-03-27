@@ -4,65 +4,66 @@
       <div class="loading-orbit">
         <span class="loading-orbit__ring ring-a" />
         <span class="loading-orbit__ring ring-b" />
-        <span class="loading-orbit__heart">♡</span>
+        <span class="loading-orbit__heart heartbeat-anim">♡</span>
       </div>
-      <p class="loading-title">正在揭晓你的心动解密</p>
-      <p class="loading-desc">请稍等片刻，缘分正在抵达。</p>
+      <p class="loading-title">正在解密心动档案</p>
+      <p class="loading-desc">引力场正在为你拉近缘分的距离...</p>
     </div>
 
     <div v-else-if="!result?.matched" class="empty-state">
-      <div class="empty-state__icon">✦</div>
-      <h2>本周暂未找到最佳匹配</h2>
+      <div class="empty-state__icon float-anim">✨</div>
+      <h2>本周星轨暂未交汇</h2>
       <p>你的心动档案已保留，下周继续帮你寻找。</p>
-      <button class="btn-back-home" @click="$router.replace('/moment')">返回心动时刻</button>
+      <button class="glass-btn mt-6" @click="$router.replace('/moment')">返回引力场</button>
     </div>
 
     <div v-else class="result-shell">
-      <section class="result-hero panel-entrance">
+      <section class="result-hero glass-panel panel-entrance">
         <div class="hero-badges">
-          <span class="hero-badge">心动解密</span>
-          <span class="hero-week">本周结果</span>
+          <span class="hero-badge glass-pill"><span class="pulse-dot"></span> 心动解密</span>
+          <span class="hero-week glass-pill">本周结果</span>
         </div>
 
         <div class="hero-content">
-          <p class="hero-kicker">缘分揭晓</p>
-          <h1 class="hero-title">{{ result.yuanfenTitle || '刚好对频' }}</h1>
+          <p class="hero-kicker">MOMENT REVEAL</p>
+          <h1 class="hero-title text-gradient-warm">{{ result.yuanfenTitle || '刚好同频' }}</h1>
           <p class="hero-desc">不需要数字证明什么。先看看是什么把你们轻轻推到了同一个地方。</p>
         </div>
 
-        <nav class="screen-tabs" role="tablist">
+        <nav class="tuner-capsule glass-pill-light mt-6" role="tablist">
           <button
             v-for="(label, index) in screenLabels"
             :key="label"
             type="button"
             role="tab"
-            class="screen-tab"
+            class="tuner-btn"
             :class="{ active: activeScreen === index + 1, locked: index === 3 && !result.datePrepUnlocked }"
             :disabled="index === 3 && !result.datePrepUnlocked"
             :aria-selected="activeScreen === index + 1"
             @click="goScreen(index + 1)"
           >
-            <span class="screen-tab__index">0{{ index + 1 }}</span>
-            <span class="screen-tab__label">{{ label }}</span>
+            {{ label }}
+            <el-icon v-if="index === 3 && !result.datePrepUnlocked" class="ml-1"><Lock /></el-icon>
           </button>
         </nav>
       </section>
 
-      <section class="content-sheet panel-entrance">
+      <section class="content-sheet glass-panel panel-entrance">
         <template v-if="activeScreen === 1">
           <header class="sheet-header">
-            <span class="sheet-badge">第一屏</span>
+            <span class="sheet-badge glass-pill">SCREEN 01</span>
             <h2>心动揭晓</h2>
             <p>先认识这个让你产生好感的人，再慢慢打开后面的故事。</p>
           </header>
 
           <div class="content-stack">
-            <button type="button" class="match-card match-card--hero" @click="goProfile">
+            <button type="button" class="match-card match-card--hero glass-card-light" @click="goProfile">
               <span class="match-card__glow" />
               <span class="match-card__spark spark-a" />
               <span class="match-card__spark spark-b" />
+              
               <div class="match-card__main">
-                <div class="match-avatar-wrap">
+                <div class="avatar-glow-wrap" style="--glow-color: rgba(255,51,102,0.4)">
                   <img :src="avatarSrc" class="match-avatar" alt="" />
                 </div>
                 <div class="match-info">
@@ -79,13 +80,16 @@
                 </div>
                 <span class="match-card__arrow">›</span>
               </div>
-              <div v-if="showMatchScore" class="match-score-block" aria-label="综合匹配度">
+
+              <div v-if="showMatchScore" class="match-score-block glass-pill-light" aria-label="综合匹配度">
                 <div class="match-score-block__row">
                   <span class="match-score-block__label">综合匹配度：</span>
-                  <span class="match-score-block__value">{{ result.matchScorePercent }}%</span>
+                  <span class="match-score-block__value text-gradient-warm">{{ result.matchScorePercent }}%</span>
                 </div>
               </div>
+
               <div v-if="result.bio" class="match-bio">{{ result.bio }}</div>
+              
               <div v-if="(result.mbti || result.zodiac || (result.complementaryModes?.length))" class="match-tags">
                 <span v-if="result.mbti" class="info-tag">{{ result.mbti }}</span>
                 <span v-if="result.zodiac" class="info-tag">{{ result.zodiac }}</span>
@@ -93,31 +97,31 @@
                   {{ mode }}
                 </span>
               </div>
-              <p class="match-card__hint">点击卡片查看 TA 的主页</p>
+              <p class="match-card__hint">点击卡片查看 TA 的引力主页</p>
             </button>
 
-            <article v-if="result.complementaryModes?.length" class="lux-card">
+            <article v-if="result.complementaryModes?.length" class="lux-card glass-card-light">
               <h3 class="lux-card__title">你们的默契</h3>
               <div class="tag-row">
-                <span v-for="mode in result.complementaryModes" :key="mode" class="pill-tag">{{ mode }}</span>
+                <span v-for="mode in result.complementaryModes" :key="mode" class="glass-pill text-accent-pink px-3 py-1 text-sm font-bold">{{ mode }}</span>
               </div>
             </article>
           </div>
 
           <div class="sheet-actions">
-            <button type="button" class="btn-primary" @click="goScreen(2)">查看你们的缘分</button>
+            <button type="button" class="glow-btn-warm w-full" @click="goScreen(2)">查看你们的缘分</button>
           </div>
         </template>
 
         <template v-else-if="activeScreen === 2">
           <header class="sheet-header">
-            <span class="sheet-badge">第二屏</span>
+            <span class="sheet-badge glass-pill">SCREEN 02</span>
             <h2>你们之间</h2>
             <p>不是一瞬间的巧合，而是很多细小偏好在同一个方向上靠拢。</p>
           </header>
 
           <div class="content-stack">
-            <article v-for="(text, index) in insightCards" :key="index" class="insight-card">
+            <article v-for="(text, index) in insightCards" :key="index" class="insight-card glass-card-light">
               <div class="insight-card__index">0{{ index + 1 }}</div>
               <div class="insight-card__body">
                 <h3>{{ insightTitles[index] }}</h3>
@@ -125,47 +129,47 @@
               </div>
             </article>
 
-            <article v-if="result.dimensionLabels?.length" class="lux-card">
+            <article v-if="result.dimensionLabels?.length" class="lux-card glass-card-light">
               <h3 class="lux-card__title">关键词</h3>
               <div class="tag-row">
-                <span v-for="item in result.dimensionLabels" :key="item" class="pill-tag pill-tag--light">{{ item }}</span>
+                <span v-for="item in result.dimensionLabels" :key="item" class="glass-pill-light text-main px-3 py-1 text-sm font-bold">{{ item }}</span>
               </div>
             </article>
 
-            <article v-if="result.goldenSentence" class="quote-card">
+            <article v-if="result.goldenSentence" class="quote-card glass-card-light">
               <h3 class="quote-card__title">专属金句</h3>
-              <p class="quote-card__text">{{ result.goldenSentence }}</p>
+              <p class="quote-card__text text-gradient-warm">{{ result.goldenSentence }}</p>
             </article>
           </div>
 
-          <div class="sheet-actions">
-            <button type="button" class="btn-secondary" @click="goScreen(1)">回到揭晓</button>
-            <button type="button" class="btn-primary" @click="goScreen(3)">继续了解 TA</button>
+          <div class="sheet-actions two-btn-layout">
+            <button type="button" class="glass-btn" @click="goScreen(1)">回到揭晓</button>
+            <button type="button" class="glow-btn-warm" @click="goScreen(3)">继续了解 TA</button>
           </div>
         </template>
 
         <template v-else-if="activeScreen === 3">
           <header class="sheet-header">
-            <span class="sheet-badge">第三屏</span>
+            <span class="sheet-badge glass-pill">SCREEN 03</span>
             <h2>关于 TA</h2>
             <p>现在你可以决定，是立刻往前一步，还是留一点时间慢慢靠近。</p>
           </header>
 
           <div class="content-stack">
-            <article class="lux-card">
+            <article class="lux-card glass-card-light">
               <h3 class="lux-card__title">对 TA 的印象</h3>
               <p class="lux-card__paragraph">{{ result.aboutMatchedUser || 'TA身上有一种适合慢慢了解的气质。' }}</p>
             </article>
 
-            <article class="decision-card">
-              <p class="decision-card__title">{{ decisionHint }}</p>
+            <article class="decision-card glass-card-light">
+              <p class="decision-card__title text-gradient-warm">{{ decisionHint }}</p>
               <p v-if="decisionDetail" class="decision-card__detail">{{ decisionDetail }}</p>
 
               <div class="decision-card__buttons">
-                <button class="btn-primary" :disabled="choiceLocked || confirming" @click="handleChoice('YUE')">
+                <button class="glow-btn-warm" :disabled="choiceLocked || confirming" @click="handleChoice('YUE')">
                   {{ confirming && pendingChoice === 'YUE' ? '提交中...' : '心动，约起来' }}
                 </button>
-                <button class="btn-secondary" :disabled="choiceLocked || confirming" @click="handleChoice('GUANZHU')">
+                <button class="glass-btn" :disabled="choiceLocked || confirming" @click="handleChoice('GUANZHU')">
                   {{ confirming && pendingChoice === 'GUANZHU' ? '提交中...' : '先关注，慢慢来' }}
                 </button>
               </div>
@@ -174,15 +178,16 @@
                 <button class="text-action" @click="goProfile">查看 TA 的主页</button>
                 <button class="text-action" @click="goChat">去打招呼</button>
               </div>
-              <p v-if="result.confirmStatus === 'BOTH_YUE' && result.datePrepUnlocked" class="decision-card__four-hint">
-                第四屏已解锁：进入后将加载 AI 约会建议，并与「三步约会协商」一起展示（双方已互关）。
-              </p>
+              
+              <div v-if="result.confirmStatus === 'BOTH_YUE' && result.datePrepUnlocked" class="mt-4 p-3 glass-pill-light border-accent-blue">
+                <p class="text-xs text-main m-0">🎉 第四屏已解锁：进入后将加载 AI 约会建议，并开启「三步约会协商」。</p>
+              </div>
             </article>
           </div>
 
-          <div class="sheet-actions">
-            <button type="button" class="btn-secondary" @click="goScreen(2)">回看缘分</button>
-            <button type="button" class="btn-primary" :disabled="!result.datePrepUnlocked" @click="openDatePrep">
+          <div class="sheet-actions two-btn-layout">
+            <button type="button" class="glass-btn" @click="goScreen(2)">回看缘分</button>
+            <button type="button" class="glow-btn-warm" :disabled="!result.datePrepUnlocked" @click="openDatePrep">
               {{ result.datePrepUnlocked ? '查看约会准备' : '等待双方确认' }}
             </button>
           </div>
@@ -190,61 +195,62 @@
 
         <template v-else>
           <header class="sheet-header">
-            <span class="sheet-badge">第四屏</span>
+            <span class="sheet-badge glass-pill">SCREEN 04</span>
             <h2>去见 TA</h2>
             <p>下方先展示 AI 约会建议，同步可进行三步协商；你可先独立完成选项，无需等对方。</p>
           </header>
 
-          <div v-if="!result.datePrepUnlocked" class="locked-card">
-            <p class="locked-card__title">第四屏尚未解锁</p>
-            <p>双方都选择“心动，约起来”后，这里会出现三步协商与约会准备内容。</p>
+          <div v-if="!result.datePrepUnlocked" class="locked-card glass-card-light">
+            <div class="text-4xl mb-2">🔒</div>
+            <p class="locked-card__title text-gradient-warm">星轨尚未完全重合</p>
+            <p>双方都选择“心动，约起来”后，这里会出现三步协商与专属约会建议。</p>
           </div>
 
           <div v-if="result.datePrepUnlocked && prepLoading" class="prep-loading">
-            <div class="prep-loading__spinner" />
-            <p>正在为你准备第一次见面的细节...</p>
+            <div class="prep-loading__spinner pulse-ring" />
+            <p class="text-main font-bold">正在为你生成第一次见面的完美方案...</p>
           </div>
 
           <div v-else-if="result.datePrepUnlocked && datePrep" class="content-stack">
-            <article class="lux-card">
+            <article class="lux-card glass-card-light">
               <h3 class="lux-card__title">约会方式推荐</h3>
-              <h3>{{ datePrep.dateSceneType }}</h3>
+              <h3 class="text-gradient-warm">{{ datePrep.dateSceneType }}</h3>
               <p>{{ datePrep.dateSuggestion }}</p>
             </article>
 
-            <article class="lux-card">
+            <article class="lux-card glass-card-light">
               <h3 class="lux-card__title">破冰话题</h3>
               <div class="topic-list">
-                <div v-for="item in datePrep.iceBreakTopics" :key="item.title" class="topic-item">
-                  <h3>{{ item.title }}</h3>
+                <div v-for="item in datePrep.iceBreakTopics" :key="item.title" class="topic-item glass-pill-light">
+                  <h3 class="text-main">{{ item.title }}</h3>
                   <p>{{ item.opener }}</p>
                 </div>
               </div>
             </article>
 
-            <article class="lux-card">
+            <article class="lux-card glass-card-light">
               <h3 class="lux-card__title">约会小惊喜</h3>
               <p>{{ datePrep.surpriseIdea }}</p>
             </article>
 
             <article class="two-col">
-              <div class="lux-card">
+              <div class="lux-card glass-card-light">
                 <h3 class="lux-card__title">打扮建议</h3>
                 <p>{{ datePrep.outfitAdvice }}</p>
               </div>
-              <div class="lux-card">
+              <div class="lux-card glass-card-light">
                 <h3 class="lux-card__title">心理准备</h3>
                 <p>{{ datePrep.mindsetAdvice }}</p>
               </div>
             </article>
 
-            <article v-if="datePrep.nearbyShops?.length" class="lux-card">
+            <article v-if="datePrep.nearbyShops?.length" class="lux-card glass-card-light">
               <h3 class="lux-card__title">附近推荐</h3>
               <div class="shop-list">
-                <div v-for="shop in datePrep.nearbyShops" :key="shop.name" class="shop-item">
-                  <strong>{{ shop.name }}</strong>
-                  <span v-if="shop.typeName">{{ shop.typeName }}</span>
-                  <span v-if="shop.distance">{{ shop.distance }}m</span>
+                <div v-for="shop in datePrep.nearbyShops" :key="shop.name" class="shop-item glass-pill-light">
+                  <strong class="text-main">{{ shop.name }}</strong>
+                  <span v-if="shop.typeName" class="text-xs text-sub">{{ shop.typeName }}</span>
+                  <span v-if="shop.distance" class="text-xs text-accent-blue">{{ shop.distance }}m</span>
                 </div>
               </div>
             </article>
@@ -257,9 +263,9 @@
             />
           </div>
 
-          <div class="sheet-actions">
-            <button type="button" class="btn-secondary" @click="goScreen(3)">回到上一屏</button>
-            <button type="button" class="btn-primary" @click="goChat">去打招呼</button>
+          <div class="sheet-actions two-btn-layout">
+            <button type="button" class="glass-btn" @click="goScreen(3)">回到上一屏</button>
+            <button type="button" class="glow-btn-warm" @click="goChat">去打招呼</button>
           </div>
         </template>
       </section>
@@ -268,15 +274,16 @@
 </template>
 
 <script setup lang="ts">
+// ==========================================
+// 核心逻辑 100% 原封不动
+// ==========================================
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter } from 'vue-router'
+import { Lock } from '@element-plus/icons-vue'
 import {
-  confirmMomentChoice,
-  getMomentDatePrep,
-  getMomentResult,
-  type MomentDatePrepResponse,
-  type MomentResultResponse,
+  confirmMomentChoice, getMomentDatePrep, getMomentResult,
+  type MomentDatePrepResponse, type MomentResultResponse,
 } from '@/api/momentApi'
 import PairDateNegotiationCore from '@/views/moment/components/PairDateNegotiationCore.vue'
 import { DEFAULT_AVATAR, getMediaUrl } from '@/utils/shared'
@@ -295,7 +302,6 @@ const insightTitles = ['是什么让你们靠近', '在一起大概是什么感�
 
 const avatarSrc = computed(() => getMediaUrl(result.value?.avatarUrl || null) || DEFAULT_AVATAR)
 
-/** 第一屏卡片内展示综合匹配度（与后端 matchScorePercent 一致） */
 const showMatchScore = computed(() => {
   const p = result.value?.matchScorePercent
   return p != null && p >= 0
@@ -314,7 +320,6 @@ const choiceLocked = computed(() => {
     || result.value.confirmStatus === 'TIMEOUT_GUANZHU'
 })
 
-/** 第四屏：约会准备加载完成后与三步协商同屏（后端已在双方约一下后创建协商） */
 const pairNegotiationEmbedVisible = computed(() => {
   const r = result.value
   if (!r?.datePrepUnlocked) return false
@@ -423,854 +428,241 @@ onMounted(loadResult)
 </script>
 
 <style lang="scss" scoped>
-@use '@/styles/variables' as *;
-
-$pink: #d77fa2;
-$pink-soft: #fff3f8;
-$pink-border: rgba(215, 127, 162, 0.18);
-$pink-strong: rgba(215, 127, 162, 0.34);
-$text-main: #4f3941;
-$text-soft: #8f7480;
+/* ==========================================
+   晨曦极光 (Light Glassmorphism) 结果页 UI
+   ========================================== */
+$bg-aurora: #f8fafc;
+$accent-pink: #FF3366;
+$accent-orange: #FF7B54;
+$accent-blue: #4f8cff;
+$text-main: #1e293b;
+$text-sub: #64748b;
+$border-light: rgba(255, 255, 255, 0.8);
 $serif: 'Noto Serif SC', 'Songti SC', 'STSong', serif;
-$max-width: 560px;
+$max-width: 600px;
 
 .result-page {
   min-height: 100vh;
   padding: 24px 16px 64px;
-  background:
-    radial-gradient(circle at top left, rgba(248, 206, 222, 0.2), transparent 28%),
-    linear-gradient(180deg, #fffafc 0%, #fff5f8 44%, #ffffff 100%);
-}
-
-.loading-state,
-.empty-state,
-.result-shell {
-  width: 100%;
-  max-width: $max-width;
-  margin: 0 auto;
-}
-
-.loading-state,
-.empty-state {
-  padding-top: 120px;
-  text-align: center;
-}
-
-.loading-orbit {
+  background: $bg-aurora;
   position: relative;
-  width: 120px;
-  height: 120px;
-  margin: 0 auto 22px;
+  
+  &::before {
+    content: ''; position: fixed; inset: 0; pointer-events: none;
+    background: 
+      radial-gradient(circle at 10% 10%, rgba(79, 140, 255, 0.1), transparent 45%),
+      radial-gradient(circle at 90% 40%, rgba(255, 51, 102, 0.08), transparent 45%),
+      radial-gradient(circle at 50% 90%, rgba(255, 123, 84, 0.06), transparent 50%);
+    z-index: 0;
+  }
 }
 
-.loading-orbit__ring {
-  position: absolute;
-  inset: 0;
-  border-radius: 50%;
-  border: 1px solid rgba(215, 127, 162, 0.22);
+// 布局壳
+.loading-state, .empty-state, .result-shell {
+  width: 100%; max-width: $max-width; margin: 0 auto; position: relative; z-index: 1;
 }
 
-.ring-a { animation: spin 6s linear infinite; }
-.ring-b { inset: 18px; animation: spin 4s linear infinite reverse; }
+/* ================= 极光玻璃态核心类 ================= */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.65); backdrop-filter: blur(24px); -webkit-backdrop-filter: blur(24px);
+  border: 1px solid $border-light; box-shadow: 0 10px 40px rgba(31, 38, 135, 0.05); border-radius: 28px;
+}
+.glass-card-light {
+  background: rgba(255, 255, 255, 0.5); backdrop-filter: blur(12px); 
+  border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 20px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.02);
+}
+.glass-pill {
+  background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.9); border-radius: 999px;
+}
+.glass-pill-light {
+  background: rgba(255, 255, 255, 0.4); border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 16px;
+}
+.text-gradient-warm {
+  background: linear-gradient(135deg, $accent-pink, $accent-orange);
+  -webkit-background-clip: text; -webkit-text-fill-color: transparent; font-weight: 800;
+}
+.text-accent-pink { color: $accent-pink; }
+.text-accent-blue { color: $accent-blue; }
+.text-main { color: $text-main; }
+.text-sub { color: $text-sub; }
+.font-bold { font-weight: 700; }
+.text-sm { font-size: 14px; }
+.text-xs { font-size: 12px; }
+.text-4xl { font-size: 36px; }
+.m-0 { margin: 0; }
+.mt-4 { margin-top: 16px; }
+.mt-6 { margin-top: 24px; }
+.mb-2 { margin-bottom: 8px; }
+.p-3 { padding: 12px; }
+.px-3 { padding-left: 12px; padding-right: 12px; }
+.py-1 { padding-top: 4px; padding-bottom: 4px; }
+.ml-1 { margin-left: 4px; }
+.border-accent-blue { border: 1px solid rgba(79, 140, 255, 0.3); }
 
-.loading-orbit__heart {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: #c96f93;
-  font-size: 34px;
-  animation: pulse 1.6s ease-in-out infinite;
+// ================= 按钮体系 =================
+.glow-btn-warm {
+  height: 52px; border-radius: 999px; border: none; display: inline-flex; align-items: center; justify-content: center;
+  background: linear-gradient(135deg, $accent-pink, $accent-orange); color: white;
+  font-size: 16px; font-weight: 700; cursor: pointer; letter-spacing: 1px;
+  box-shadow: 0 8px 25px rgba(255, 51, 102, 0.3); transition: all 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  &:hover:not(:disabled) { transform: translateY(-3px); box-shadow: 0 12px 30px rgba(255, 51, 102, 0.4); }
+  &:disabled { background: #cbd5e1; box-shadow: none; cursor: not-allowed; opacity: 0.8; color: #fff; }
+}
+.glass-btn {
+  height: 52px; border-radius: 999px; background: rgba(255, 255, 255, 0.6); border: 1px solid #fff;
+  color: $text-sub; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.3s;
+  display: inline-flex; align-items: center; justify-content: center;
+  &:hover:not(:disabled) { background: #fff; color: $text-main; transform: translateY(-2px); box-shadow: 0 8px 20px rgba(0,0,0,0.05); }
+  &:disabled { opacity: 0.5; cursor: not-allowed; }
+}
+.w-full { width: 100%; }
+
+// ================= 动画与特效 =================
+.pulse-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: $accent-pink; animation: pulse 2s infinite; margin-right: 4px;}
+.float-anim { animation: float 3s ease-in-out infinite; }
+.heartbeat-anim { animation: heartbeat 1.5s ease-in-out infinite; }
+.panel-entrance { animation: rise-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both; }
+.content-sheet { animation-delay: 0.1s; }
+
+// ================= 状态页 =================
+.loading-state, .empty-state { padding-top: 120px; text-align: center; }
+.loading-orbit { position: relative; width: 120px; height: 120px; margin: 0 auto 24px; }
+.loading-orbit__ring { position: absolute; inset: 0; border-radius: 50%; border: 2px solid transparent; }
+.ring-a { border-top-color: $accent-pink; border-right-color: $accent-pink; animation: spin 2s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite; }
+.ring-b { inset: 15px; border-bottom-color: $accent-blue; border-left-color: $accent-blue; animation: spin 3s cubic-bezier(0.68, -0.55, 0.265, 1.55) infinite reverse; }
+.loading-orbit__heart { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: $accent-pink; font-size: 40px; }
+
+.loading-title, .empty-state h2 { color: $text-main; font-family: $serif; font-size: 32px; font-weight: 700; margin-bottom: 12px; }
+.loading-desc, .empty-state p { color: $text-sub; font-size: 15px; line-height: 1.6; }
+.empty-state__icon { margin-bottom: 20px; font-size: 48px; }
+
+// ================= Hero 区 =================
+.result-hero { padding: 24px 28px; display: flex; flex-direction: column; align-items: center;}
+.hero-badges { display: flex; gap: 12px; margin-bottom: 20px; }
+.hero-badge, .hero-week, .sheet-badge { padding: 6px 14px; font-size: 11px; font-weight: 800; color: $accent-pink; letter-spacing: 1px; }
+
+.hero-content { text-align: center; display: flex; flex-direction: column; gap: 12px; }
+.hero-kicker { color: $accent-blue; font-size: 12px; font-weight: 800; letter-spacing: 0.15em; }
+.hero-title { font-size: 36px; line-height: 1.2; font-family: $serif; margin: 0; }
+.hero-desc { color: $text-sub; font-size: 14px; max-width: 400px; margin: 0; line-height: 1.6;}
+
+// 胶囊导航
+.tuner-capsule { display: flex; width: 100%; padding: 6px; gap: 4px; }
+.tuner-btn {
+  flex: 1; padding: 10px 0; border-radius: 999px; text-align: center; font-size: 13px; font-weight: 700;
+  color: $text-sub; transition: all 0.3s; border: none; background: transparent; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  &.active {
+    color: $accent-pink; background: linear-gradient(135deg, rgba(79, 140, 255, 0.08), rgba(255, 51, 102, 0.08));
+    box-shadow: 0 2px 8px rgba(255, 51, 102, 0.05), inset 0 0 0 1px rgba(255, 255, 255, 0.8);
+  }
+  &.locked { color: #cbd5e1; }
 }
 
-.loading-title,
-.empty-state h2 {
-  color: $text-main;
-  font-family: $serif;
-  font-size: 32px;
-  font-weight: 700;
-  margin-bottom: 12px;
-}
+// ================= 内容面板区 =================
+.content-sheet { padding: 32px 24px 24px; margin-top: 16px; }
+.sheet-header { text-align: center; margin-bottom: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
+.sheet-header h2 { margin: 0; color: $text-main; font-size: 28px; font-family: $serif; font-weight: 700; }
+.sheet-header p { margin: 0; color: $text-sub; font-size: 14px; max-width: 360px; line-height: 1.6;}
 
-.loading-desc,
-.empty-state p {
-  color: $text-soft;
-  font-size: 14px;
-  line-height: 1.9;
-}
+.content-stack { display: flex; flex-direction: column; gap: 16px; }
 
-.empty-state__icon {
-  margin-bottom: 18px;
-  color: #c96f93;
-  font-size: 40px;
-}
-
-.btn-back-home,
-.btn-primary,
-.btn-secondary {
-  min-height: 48px;
-  padding: 0 24px;
-  border-radius: 999px;
-  font-size: 15px;
-  font-weight: 700;
-  transition: transform $transition-base, box-shadow $transition-base, opacity $transition-base;
-  cursor: pointer;
-}
-
-.btn-back-home,
-.btn-secondary {
-  background: rgba(255, 255, 255, 0.96);
-  color: $text-soft;
-  border: 1px solid $pink-border;
-}
-
-.btn-primary {
-  border: none;
-  color: #ffffff;
-  background: linear-gradient(135deg, #efabc4 0%, #d77fa2 100%);
-  box-shadow: 0 14px 28px rgba(215, 127, 162, 0.24);
-}
-
-.btn-back-home:hover,
-.btn-primary:hover:not(:disabled),
-.btn-secondary:hover:not(:disabled),
-.screen-tab:hover:not(:disabled) {
-  transform: translateY(-2px);
-}
-
-.btn-primary:disabled,
-.btn-secondary:disabled,
-.screen-tab:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-  box-shadow: none;
-}
-
-.result-shell {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.result-hero,
-.content-sheet {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 248, 251, 0.95));
-  border: 1px solid rgba(255, 255, 255, 0.92);
-  box-shadow: 0 24px 56px rgba(227, 191, 205, 0.14);
-}
-
-.result-hero {
-  padding: 24px 20px 20px;
-  border-radius: 24px;
-}
-
-.hero-badges {
-  display: flex;
-  justify-content: center;
-  gap: 12px;
-  margin-bottom: 20px;
-}
-
-.hero-badge,
-.hero-week,
-.sheet-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(255, 246, 250, 0.96);
-  border: 1px solid $pink-border;
-  color: #b76587;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-}
-
-.match-card__label,
-.lux-card__title,
-.quote-card__title {
-  color: #b76587;
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-}
-
-.hero-content {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  text-align: center;
-}
-
-.hero-kicker {
-  color: #b76587;
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.hero-title,
-.sheet-header h2,
-.match-info h2,
-.lux-card h3,
-.insight-card__body h3,
-.topic-item h3,
-.decision-card__title {
-  font-family: $serif;
-}
-
-.hero-title {
-  margin: 0;
-  color: $text-main;
-  font-size: 32px;
-  line-height: 1.2;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.hero-desc,
-.sheet-header p,
-.match-bio,
-.lux-card p,
-.insight-card__body p,
-.topic-item p,
-.decision-card__detail,
-.locked-card p,
-.prep-loading p {
-  color: $text-soft;
-  font-size: 14px;
-  line-height: 1.8;
-}
-
-.hero-desc {
-  margin: 0;
-  text-align: center;
-}
-
-.match-card,
-.lux-card,
-.quote-card,
-.decision-card,
-.locked-card,
-.topic-item {
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 246, 250, 0.94));
-  border: 1px solid rgba(215, 127, 162, 0.12);
-  box-shadow: 0 14px 30px rgba(227, 191, 205, 0.1);
-}
-
+// --- 第一屏：心动卡片 ---
 .match-card {
-  padding: 20px;
-  border-radius: 20px;
-  text-align: left;
-  position: relative;
-  overflow: hidden;
+  padding: 24px; border-radius: 24px; text-align: left; cursor: pointer;
+  position: relative; overflow: hidden; border: none; transition: all 0.3s;
 }
-
 .match-card--hero {
-  width: 100%;
-  border: 1px solid rgba(215, 127, 162, 0.18);
-  background:
-    radial-gradient(circle at top left, rgba(255, 247, 250, 0.95), transparent 42%),
-    linear-gradient(135deg, rgba(255, 255, 255, 0.99), rgba(255, 241, 246, 0.96) 48%, rgba(249, 225, 233, 0.92));
-  box-shadow:
-    0 24px 48px rgba(215, 127, 162, 0.16),
-    inset 0 1px 0 rgba(255, 255, 255, 0.9);
-  transition: transform $transition-base, box-shadow $transition-base, border-color $transition-base;
-}
-
-.match-card--hero:hover {
-  transform: translateY(-3px);
-  border-color: rgba(215, 127, 162, 0.3);
-  box-shadow:
-    0 28px 56px rgba(215, 127, 162, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.94);
-}
-
-.match-card__glow,
-.match-card__spark {
-  position: absolute;
-  pointer-events: none;
-}
-
-.match-card__glow {
-  inset: auto -20% -55% auto;
-  width: 220px;
-  height: 220px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(255, 215, 228, 0.42), transparent 62%);
-}
-
-.match-card__spark {
-  width: 10px;
-  height: 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.9);
-  box-shadow: 0 0 18px rgba(255, 255, 255, 0.85);
-}
-
-.spark-a {
-  top: 24px;
-  right: 26px;
-}
-
-.spark-b {
-  top: 52px;
-  right: 56px;
-  width: 6px;
-  height: 6px;
-}
-
-.match-card__main {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  position: relative;
-  z-index: 1;
-}
-
-.match-avatar-wrap {
-  flex-shrink: 0;
-}
-
-.match-avatar {
-  display: block;
-  width: 78px;
-  height: 78px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 3px solid rgba(255, 255, 255, 0.92);
-  box-shadow: 0 18px 30px rgba(215, 127, 162, 0.18);
-}
-
-/* 全宽显式说明，手机无需长按即可理解含义 */
-.match-score-block {
-  margin-top: 14px;
-  padding: 12px 14px;
-  border-radius: 14px;
-  background: linear-gradient(135deg, rgba(255, 247, 250, 0.98), rgba(255, 236, 242, 0.92));
-  border: 1px solid rgba(215, 127, 162, 0.22);
-  text-align: left;
-  position: relative;
-  z-index: 1;
-}
-
-.match-score-block__row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  gap: 6px 10px;
-}
-
-.match-score-block__label {
-  font-size: 14px;
-  font-weight: 700;
-  color: #8b4060;
-}
-
-.match-score-block__value {
-  font-size: clamp(22px, 5.2vw, 28px);
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  color: #b84f7a;
-  letter-spacing: -0.02em;
-  line-height: 1;
-}
-
-.match-card__label {
-  margin-bottom: 6px;
-}
-
-.match-title-row {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 6px;
-}
-
-.match-title-row h3 {
-  margin: 0;
-  color: $text-main;
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.match-info h2,
-.match-info h3 {
-  margin: 0 0 6px;
-  color: $text-main;
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.match-meta {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  color: $text-soft;
-  font-size: 13px;
-}
-
-.match-bio {
-  margin: 14px 0 0;
-  padding-top: 14px;
-  border-top: 1px solid rgba(215, 127, 162, 0.1);
-  position: relative;
-  z-index: 1;
-}
-
-.match-tags,
-.tag-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-}
-
-.match-tags {
-  margin-top: 14px;
-  position: relative;
-  z-index: 1;
-}
-
-.info-tag,
-.pill-tag {
-  display: inline-flex;
-  align-items: center;
-  min-height: 32px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(255, 242, 247, 0.96);
-  border: 1px solid $pink-border;
-  color: #b76587;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.info-tag--soft,
-.pill-tag--light {
-  color: $text-main;
-  background: rgba(255, 248, 251, 0.96);
-}
-
-.match-card__arrow {
-  margin-left: auto;
-  color: #c47896;
-  font-size: 34px;
-  line-height: 1;
-}
-
-.match-card__hint {
-  margin-top: 14px;
-  color: #b76587;
-  font-size: 13px;
-  font-weight: 700;
-  position: relative;
-  z-index: 1;
-}
-
-.screen-tabs {
-  display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 20px;
-}
-
-.screen-tab {
-  min-height: 52px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.66);
-  border: 1px solid rgba(215, 127, 162, 0.12);
-  transition: transform $transition-base, border-color $transition-base, box-shadow $transition-base;
-}
-
-.screen-tab.active {
-  border-color: $pink-strong;
-  background: linear-gradient(135deg, rgba(255, 247, 250, 0.98), rgba(255, 236, 242, 0.94));
-  box-shadow: 0 10px 24px rgba(227, 191, 205, 0.14);
-}
-
-.screen-tab__index {
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 10px;
-  background: $pink-soft;
-  border: 1px solid $pink-border;
-  color: #b76587;
-  font-size: 11px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.screen-tab__label {
-  color: $text-main;
-  font-size: 13px;
-  font-weight: 700;
-  text-align: center;
-}
-
-.content-sheet {
-  padding: 28px 20px 24px;
-  border-radius: 24px;
-}
-
-.sheet-header {
-  margin-bottom: 24px;
-  text-align: center;
-}
-
-.sheet-header h2 {
-  margin: 12px 0 8px;
-  color: $text-main;
-  font-size: 28px;
-  line-height: 1.2;
-  font-weight: 700;
-  letter-spacing: -0.02em;
-}
-
-.sheet-header p {
-  width: 100%;
-  max-width: 400px;
-  margin: 0 auto;
-}
-
-.content-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.lux-card,
-.quote-card,
-.decision-card,
-.locked-card {
-  padding: 20px;
-  border-radius: 20px;
-}
-
-.lux-card--center {
-  text-align: center;
-}
-
-.lux-card h3 {
-  margin: 12px 0 8px;
-  color: $text-main;
-  font-size: 22px;
-  font-weight: 700;
-}
-
-.lux-card__title {
-  margin: 0 0 14px;
-}
-
-.lux-card__paragraph {
-  color: $text-soft;
-  font-size: 15px;
-  line-height: 1.95;
-}
-
-.insight-card {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 14px;
-  padding: 18px 20px;
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.98), rgba(255, 245, 249, 0.94));
-  border: 1px solid rgba(215, 127, 162, 0.12);
-}
-
-.insight-card__index {
-  width: 40px;
-  height: 40px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 14px;
-  background: $pink-soft;
-  border: 1px solid $pink-border;
-  color: #b76587;
-  font-size: 12px;
-  font-weight: 700;
-  flex-shrink: 0;
-}
-
-.insight-card__body h3,
-.topic-item h3 {
-  margin-bottom: 6px;
-  color: $text-main;
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.quote-card__title {
-  margin: 0 0 16px;
-  text-align: center;
-}
-
-.quote-card__text {
-  color: $text-main;
-  font-family: $serif;
-  font-size: 22px;
-  line-height: 1.7;
-  text-align: center;
-}
-
-.decision-card {
-  text-align: center;
-}
-
-.decision-card__title {
-  color: $text-main;
-  font-size: 22px;
-  line-height: 1.5;
-  font-weight: 700;
-}
-
-.decision-card__detail {
-  margin-top: 10px;
-}
-
-.decision-card__buttons,
-.sheet-actions__buttons,
-.two-col {
-  display: grid;
-  gap: 12px;
-}
-
-.decision-card__buttons,
-.sheet-actions__buttons {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  margin-top: 20px;
-}
-
-.decision-card__links {
-  display: flex;
-  justify-content: center;
-  gap: 18px;
-  margin-top: 16px;
-}
-
-.decision-card__four-hint {
-  margin-top: 14px;
-  font-size: 13px;
-  line-height: 1.5;
-  color: $text-soft;
-  text-align: center;
-}
-
-.text-action {
-  color: #b76587;
-  font-size: 14px;
-  font-weight: 700;
-}
-
-.locked-card,
-.prep-loading {
-  text-align: center;
-}
-
-.locked-card__title {
-  margin-bottom: 10px;
-  color: $text-main;
-  font-family: $serif;
-  font-size: 28px;
-  font-weight: 700;
-}
-
-.prep-loading {
-  padding: 48px 24px;
-}
-
-.prep-loading__spinner {
-  width: 44px;
-  height: 44px;
-  margin: 0 auto 14px;
-  border-radius: 50%;
-  border: 3px solid rgba(215, 127, 162, 0.18);
-  border-top-color: #d77fa2;
-  animation: spin 1s linear infinite;
-}
-
-.topic-list,
-.shop-list {
-  display: grid;
-  gap: 12px;
-}
-
-.topic-item {
-  padding: 18px;
-  border-radius: 20px;
-}
-
-.two-col {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.shop-item {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  padding: 14px 16px;
-  border-radius: 18px;
-  background: rgba(255, 251, 253, 0.98);
-  border: 1px solid rgba(215, 127, 162, 0.1);
-  color: $text-soft;
-  font-size: 13px;
-}
-
-.shop-item strong {
-  color: $text-main;
-}
-
-.sheet-actions {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 12px;
-  margin-top: 28px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(215, 127, 162, 0.12);
-}
-
-.sheet-actions .btn-primary,
-.sheet-actions .btn-secondary {
-  flex: 1;
-  min-width: 140px;
-}
-
-.sheet-actions__summary {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.sheet-actions__summary span {
-  color: $text-soft;
-  font-size: 12px;
-}
-
-.sheet-actions__summary strong {
-  color: $text-main;
-  font-size: 15px;
-  font-weight: 700;
-}
-
-.panel-entrance {
-  animation: rise-in 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) both;
-}
-
-.content-sheet {
-  animation-delay: 0.06s;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.08); opacity: 0.8; }
-}
-
-@keyframes rise-in {
-  from { opacity: 0; transform: translateY(18px); }
-  to { opacity: 1; transform: translateY(0); }
-}
-
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: radial-gradient(circle at top left, rgba(255, 255, 255, 0.95), rgba(255, 245, 248, 0.8));
+  box-shadow: 0 15px 35px rgba(255, 51, 102, 0.08);
+  &:hover { transform: translateY(-4px); box-shadow: 0 20px 40px rgba(255, 51, 102, 0.12); border-color: rgba(255, 51, 102, 0.2);}
+}
+
+.match-card__glow { position: absolute; top: -50px; right: -50px; width: 150px; height: 150px; border-radius: 50%; background: radial-gradient(circle, rgba(255,51,102,0.15) 0%, transparent 70%); }
+.match-card__spark { position: absolute; width: 6px; height: 6px; border-radius: 50%; background: #fff; box-shadow: 0 0 10px #fff; }
+.spark-a { top: 20px; right: 30px; animation: pulse 2s infinite; }
+.spark-b { top: 50px; right: 15px; width: 4px; height: 4px; animation: pulse 3s infinite reverse; }
+
+.match-card__main { display: flex; align-items: center; gap: 16px; position: relative; z-index: 1; }
+.avatar-glow-wrap {
+  position: relative; border-radius: 50%; padding: 3px; background: var(--glow-color); 
+  box-shadow: 0 4px 15px var(--glow-color); flex-shrink: 0;
+  .match-avatar { width: 72px; height: 72px; border-radius: 50%; border: 2px solid #fff; object-fit: cover;}
+}
+.match-info { flex: 1; }
+.match-card__label { margin: 0 0 4px; color: $accent-pink; font-size: 12px; font-weight: 800; letter-spacing: 1px; }
+.match-title-row h3 { margin: 0; color: $text-main; font-size: 24px; font-weight: 800; font-family: $serif; }
+.match-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 6px; color: $text-sub; font-size: 13px; font-weight: 600; }
+.match-card__arrow { color: $accent-pink; font-size: 28px; font-weight: 300; opacity: 0.5; transition: transform 0.3s; }
+.match-card--hero:hover .match-card__arrow { transform: translateX(5px); opacity: 1; }
+
+.match-score-block { margin-top: 20px; padding: 12px 16px; text-align: left; }
+.match-score-block__row { display: flex; align-items: baseline; gap: 8px; }
+.match-score-block__label { font-size: 14px; font-weight: 700; color: $text-main; }
+.match-score-block__value { font-size: 28px; }
+
+.match-bio { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(0,0,0,0.05); color: $text-sub; font-size: 14px; line-height: 1.6; }
+.match-tags { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
+.info-tag { padding: 4px 12px; border-radius: 999px; font-size: 12px; font-weight: 700; background: rgba(255,51,102,0.1); color: $accent-pink; }
+.info-tag--soft { background: #fff; color: $text-sub; border: 1px solid rgba(0,0,0,0.05); }
+.match-card__hint { margin-top: 16px; color: $accent-blue; font-size: 12px; font-weight: 700; }
+
+// --- 第二至四屏卡片 ---
+.lux-card, .quote-card, .decision-card, .locked-card { padding: 24px; text-align: center; }
+.lux-card { text-align: left; }
+.lux-card__title { margin: 0 0 16px; color: $text-main; font-size: 20px; font-weight: 800; font-family: $serif;}
+.lux-card p, .lux-card__paragraph { margin: 0; color: $text-sub; font-size: 14px; line-height: 1.8; }
+.tag-row { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.insight-card { display: flex; gap: 16px; padding: 20px; align-items: flex-start; }
+.insight-card__index { width: 36px; height: 36px; border-radius: 12px; background: rgba(255,51,102,0.1); color: $accent-pink; display: flex; align-items: center; justify-content: center; font-weight: 800; font-size: 14px; flex-shrink: 0; }
+.insight-card__body h3 { margin: 0 0 6px; color: $text-main; font-size: 18px; font-weight: 700; font-family: $serif;}
+.insight-card__body p { margin: 0; color: $text-sub; font-size: 14px; line-height: 1.6; }
+
+.quote-card__title { margin: 0 0 12px; font-size: 13px; color: $accent-pink; font-weight: 800; letter-spacing: 1px; }
+.quote-card__text { margin: 0; font-size: 24px; font-family: $serif; line-height: 1.5; }
+
+.decision-card__title { margin: 0 0 8px; font-size: 24px; font-family: $serif;}
+.decision-card__detail { margin: 0; color: $text-sub; font-size: 14px; line-height: 1.6; }
+.decision-card__buttons { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 24px; }
+.decision-card__links { display: flex; justify-content: center; gap: 24px; margin-top: 20px; }
+.text-action { background: none; border: none; color: $accent-blue; font-size: 14px; font-weight: 700; cursor: pointer; transition: color 0.2s; &:hover { color: $text-main; } }
+
+.locked-card__title { margin: 0 0 12px; font-size: 24px; font-family: $serif; }
+.prep-loading { padding: 40px 20px; display: flex; flex-direction: column; align-items: center;}
+.pulse-ring { width: 48px; height: 48px; border-radius: 50%; border: 3px solid rgba(255,51,102,0.2); border-top-color: $accent-pink; animation: spin 1s linear infinite; margin-bottom: 16px;}
+
+.topic-list, .shop-list { display: flex; flex-direction: column; gap: 12px; }
+.topic-item { padding: 16px; border-radius: 16px; text-align: left; }
+.topic-item h3 { margin: 0 0 6px; font-size: 16px; font-weight: 700; }
+.topic-item p { margin: 0; font-size: 14px; color: $text-sub; line-height: 1.6;}
+.shop-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; }
+.two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+
+// --- 底部动作区 ---
+.sheet-actions { margin-top: 32px; padding-top: 24px; border-top: 1px solid rgba(0,0,0,0.05); }
+.two-btn-layout { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+
+// --- Keyframes ---
+@keyframes spin { 100% { transform: rotate(360deg); } }
+@keyframes pulse { 0%, 100% { transform: scale(1); opacity: 1; } 50% { transform: scale(1.1); opacity: 0.7; } }
+@keyframes float { 0%, 100% { transform: translateY(0); } 50% { transform: translateY(-10px); } }
+@keyframes heartbeat { 0%, 30%, 60%, 100% { transform: scale(1); } 15%, 45% { transform: scale(1.15); } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+
+// --- 移动端适配 ---
 @media (max-width: 640px) {
-  .result-page {
-    padding: 16px 12px 48px;
-  }
-
-  .result-hero,
-  .content-sheet {
-    padding-left: 16px;
-    padding-right: 16px;
-    border-radius: 20px;
-  }
-
-  .hero-title {
-    font-size: 28px;
-  }
-
-  .screen-tabs {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 8px;
-  }
-
-  .screen-tab {
-    min-height: 48px;
-    flex-direction: column;
-    gap: 4px;
-  }
-
-  .screen-tab__label {
-    font-size: 12px;
-  }
-
-  .sheet-actions {
-    flex-direction: column;
-  }
-
-  .sheet-actions .btn-primary,
-  .sheet-actions .btn-secondary {
-    min-width: 100%;
-  }
-
-  .sheet-header h2,
-  .decision-card__title,
-  .quote-card__text,
-  .locked-card__title {
-    font-size: 24px;
-  }
-
-  .lux-card h3,
-  .insight-card__body h3 {
-    font-size: 20px;
-  }
-
-  .match-score-block {
-    padding: 10px 12px;
-    border-radius: 12px;
-  }
-
-  .match-score-block__label {
-    font-size: 13px;
-  }
-
-  .match-card__main {
-    align-items: flex-start;
-  }
-
-  .match-avatar {
-    width: 72px;
-    height: 72px;
-  }
-
-  .decision-card__buttons,
-  .sheet-actions__buttons {
-    grid-template-columns: 1fr;
-  }
-
-  .two-col {
-    grid-template-columns: 1fr;
-  }
-
-  .decision-card__links {
-    flex-direction: column;
-    gap: 12px;
-  }
+  .result-page { padding: 16px 12px 48px; }
+  .result-hero { padding: 24px 16px; border-radius: 20px; }
+  .content-sheet { padding: 24px 16px 20px; border-radius: 20px; }
+  .hero-title { font-size: 30px; }
+  .match-avatar { width: 64px; height: 64px; }
+  .match-title-row h3 { font-size: 20px; }
+  .match-score-block__value { font-size: 24px; }
+  .decision-card__buttons, .two-btn-layout, .two-col { grid-template-columns: 1fr; }
+  .tuner-btn { padding: 8px 0; font-size: 12px; }
 }
 </style>

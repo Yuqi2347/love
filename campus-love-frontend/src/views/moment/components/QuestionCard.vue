@@ -82,9 +82,9 @@ $moment-pink-soft: #fff4f8;
 $moment-pink-border: rgba(215, 129, 162, 0.2);
 
 .question-card {
-  margin-bottom: 26px;
-  padding: 30px 28px 26px;
-  border-radius: 30px;
+  margin-bottom: 20px;
+  padding: 24px 22px 20px;
+  border-radius: 26px;
   background: linear-gradient(180deg, rgba(255, 255, 255, 0.99), rgba(255, 248, 251, 0.95));
   border: 1px solid rgba(255, 255, 255, 0.92);
   box-shadow: 0 22px 44px rgba(227, 191, 205, 0.12);
@@ -94,21 +94,21 @@ $moment-pink-border: rgba(215, 129, 162, 0.2);
   display: grid;
   grid-template-columns: auto 1fr;
   align-items: start;
-  gap: 18px;
-  margin-bottom: 22px;
+  gap: 14px;
+  margin-bottom: 16px;
 }
 
 .question-index {
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 15px;
+  border-radius: 13px;
   background: $moment-pink-soft;
   border: 1px solid $moment-pink-border;
   color: $moment-pink-strong;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.08em;
   flex-shrink: 0;
@@ -117,23 +117,23 @@ $moment-pink-border: rgba(215, 129, 162, 0.2);
 .question-title {
   margin: 0;
   font-family: 'Noto Serif SC', 'Songti SC', 'STSong', serif;
-  font-size: 24px;
-  line-height: 1.55;
+  font-size: 21px;
+  line-height: 1.45;
   font-weight: 700;
   color: #3f2f36;
 }
 
 .question-hint {
-  margin: 10px 0 0;
+  margin: 8px 0 0;
   color: #9b7a87;
   font-size: 13px;
-  line-height: 1.8;
+  line-height: 1.65;
 }
 
 .option-list {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 10px;
 }
 
 .option-card {
@@ -141,9 +141,9 @@ $moment-pink-border: rgba(215, 129, 162, 0.2);
   display: grid;
   grid-template-columns: auto auto 1fr auto;
   align-items: center;
-  gap: 14px;
-  padding: 18px 20px;
-  border-radius: 22px;
+  gap: 10px;
+  padding: 14px 16px;
+  border-radius: 18px;
   background: rgba(255, 255, 255, 0.9);
   border: 1px solid rgba(233, 168, 190, 0.12);
   text-align: left;
@@ -174,35 +174,35 @@ $moment-pink-border: rgba(215, 129, 162, 0.2);
 }
 
 .option-card__marker {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 12px;
+  border-radius: 10px;
   background: $moment-pink-soft;
   border: 1px solid $moment-pink-border;
   color: #bf708f;
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 700;
   flex-shrink: 0;
 }
 
 .option-emoji {
-  font-size: 18px;
+  font-size: 16px;
   line-height: 1;
 }
 
 .option-text {
   min-width: 0;
   color: #6b5962;
-  font-size: 15px;
-  line-height: 1.8;
+  font-size: 14px;
+  line-height: 1.55;
 }
 
 .check-mark {
-  width: 18px;
-  height: 18px;
+  width: 16px;
+  height: 16px;
   border-radius: 50%;
   border: 1px solid rgba(233, 168, 190, 0.24);
   background: rgba(249, 243, 246, 0.92);
@@ -212,7 +212,7 @@ $moment-pink-border: rgba(215, 129, 162, 0.2);
   &::after {
     content: '';
     position: absolute;
-    inset: 4px;
+    inset: 3px;
     border-radius: 50%;
     background: transparent;
     transition: background $transition-base;
@@ -230,20 +230,21 @@ $moment-pink-border: rgba(215, 129, 162, 0.2);
 
 @media (max-width: 720px) {
   .question-card {
-    padding: 22px 18px 20px;
-    border-radius: 24px;
+    padding: 18px 16px 16px;
+    border-radius: 20px;
   }
 
   .question-card__head {
-    gap: 14px;
+    gap: 12px;
   }
 
   .question-title {
-    font-size: 20px;
+    font-size: 18px;
   }
 
   .option-card {
     grid-template-columns: auto auto 1fr;
+    padding: 12px 14px;
   }
 
   .check-mark {

@@ -21,8 +21,8 @@
           <div class="stat-label">参与邀约</div>
         </div>
         <div class="stat-item">
-          <div class="stat-value">{{ stats.successRate.toFixed(1) }}%</div>
-          <div class="stat-label">成功率</div>
+          <div class="stat-value">{{ stats.formedInviteCount ?? 0 }}</div>
+          <div class="stat-label">成行场次</div>
         </div>
         <div class="stat-item">
           <div class="stat-value">{{ stats.receivedSocialRating?.toFixed(1) || '-' }}</div>
@@ -198,7 +198,7 @@ onMounted(() => {
   background: linear-gradient(135deg, rgba($primary, 0.1), rgba($primary, 0.05));
   border: 1px solid rgba($primary, 0.2);
   border-radius: $radius-lg;
-  padding: 20px;
+  padding: 18px;
   margin-bottom: 20px;
 }
 
@@ -211,24 +211,35 @@ onMounted(() => {
 
 .stats-grid {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 12px;
 }
 
 .stat-item {
-  text-align: center;
+  min-height: 80px;
+  padding: 14px 14px 12px;
+  border-radius: 18px;
+  background: rgba($bg-primary, 0.72);
+  border: 1px solid rgba($primary, 0.08);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.7);
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 8px;
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: 26px;
   font-weight: 800;
   color: $primary;
-  margin-bottom: 4px;
+  line-height: 1;
 }
 
 .stat-label {
   font-size: 12px;
   color: $text-secondary;
+  line-height: 1.25;
 }
 
 .tabs-row {
@@ -291,14 +302,14 @@ onMounted(() => {
 .invite-items {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 14px;
 }
 
 .invite-card {
   background: $bg-primary;
   border: 1px solid $border-light;
   border-radius: $radius-lg;
-  padding: 16px;
+  padding: 14px;
   cursor: pointer;
   transition: all $transition-fast;
 
