@@ -127,7 +127,7 @@
       <div class="cta-ambient"></div>
       <div class="cta-inner glass-card" :class="{ visible: ctaVisible }">
         <h2>让每一段校园时光，都有温暖的陪伴</h2>
-        <p>已经有超过 5,000 名深大同学在这里相遇</p>
+        <p>已经有超过 2 名深大同学在这里相遇</p>
         <router-link to="/register" class="cta-btn cta-warm">立即加入</router-link>
       </div>
     </section>

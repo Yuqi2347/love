@@ -112,6 +112,14 @@ public class MomentController {
         return Result.success(momentAdminService.triggerMatching(weekTag, momentService.getCurrentWeekTag(), CurrentUser.getId()));
     }
 
+    @Operation(summary = "管理员重新匹配（清空本期匹配结果与流水线数据，报名恢复待匹配后再次异步匹配；不删报名）")
+    @PostMapping("/admin/rematch")
+    public Result<Map<String, Object>> rematchWeek(
+            @RequestParam(value = "weekTag", required = false) String weekTag) {
+        requireAdmin();
+        return Result.success(momentAdminService.rematchWeek(weekTag, momentService.getCurrentWeekTag(), CurrentUser.getId()));
+    }
+
     @Operation(summary = "管理员公布匹配结果（RESULT_READY → PUBLISHED，用户端可见）")
     @PostMapping("/admin/publish")
     public Result<Map<String, Object>> publishResult(

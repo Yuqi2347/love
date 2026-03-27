@@ -91,14 +91,6 @@
         <p class="empty-hint">完善资料、多发动态，系统将逐步生成你的性格画像</p>
       </div>
 
-      <!-- AI 信息授权引导（有画像时提示） -->
-      <div v-if="hasOcean || (profile?.naturalLanguageTags?.length)" class="disclosure-hint-card">
-        <p class="disclosure-hint-text">您可设置哪些信息用于 AI 生成破冰话题</p>
-        <button class="disclosure-hint-btn" @click="$router.push('/profile?openAiDisclosure=1')">
-          去设置
-        </button>
-      </div>
-
       <!-- 自然语言标签 -->
       <div v-if="profile && profile.naturalLanguageTags && profile.naturalLanguageTags.length" class="tags-card">
         <h3 class="card-title">性格标签</h3>
@@ -388,39 +380,6 @@ onMounted(loadProfile)
   flex-wrap: wrap;
   gap: 10px;
   margin-top: 12px;
-}
-
-.disclosure-hint-card {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 16px 20px;
-  margin-bottom: 16px;
-  background: linear-gradient(135deg, rgba($primary, 0.06), rgba($primary, 0.02));
-  border-radius: 16px;
-  border: 1px solid rgba($primary, 0.12);
-}
-
-.disclosure-hint-text {
-  margin: 0;
-  font-size: 14px;
-  color: $text-secondary;
-}
-
-.disclosure-hint-btn {
-  padding: 8px 20px;
-  font-size: 14px;
-  font-weight: 500;
-  color: $primary;
-  background: rgba($primary, 0.1);
-  border: 1px solid $primary;
-  border-radius: 10px;
-  cursor: pointer;
-
-  &:hover {
-    background: rgba($primary, 0.15);
-  }
 }
 
 .tag-item {

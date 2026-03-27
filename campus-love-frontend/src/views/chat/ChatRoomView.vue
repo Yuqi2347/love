@@ -28,11 +28,13 @@
       <div ref="messageListRef" class="message-list" @scroll="onMessageListScroll">
         <div v-if="noMoreHistory && messages.length > 0" class="no-more-hint glass-pill-light mx-auto w-fit px-4 py-1">星轨记录已到尽头</div>
         
-        <div
-          v-for="msg in messages"
-          :key="msg.id"
-          :class="['message-row', { mine: msg.senderId === myId }]"
-        >
+        <template v-for="(msg, idx) in messages" :key="msg.id">
+          <div v-if="showDateDividerBefore(idx)" class="chat-date-divider">
+            <span class="chat-date-divider__text">{{ formatChatDateDividerLabel(msg.createdAt) }}</span>
+          </div>
+          <div
+            :class="['message-row', { mine: msg.senderId === myId }]"
+          >
           <AppAvatar
             v-if="msg.senderId !== myId"
             :src="msg.senderAvatar"
@@ -91,8 +93,8 @@
               </div>
               <div v-if="getSharedPostInfo(msg.content).images" class="share-card-images">
                 <img
-                  v-for="(img, idx) in getSharedPostInfo(msg.content).images.slice(0, 3)"
-                  :key="idx"
+                  v-for="(img, imgIdx) in getSharedPostInfo(msg.content).images.slice(0, 3)"
+                  :key="imgIdx"
                   :src="img"
                   class="share-card-img"
                 />
@@ -123,6 +125,7 @@
           </div>
           <button v-if="msg.senderId === myId && canRecall(msg)" type="button" class="recall-btn recall-btn-left" @click.stop="handleRecall(msg.id)">撤回</button>
         </div>
+        </template>
       </div>
 
       <div class="chat-input-area glass-panel-bottom">
@@ -270,6 +273,48 @@ const messages = computed(() => {
     return true
   })
 })
+
+function parseMessageDate(iso?: string | null): Date | null {
+  if (iso == null || iso === '') return null
+  const normalized = /^\d{4}-\d{2}-\d{2} \d/.test(iso) ? iso.replace(' ', 'T') : iso
+  const d = new Date(normalized)
+  return Number.isNaN(d.getTime()) ? null : d
+}
+
+function messageDayKey(d: Date): string {
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`
+}
+
+function formatChatDateDividerLabel(iso?: string | null): string {
+  const d = parseMessageDate(iso)
+  if (!d) return ''
+  const now = new Date()
+  const todayK = messageDayKey(now)
+  const yest = new Date(now)
+  yest.setDate(yest.getDate() - 1)
+  const yestK = messageDayKey(yest)
+  const dk = messageDayKey(d)
+  if (dk === todayK) return '今天'
+  if (dk === yestK) return '昨天'
+  const m = d.getMonth() + 1
+  const day = d.getDate()
+  if (d.getFullYear() === now.getFullYear()) return `${m}月${day}日`
+  return `${d.getFullYear()}年${m}月${day}日`
+}
+
+function showDateDividerBefore(idx: number): boolean {
+  const list = messages.value
+  const msg = list[idx]
+  if (!msg || !formatChatDateDividerLabel(msg.createdAt)) return false
+  const d = parseMessageDate(msg.createdAt)
+  if (!d) return false
+  if (idx === 0) return true
+  const prev = list[idx - 1]
+  if (!prev) return true
+  const pd = parseMessageDate(prev.createdAt)
+  if (!pd) return true
+  return messageDayKey(d) !== messageDayKey(pd)
+}
 
 onMounted(async () => {
   historyPage.value = 1
@@ -581,6 +626,26 @@ $mobile-tab-reserve: 72px;
 }
 
 .no-more-hint { font-size: 12px; color: $text-sub; text-align: center; border: 1px solid rgba(255,255,255,0.5); }
+
+// 跨天日期分隔（类似微信）
+.chat-date-divider {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  flex-shrink: 0;
+  margin: 4px 0 4px;
+  &__text {
+    padding: 5px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    color: $text-sub;
+    background: rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.85);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+  }
+}
 
 .message-row {
   display: flex; align-items: flex-end; gap: 12px; max-width: 85%;

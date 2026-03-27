@@ -192,6 +192,13 @@ export function triggerMomentMatching(weekTag?: string) {
   })
 }
 
+/** 已有结果（或失败后）整期重跑：归档旧结果、清空流水线、报名恢复待匹配后再次异步匹配（不删报名） */
+export function rematchMomentWeek(weekTag?: string) {
+  return request.post<ApiResult<Record<string, unknown>>>('/moment/admin/rematch', null, {
+    params: weekTag ? { weekTag } : {},
+  })
+}
+
 export function closeMomentEnrollment(weekTag?: string) {
   return request.post<ApiResult<Record<string, unknown>>>('/moment/admin/close', null, {
     params: weekTag ? { weekTag } : {},

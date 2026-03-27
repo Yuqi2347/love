@@ -226,6 +226,8 @@ export interface MomentAdminOverview {
   canCloseEnrollment: boolean
   canReopenEnrollment: boolean
   canResetWeek: boolean
+  /** 已有结果或失败后，可归档并重跑匹配（不删报名）；旧后端未返回时可由前端按 phase 推断 */
+  canRematch?: boolean
   /** RESULT_READY 时可公布给用户 */
   canPublishResult: boolean
 }
@@ -414,6 +416,13 @@ export function getMomentStatus() {
 
 export function triggerMomentMatching(weekTag?: string) {
   return request.post<ApiResult<Record<string, unknown>>>('/moment/admin/trigger', null, {
+    params: weekTag ? { weekTag } : {},
+  })
+}
+
+/** 归档旧结果、清空流水线、报名恢复待匹配后再次异步匹配（不删报名） */
+export function rematchMomentWeek(weekTag?: string) {
+  return request.post<ApiResult<Record<string, unknown>>>('/moment/admin/rematch', null, {
     params: weekTag ? { weekTag } : {},
   })
 }

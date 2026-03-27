@@ -100,9 +100,15 @@ const router = createRouter({
           component: () => import('@/views/invite/InviteCreateView.vue'),
         },
         {
+          path: 'invite/wait/create',
+          name: 'InviteWaitCreate',
+          // 等待雷达已暂时下线（见 InviteView SHOW_INVITE_WAIT_RADAR）
+          redirect: '/invite',
+        },
+        {
           path: 'invite/wait',
           name: 'InviteWait',
-          component: () => import('@/views/invite/InviteWaitView.vue'),
+          redirect: '/invite',
         },
         {
           path: 'invite/:id',

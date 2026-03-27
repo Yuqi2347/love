@@ -2,6 +2,7 @@ package com.campus.love.moment.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.love.common.exception.BusinessException;
@@ -31,11 +32,13 @@ import com.campus.love.profile.entity.UserPortrait;
 import com.campus.love.profile.service.UserPortraitService;
 import com.campus.love.user.entity.User;
 import com.campus.love.user.mapper.UserMapper;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
@@ -75,6 +78,7 @@ public class MomentAdminService {
     private static final String ACTION_MANUAL_REOPEN = "MANUAL_REOPEN";
     private static final String ACTION_RESET_WEEK = "RESET_WEEK";
     private static final String ACTION_REMOVE_ENROLLMENT = "REMOVE_ENROLLMENT";
+    private static final String ACTION_REMATCH = "REMATCH";
 
     private static final String TARGET_WEEK = "WEEK";
     private static final String TARGET_ENROLLMENT = "ENROLLMENT";
@@ -100,6 +104,8 @@ public class MomentAdminService {
     private final MomentActivityWeekService activityWeekService;
     private final MomentAdminLogService momentAdminLogService;
     private final MomentAdminLogMapper adminLogMapper;
+    private final TransactionTemplate transactionTemplate;
+
     public MomentAdminOverviewResponse getOverview(String weekTag, String currentWeekTag) {
         String resolvedWeekTag = resolveWeekTag(weekTag, currentWeekTag);
         MomentMatchConfig config = matchConfigService.getConfig();
@@ -144,6 +150,7 @@ public class MomentAdminService {
                 participantCount > 0
                         || matchedPairs > 0
                         || !MomentActivityWeek.STATUS_ENROLLING.equals(week.getStatus()),
+                canRematchWeek(week.getStatus()),
                 MomentActivityWeek.STATUS_RESULT_READY.equals(week.getStatus()),
                 config.getAutoPublishEnabled(),
                 config.getAutoPublishDayOfWeek(),
@@ -271,6 +278,78 @@ public class MomentAdminService {
 
     public Map<String, Object> triggerMatchingBySystem(String weekTag, String currentWeekTag) {
         return triggerMatchingInternal(weekTag, currentWeekTag, null, true);
+    }
+
+    /**
+     * 在已有匹配结果（或失败后）清空本期流水线数据、报名回到待匹配，并再次异步执行匹配。
+     * 用于算法/配置调整后对「刚结束」的一期重跑，不等价于 {@link #resetWeek}（后者会删报名）。
+     */
+    public Map<String, Object> rematchWeek(String weekTag, String currentWeekTag, Long operatorId) {
+        String resolvedWeekTag = resolveWeekTag(weekTag, currentWeekTag);
+        MomentActivityWeek week = activityWeekService.getOrCreateWeek(resolvedWeekTag);
+        assertWeekAllowsRematch(week);
+
+        transactionTemplate.executeWithoutResult(status -> {
+            Optional<String> archiveBatch =
+                    momentMatchResetArchiveService.archiveWeekMatchResultsBeforeDelete(resolvedWeekTag, operatorId);
+            momentWeekDataService.deletePipelineDataForWeek(resolvedWeekTag);
+            enrollmentMapper.update(
+                    null,
+                    new LambdaUpdateWrapper<MomentEnrollment>()
+                            .eq(MomentEnrollment::getWeekTag, resolvedWeekTag)
+                            .set(MomentEnrollment::getStatus, MomentEnrollment.STATUS_WAITING)
+            );
+            activityWeekService.resetWeekToWaitingMatch(resolvedWeekTag);
+
+            Map<String, Object> logDetail = new LinkedHashMap<>();
+            logDetail.put("weekTag", resolvedWeekTag);
+            archiveBatch.ifPresent(b -> logDetail.put("archiveSnapshotBatchId", b));
+            logAction(
+                    resolvedWeekTag,
+                    operatorId,
+                    ACTION_REMATCH,
+                    TARGET_WEEK,
+                    null,
+                    "已归档并清空本期匹配数据，报名已恢复为待匹配，即将重新触发匹配",
+                    detailJson(logDetail)
+            );
+        });
+
+        log.info("心动时刻重新匹配: weekTag={} operatorId={}", resolvedWeekTag, operatorId);
+        return triggerMatchingInternal(weekTag, currentWeekTag, operatorId, false);
+    }
+
+    private static void assertWeekAllowsRematch(MomentActivityWeek week) {
+        if (week == null || week.getStatus() == null) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "周状态异常");
+        }
+        String st = week.getStatus();
+        if (MomentActivityWeek.STATUS_MATCHING.equals(st) || MomentActivityWeek.STATUS_AI_ANALYZING.equals(st)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "匹配任务进行中，请稍后再试");
+        }
+        if (MomentActivityWeek.STATUS_ENROLLING.equals(st)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "报名尚未截止，无法重新匹配");
+        }
+        if (MomentActivityWeek.STATUS_WAITING_MATCH.equals(st)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "尚未执行过匹配，请使用「触发匹配」");
+        }
+        if (!MomentActivityWeek.STATUS_RESULT_READY.equals(st)
+                && !MomentActivityWeek.STATUS_PUBLISHED.equals(st)
+                && !MomentActivityWeek.STATUS_FAILED.equals(st)) {
+            throw new BusinessException(ResultCode.BAD_REQUEST, "当前阶段不可重新匹配");
+        }
+    }
+
+    private static boolean canRematchWeek(String status) {
+        if (status == null) {
+            return false;
+        }
+        if (MomentActivityWeek.STATUS_MATCHING.equals(status) || MomentActivityWeek.STATUS_AI_ANALYZING.equals(status)) {
+            return false;
+        }
+        return MomentActivityWeek.STATUS_RESULT_READY.equals(status)
+                || MomentActivityWeek.STATUS_PUBLISHED.equals(status)
+                || MomentActivityWeek.STATUS_FAILED.equals(status);
     }
 
     @Transactional
@@ -1128,6 +1207,7 @@ public class MomentAdminService {
             boolean canCloseEnrollment,
             boolean canReopenEnrollment,
             boolean canResetWeek,
+            @JsonProperty("canRematch") boolean canRematch,
             boolean canPublishResult,
             Boolean autoPublishEnabled,
             Integer autoPublishDayOfWeek,

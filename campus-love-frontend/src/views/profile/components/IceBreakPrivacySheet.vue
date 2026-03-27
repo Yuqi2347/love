@@ -31,7 +31,7 @@
       </div>
 
       <div class="settings-group">
-        <div class="group-title">第二层 · 动态标签中的敏感项（默认关闭，需主动开启）</div>
+        <div class="group-title">第二层 · 动态标签中的敏感项（默认开启，可关闭）</div>
         <label class="setting-row">
           <span class="setting-label">我的性格标签（如「需要安全感」）</span>
           <el-switch v-model="local.naturalLangTags" />
@@ -67,9 +67,9 @@ const DEFAULT: AiDisclosureSettings = {
   zodiac: true,
   majorCategory: true,
   interestTags: true,
-  naturalLangTags: false,
-  baziInfo: false,
-  questionnaireHints: false,
+  naturalLangTags: true,
+  baziInfo: true,
+  questionnaireHints: true,
 }
 
 const props = defineProps<{

@@ -145,10 +145,10 @@
       </div>
     </div>
 
-    <div v-else-if="activeTab === 'wait'" class="wait-list tab-content">
+    <div v-else-if="SHOW_INVITE_WAIT_RADAR && activeTab === 'wait'" class="wait-list tab-content">
       <div class="wait-header-row mb-4">
         <h2 class="section-title text-main font-bold text-xl">我的等待邀约</h2>
-        <button class="glow-btn-warm px-4 text-sm h-10" @click="$router.push('/invite/wait')">创建等待</button>
+        <button class="glow-btn-warm px-4 text-sm h-10" @click="$router.push('/invite/wait/create')">创建等待</button>
       </div>
       <div v-if="waitList.length" class="wait-items">
         <div v-for="wait in waitList" :key="wait.id" class="wait-card glass-card-light">
@@ -174,7 +174,7 @@
         </div>
       </div>
       <AppEmptyState v-else icon="⏳" text="雷达静默中，创建一个等待让别人找到你">
-        <button class="glow-btn-warm px-6 mt-4" @click="$router.push('/invite/wait')">开启等待雷达</button>
+        <button class="glow-btn-warm px-6 mt-4" @click="$router.push('/invite/wait/create')">开启等待雷达</button>
       </AppEmptyState>
     </div>
 
@@ -247,8 +247,8 @@ import { useInviteStore } from '@/store/inviteStore'
 import { useBadgeStore } from '@/store/badgeStore'
 import { useUserStore } from '@/store/userStore'
 import {
-  cancelInviteWait, getMyInviteWaits, getMyCreatedInvites, getMyJoinedInvites,
-  joinInvite, declineInvite, type InviteWait, type Invite, type HistoryRange,
+  cancelInviteWait, getMyCreatedInvites, getMyJoinedInvites,
+  joinInvite, declineInvite, type Invite, type HistoryRange,
 } from '@/api/inviteApi'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, User, Clock, Location, UserFilled, Refresh, Loading } from '@element-plus/icons-vue'
@@ -267,13 +267,16 @@ const inviteStore = useInviteStore()
 const badgeStore = useBadgeStore()
 const userStore = useUserStore()
 
+/** 等待雷达按大类自动匹配易误判（如运动项目不一致），暂时隐藏入口；恢复时改为 true */
+const SHOW_INVITE_WAIT_RADAR = false
+
 const activeTab = ref<string>('list')
 const inviteSource = ref<'related' | 'public' | 'created' | 'joined'>('public')
 const inviteSort = ref<'recommend' | 'time'>('recommend')
 const filterType = ref<string>()
 const filterStatus = ref<string>()
 const filterTimeRange = ref<string>('week')
-const waitList = ref<InviteWait[]>([])
+const waitList = computed(() => inviteStore.inviteWaits)
 const createdHistory = ref<Invite[]>([])
 const joinedHistory = ref<Invite[]>([])
 const historyRange = ref<HistoryRange>('week')
@@ -287,11 +290,14 @@ let iTouchStartY = 0
 function setInviteSort(sort: 'recommend' | 'time') { inviteSort.value = sort; loadInvitesBySource() }
 function handleInviteRefresh() { loadInvitesBySource() }
 
-const tabs = [
-  { label: '探索邀约', value: 'list' },
-  { label: '我的等待雷达', value: 'wait' },
-  { label: '引力统计', value: 'history' },
-]
+const tabs = computed(() => {
+  const all = [
+    { label: '探索邀约', value: 'list' },
+    { label: '我的等待雷达', value: 'wait' },
+    { label: '引力统计', value: 'history' },
+  ]
+  return SHOW_INVITE_WAIT_RADAR ? all : all.filter((x) => x.value !== 'wait')
+})
 
 const statusOptions = [
   ...Object.entries(INVITE_STATUS_LABELS).map(([value, label]) => ({ value, label })),
@@ -388,26 +394,41 @@ async function loadMorePublicInvites() { if (inviteSource.value === 'public' && 
 async function handleCancelWait(id: number) {
   try {
     await ElMessageBox.confirm('确定关闭该等待雷达吗？', '确认', { confirmButtonText: '确定', cancelButtonText: '取消' })
-    await cancelInviteWait(id); waitList.value = waitList.value.filter(w => w.id !== id); ElMessage.success('雷达已关闭')
+    await cancelInviteWait(id)
+    inviteStore.removeWaitInvite(id)
+    ElMessage.success('雷达已关闭')
   } catch {}
 }
 
-async function loadWaitList() { try { waitList.value = (await getMyInviteWaits()).data.data || [] } catch {} }
+async function loadWaitList() {
+  try {
+    await inviteStore.fetchInviteWaits()
+  } catch {}
+}
 
 function initFromRouteQuery() {
-  const t = route.query.type as string | undefined; const s = route.query.source as string | undefined
+  const t = route.query.type as string | undefined
+  const s = route.query.source as string | undefined
+  const tab = route.query.tab as string | undefined
   if (t) filterType.value = t
-  if (s && ['related', 'public', 'created', 'joined'].includes(s)) inviteSource.value = s as any
+  if (s && ['related', 'public', 'created', 'joined'].includes(s)) inviteSource.value = s as 'related' | 'public' | 'created' | 'joined'
+  if (tab && ['list', 'wait', 'history'].includes(tab)) {
+    if (tab === 'wait' && !SHOW_INVITE_WAIT_RADAR) activeTab.value = 'list'
+    else activeTab.value = tab
+  }
 }
 
 onMounted(() => {
-  badgeStore.markInviteActivityViewed(); initFromRouteQuery(); loadInvitesBySource(); inviteStore.fetchStats(); loadWaitList(); loadHistory()
+  badgeStore.markInviteActivityViewed(); initFromRouteQuery(); loadInvitesBySource(); inviteStore.fetchStats()
+  if (SHOW_INVITE_WAIT_RADAR) loadWaitList()
+  loadHistory()
   bindInviteSideEffects()
 })
 onUnmounted(() => unbindInviteSideEffects())
 onActivated(() => {
+  if (!SHOW_INVITE_WAIT_RADAR && activeTab.value === 'wait') activeTab.value = 'list'
   bindInviteSideEffects()
-  loadWaitList()
+  if (SHOW_INVITE_WAIT_RADAR) loadWaitList()
 })
 onDeactivated(() => unbindInviteSideEffects())
 
@@ -428,7 +449,13 @@ function onInviteTouchEnd(e: TouchEvent) {
   if ((e.changedTouches[0]?.clientY ?? 0) - iTouchStartY > 80 && window.scrollY < 10 && !inviteStore.loading) loadInvitesBySource()
   iTouchStartY = 0
 }
-watch(() => [route.query.type, route.query.source], () => { initFromRouteQuery(); loadInvitesBySource() })
+watch(
+  () => [route.query.type, route.query.source, route.query.tab],
+  () => {
+    initFromRouteQuery()
+    loadInvitesBySource()
+  },
+)
 </script>
 
 <style lang="scss" scoped>

@@ -283,7 +283,7 @@ function getAvatarGlow(userId: number): string {
     'rgba(54, 227, 138, 0.7)', // 极光绿
     'rgba(255, 123, 84, 0.7)'  // 日落橘
   ];
-  return colors[(userId || 0) % colors.length];
+  return colors[(userId || 0) % colors.length]!
 }
 // ---------------------------------------------
 

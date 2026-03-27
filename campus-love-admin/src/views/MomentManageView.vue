@@ -153,6 +153,34 @@
 
           <div class="action-row">
             <div>
+              <h3>重新匹配</h3>
+              <p>
+                在「可预览 / 已公布」或匹配失败后使用：会归档本期旧结果、清空流水线数据，所有报名恢复为待匹配，并再次启动异步匹配。
+                <strong>不删除报名</strong>，适合调整算法或阈值后整期重跑。
+              </p>
+            </div>
+            <el-popconfirm
+              title="确定重新匹配吗？当前配对与 AI 文案会被归档并清空，用户端在公布前将看不到本期结果。"
+              confirm-button-text="确定重新匹配"
+              cancel-button-text="取消"
+              width="320"
+              @confirm="handleRematch"
+            >
+              <template #reference>
+                <el-button
+                  type="warning"
+                  plain
+                  :disabled="!rematchActionEnabled"
+                  :loading="actionLoading === 'rematch'"
+                >
+                  重新匹配
+                </el-button>
+              </template>
+            </el-popconfirm>
+          </div>
+
+          <div class="action-row">
+            <div>
               <h3>公布结果</h3>
               <p>当状态为「可预览 / RESULT_READY」时，将结果对用户端开放（PUBLISHED）。</p>
             </div>
@@ -320,6 +348,7 @@ import {
   getMomentMatchConfig,
   getMomentMatchProgress,
   publishMomentResult,
+  rematchMomentWeek,
   reopenMomentEnrollment,
   resetMomentWeek,
   triggerMomentMatching,
@@ -378,6 +407,16 @@ const phaseText = computed(() => {
 const showMatchStatusCard = computed(() => {
   const p = overview.value?.phase
   return p === 'MATCHING' || p === 'AI_ANALYZING' || p === 'FAILED'
+})
+
+/** 与后端 canRematch 一致；若字段缺失（旧接口或序列化名不一致）则按 phase 推断 */
+const rematchActionEnabled = computed(() => {
+  const o = overview.value
+  if (!o) return false
+  if (o.phase === 'MATCHING' || o.phase === 'AI_ANALYZING') return false
+  const v = o.canRematch
+  if (typeof v === 'boolean') return v
+  return o.phase === 'RESULT_READY' || o.phase === 'PUBLISHED' || o.phase === 'FAILED'
 })
 
 const formattedNextAutoMatch = computed(() => formatDateTime(overview.value?.nextAutoMatchAt, false))
@@ -499,7 +538,7 @@ async function loadData() {
 }
 
 async function runAction(
-  key: 'close' | 'trigger' | 'reopen' | 'reset' | 'publish',
+  key: 'close' | 'trigger' | 'rematch' | 'reopen' | 'reset' | 'publish',
   action: () => Promise<unknown>,
   successMessage: string | ((payload: Record<string, unknown> | undefined) => string),
   successType: 'success' | 'warning' = 'success',
@@ -516,6 +555,7 @@ async function runAction(
       {
         close: '截止报名失败',
         trigger: '触发匹配失败',
+        rematch: '重新匹配失败',
         reopen: '重新开放失败',
         reset: '重置失败',
         publish: '公布结果失败',
@@ -545,6 +585,23 @@ async function handleTrigger() {
       const unmatchedUsers = typeof payload?.unmatchedUsers === 'number' ? payload.unmatchedUsers : 0
       return `匹配完成，配对 ${matchedPairs} 对，未匹配 ${unmatchedUsers} 人`
     },
+  )
+}
+
+async function handleRematch() {
+  await runAction(
+    'rematch',
+    () => rematchMomentWeek(),
+    (payload) => {
+      if (payload?.async === true || payload?.message === '匹配任务已启动') {
+        return '已清空本期流水线并恢复报名为待匹配，新的匹配任务已启动，请留意下方进度。'
+      }
+      if (typeof payload?.message === 'string') {
+        return payload.message
+      }
+      return '重新匹配已提交'
+    },
+    'warning',
   )
 }
 

@@ -47,7 +47,7 @@ public class MomentEnrollRequest {
     // 第三步：关于价值观
     @NotBlank private String honestyLevel;            // 3.1 坦诚度
     @NotBlank private String premaritalCohabitation;  // 3.2
-    @NotBlank private String premaritalSex;           // 3.3 婚前性行为（硬筛选）
+    @NotBlank private String premaritalSex;           // 3.3 婚前性行为（软分）
     @NotBlank private String relationshipCoreValue;  // 3.4
     @NotBlank private String conflictStyle;           // 3.5
     @NotBlank private String socialBoundary;          // 3.6

@@ -173,9 +173,9 @@ const DOC_MAP: Record<string, DocDef> = {
 
 const route = useRoute()
 
-const doc = computed(() => {
+const doc = computed((): DocDef => {
   const key = String(route.params.docType || 'privacy-policy')
-  return DOC_MAP[key] || DOC_MAP['privacy-policy']
+  return (DOC_MAP[key] ?? DOC_MAP['privacy-policy']) as DocDef
 })
 </script>
 

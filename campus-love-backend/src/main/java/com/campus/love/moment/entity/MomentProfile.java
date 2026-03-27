@@ -42,7 +42,7 @@ public class MomentProfile {
     // 第三步：关于价值观
     private String honestyLevel;                     // 3.1 坦诚度
     private String premaritalCohabitation;           // 3.2 婚前同居
-    private String premaritalSex;                    // 3.3 婚前性行为（硬筛选）
+    private String premaritalSex;                    // 3.3 婚前性行为（软分矩阵）
     private String relationshipCoreValue;          // 3.4 核心价值
     private String conflictStyle;                    // 3.5 矛盾解决
     private String socialBoundary;                   // 3.6 社交边界
