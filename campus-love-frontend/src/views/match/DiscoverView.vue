@@ -248,6 +248,8 @@
 </template>
 
 <script setup lang="ts">
+/** 与 MainLayout keep-alive include="Discover" 一致，从帖子详情返回时保留列表与滚动位置 */
+defineOptions({ name: 'Discover' })
 import { ref, computed, onMounted, onUnmounted, onActivated, onDeactivated, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import {
