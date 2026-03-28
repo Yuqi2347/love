@@ -1,66 +1,33 @@
 <template>
   <Teleport to="body">
     <Transition name="ann-fade">
-      <div v-if="visible && items.length" class="ann-overlay" role="dialog" aria-modal="true" aria-labelledby="ann-title">
+      <div v-if="visible && items.length" class="ann-overlay" role="dialog" aria-modal="true">
         <div class="ann-backdrop" @click.self="onClose" />
-        <div class="ann-shell">
-          <button type="button" class="ann-close" aria-label="关闭并标记已读" @click="onClose">
-            <el-icon :size="20"><Close /></el-icon>
+        <div class="ann-shell glass-panel">
+          <button type="button" class="ann-close" @click="onClose">
+            <el-icon><Close /></el-icon>
           </button>
 
           <div class="ann-header">
-            <div class="ann-badge">
-              <el-icon class="ann-badge-icon"><Bell /></el-icon>
-              <span>站点公告</span>
-            </div>
-            <h2 id="ann-title" class="ann-title">{{ current?.title }}</h2>
-            <p class="ann-meta">
-              有效期 {{ formatRange(current) }}
-            </p>
+            <h2 class="ann-title">{{ current?.title }}</h2>
+            <p class="ann-meta">{{ formatRange(current) }}</p>
           </div>
 
           <div class="ann-body">
-            <div class="ann-content-scroll">
-              <p class="ann-text">{{ current?.content }}</p>
-            </div>
+            <p class="ann-text">{{ current?.content }}</p>
           </div>
 
           <div v-if="items.length > 1" class="ann-nav">
-            <button
-              type="button"
-              class="ann-nav-btn"
-              :disabled="slideIndex <= 0"
-              aria-label="上一条"
-              @click="slideIndex--"
-            >
+            <button type="button" class="ann-nav-btn" :disabled="slideIndex <= 0" @click="slideIndex--">
               <el-icon><ArrowLeft /></el-icon>
             </button>
-            <div class="ann-dots" role="tablist">
-              <button
-                v-for="(_, i) in items"
-                :key="i"
-                type="button"
-                class="ann-dot"
-                :class="{ active: i === slideIndex }"
-                :aria-label="`第 ${i + 1} 条`"
-                @click="slideIndex = i"
-              />
-            </div>
             <span class="ann-counter">{{ slideIndex + 1 }} / {{ items.length }}</span>
-            <button
-              type="button"
-              class="ann-nav-btn"
-              :disabled="slideIndex >= items.length - 1"
-              aria-label="下一条"
-              @click="slideIndex++"
-            >
+            <button type="button" class="ann-nav-btn" :disabled="slideIndex >= items.length - 1" @click="slideIndex++">
               <el-icon><ArrowRight /></el-icon>
             </button>
           </div>
 
-          <div class="ann-footer">
-            <button type="button" class="ann-btn-primary" @click="onClose">知道了</button>
-          </div>
+          <button type="button" class="ann-btn" @click="onClose">知道了</button>
         </div>
       </div>
     </Transition>
@@ -203,27 +170,9 @@ defineExpose({ load })
 }
 
 .ann-header {
-  padding: $space-2xl $space-xl $space-md;
+  padding: $space-xl $space-xl $space-md;
   padding-right: 52px;
-  background: $primary-gradient;
   border-bottom: 1px solid $border-light;
-}
-
-.ann-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: $text-xs;
-  font-weight: 600;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: $primary-dark;
-  opacity: 0.9;
-  margin-bottom: $space-sm;
-}
-
-.ann-badge-icon {
-  color: $primary;
 }
 
 .ann-title {
@@ -246,14 +195,6 @@ defineExpose({ load })
   padding: $space-lg $space-xl;
 }
 
-.ann-content-scroll {
-  max-height: min(38vh, 320px);
-  overflow-y: auto;
-  padding-right: 4px;
-  scrollbar-width: thin;
-  scrollbar-color: rgba(215, 127, 162, 0.35) transparent;
-}
-
 .ann-text {
   margin: 0;
   font-size: $text-base;
@@ -269,7 +210,6 @@ defineExpose({ load })
   justify-content: center;
   gap: $space-md;
   padding: 0 $space-xl $space-md;
-  flex-wrap: wrap;
 }
 
 .ann-nav-btn {
@@ -294,27 +234,6 @@ defineExpose({ load })
   }
 }
 
-.ann-dots {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.ann-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: $radius-full;
-  border: none;
-  padding: 0;
-  background: rgba(215, 127, 162, 0.28);
-  cursor: pointer;
-  transition: transform $transition-fast, background $transition-fast;
-  &.active {
-    background: linear-gradient(135deg, $primary, $accent);
-    transform: scale(1.25);
-  }
-}
-
 .ann-counter {
   font-size: $text-sm;
   font-weight: 600;
@@ -323,15 +242,10 @@ defineExpose({ load })
   text-align: center;
 }
 
-.ann-footer {
-  padding: $space-md $space-xl $space-xl;
-  border-top: 1px solid $border-light;
-  background: rgba(255, 248, 251, 0.6);
-}
-
-.ann-btn-primary {
+.ann-btn {
   width: 100%;
   height: 44px;
+  margin: $space-md $space-xl $space-lg;
   border: none;
   border-radius: $radius-md;
   font-size: $text-base;
@@ -339,10 +253,10 @@ defineExpose({ load })
   color: $text-inverse;
   cursor: pointer;
   background: linear-gradient(135deg, $primary, $primary-dark);
-  box-shadow: $shadow-glow;
-  transition: transform $transition-fast, filter $transition-fast;
+  box-shadow: $shadow-sm;
+  transition: transform $transition-fast, box-shadow $transition-fast;
   &:hover {
-    filter: brightness(1.03);
+    box-shadow: $shadow-md;
     transform: translateY(-1px);
   }
 }

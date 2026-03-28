@@ -138,7 +138,7 @@
 
           <div v-if="item.post.images" class="feed-images" @click.stop>
             <img
-              v-for="(img, idx) in feedCardImagePaths(item.post).slice(0, 3)"
+              v-for="(img, idx) in feedCardImagePaths(item.post).slice(0, 4)"
               :key="idx"
               :src="getMediaUrl(img)"
               class="feed-image"
@@ -905,9 +905,9 @@ $border-light: rgba(255, 255, 255, 0.8);
 .expand-btn { color: $accent-blue; background: none; border: none; cursor: pointer; font-size: 14px; font-weight: 600; }
 
 .feed-images {
-  display: grid; gap: 8px; margin-bottom: 16px; border-radius: 16px; overflow: hidden;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  .feed-image { width: 100%; height: 200px; object-fit: cover; cursor: pointer; transition: transform 0.3s; &:hover { transform: scale(1.05); } }
+  display: grid; gap: 6px; margin-bottom: 16px; border-radius: 12px; overflow: hidden;
+  grid-template-columns: repeat(4, 1fr);
+  .feed-image { width: 100%; height: 120px; object-fit: cover; cursor: pointer; transition: transform 0.3s; &:hover { transform: scale(1.05); } }
 }
 
 // 底部互动栏

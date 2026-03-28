@@ -90,6 +90,11 @@ const router = createRouter({
           component: () => import('@/views/moment/MomentResultView.vue'),
         },
         {
+          path: 'moment/history',
+          name: 'MomentHistory',
+          component: () => import('@/views/moment/MomentHistoryView.vue'),
+        },
+        {
           path: 'moment/pair-date/:negotiationId',
           name: 'PairDateNegotiation',
           component: () => import('@/views/moment/PairDateNegotiationView.vue'),

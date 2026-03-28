@@ -65,8 +65,16 @@ public class MomentController {
 
     @Operation(summary = "获取匹配结果")
     @GetMapping("/result")
-    public Result<MomentResultResponse> getResult() {
-        return Result.success(momentService.getResult());
+    public Result<MomentResultResponse> getResult(@RequestParam(required = false) String weekTag) {
+        return Result.success(momentService.getResult(weekTag));
+    }
+
+    @Operation(summary = "获取历史匹配记录")
+    @GetMapping("/history")
+    public Result<IPage<MomentResultResponse>> getMatchHistory(
+            @RequestParam(defaultValue = "1") Integer page,
+            @RequestParam(defaultValue = "10") Integer size) {
+        return Result.success(momentService.getMatchHistory(page, size));
     }
 
     @Operation(summary = "对本次心动匹配做出选择")

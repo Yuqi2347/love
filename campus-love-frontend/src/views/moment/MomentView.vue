@@ -58,6 +58,14 @@
         <p v-else class="moment-countdown__wait">预计每周五中午揭晓，请留意页面更新</p>
       </div>
 
+      <div class="moment-history-card glass-panel" @click="goToHistory">
+        <div class="moment-history-header">
+          <h3 class="moment-history-title">我的匹配</h3>
+          <span class="moment-history-arrow">→</span>
+        </div>
+        <p class="moment-history-desc">查看历史匹配记录</p>
+      </div>
+
       <div class="moment-tabs tuner-capsule glass-panel" role="tablist" aria-label="活动阶段">
         <span
           v-for="(tab, i) in phaseTabs"
@@ -193,13 +201,15 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { getMomentStatus } from '@/api/momentApi'
+import { useRouter } from 'vue-router'
+import { getMomentStatus, getMomentHistory, type MomentResultResponse } from '@/api/momentApi'
 import { useUserStore } from '@/store/userStore'
 import { Lock } from '@element-plus/icons-vue' // 新增的小图标
 
 // ==========================================
 // 核心业务逻辑 100% 保持原封不动
 // ==========================================
+const router = useRouter()
 const userStore = useUserStore()
 const profileComplete = computed(() => !!userStore.user?.profileComplete)
 
@@ -212,6 +222,7 @@ const matchedTitle = ref('')
 const weekStatus = ref<string | null>(null)
 const revealAtEpochMillis = ref<number | null>(null)
 const nowMs = ref(Date.now())
+const matchHistory = ref<MomentResultResponse[]>([])
 
 const resultPublished = computed(() => weekStatus.value === 'PUBLISHED')
 
@@ -369,8 +380,28 @@ function onVisibilityChange() {
   if (document.visibilityState === 'visible') fetchStatus()
 }
 
+async function loadHistory() {
+  try {
+    const res = await getMomentHistory(1, 5)
+    matchHistory.value = res.data.data?.records || []
+  } catch (err) {
+    console.error('加载历史记录失败', err)
+  }
+}
+
+function goToHistory() {
+  router.push('/moment/history')
+}
+
+function viewHistoryDetail(item: MomentResultResponse) {
+  if (item.matched && item.matchedUserId) {
+    router.push(`/profile/${item.matchedUserId}`)
+  }
+}
+
 onMounted(() => {
   fetchStatus()
+  loadHistory()
   document.addEventListener('visibilitychange', onVisibilityChange)
   countdownTimer = setInterval(() => { nowMs.value = Date.now() }, 1000)
 })
@@ -480,6 +511,19 @@ $border-light: rgba(255, 255, 255, 0.8);
 .moment-countdown__sep { width: 4px; }
 .moment-countdown__colon { font-size: 24px; font-weight: 800; color: #cbd5e1; transform: translateY(-8px); }
 .moment-countdown__hint { margin: 0; font-size: 12px; color: #94a3b8; }
+
+// --- 历史记录 ---
+.moment-history-card {
+  padding: 24px;
+  margin-bottom: 24px;
+  cursor: pointer;
+  transition: all 0.3s;
+  &:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(215, 127, 162, 0.15); }
+}
+.moment-history-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
+.moment-history-title { font-size: 18px; font-weight: 700; color: $text-main; margin: 0; }
+.moment-history-arrow { font-size: 20px; color: $text-sub; }
+.moment-history-desc { font-size: 14px; color: $text-sub; margin: 0; }
 
 // --- 阶段胶囊 (Tuner) ---
 .tuner-capsule { display: flex; padding: 6px; gap: 4px; margin-bottom: 24px; }

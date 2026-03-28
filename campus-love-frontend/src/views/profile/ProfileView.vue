@@ -143,7 +143,7 @@
           <div class="match-bars">
             <div v-for="(val, key) in matchResult.detail" :key="key" class="bar-item">
               <span class="bar-label text-sub text-sm w-20">{{ dimensionLabels[key as string] || key }}</span>
-              <div class="bar-track glass-pill-light flex-1 h-2 overflow-hidden">
+              <div class="bar-track glass-pill-light flex-1 h-3 overflow-hidden">
                 <div class="bar-fill glow-bg-warm h-full rounded-full transition-all" :style="{ width: `${val ?? 0}%` }"></div>
               </div>
               <span class="bar-val text-main font-bold text-sm w-12 text-right">{{ val ?? '-' }}</span>
@@ -1006,6 +1006,14 @@ $serif: 'Noto Serif SC', 'Songti SC', 'STSong', serif;
     box-shadow: 0 2px 8px rgba(255, 51, 102, 0.05), inset 0 0 0 1px rgba(255, 255, 255, 0.8);
   }
 }
+
+/* 引力分析进度条 */
+.match-bars { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+.bar-item { display: flex; align-items: center; gap: 12px; }
+.bar-label { flex-shrink: 0; }
+.bar-track { position: relative; background: rgba(215, 127, 162, 0.1); border-radius: 999px; }
+.bar-fill { background: linear-gradient(90deg, #f3b4c7, #d77fa2); border-radius: 999px; }
+.bar-val { flex-shrink: 0; }
 
 /* 移动端适配 */
 @media (max-width: 640px) {

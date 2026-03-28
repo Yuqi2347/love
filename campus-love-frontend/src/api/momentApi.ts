@@ -162,8 +162,16 @@ export function enrollMoment(data: MomentEnrollRequest) {
   return request.post<ApiResult<MomentStatusResponse>>('/moment/enroll', data)
 }
 
-export function getMomentResult() {
-  return request.get<ApiResult<MomentResultResponse>>('/moment/result')
+export function getMomentResult(weekTag?: string) {
+  return request.get<ApiResult<MomentResultResponse>>('/moment/result', {
+    params: weekTag ? { weekTag } : {}
+  })
+}
+
+export function getMomentHistory(page = 1, size = 10) {
+  return request.get<ApiResult<{ records: MomentResultResponse[]; total: number }>>('/moment/history', {
+    params: { page, size }
+  })
 }
 
 export function confirmMomentChoice(choice: 'YUE' | 'GUANZHU') {

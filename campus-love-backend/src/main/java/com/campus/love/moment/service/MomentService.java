@@ -2,6 +2,8 @@ package com.campus.love.moment.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.love.auth.security.CurrentUser;
 import com.campus.love.common.exception.BusinessException;
 import com.campus.love.common.result.ResultCode;
@@ -48,6 +50,8 @@ import java.time.LocalDateTime;
 import java.time.Period;
 import java.time.ZoneId;
 import java.time.temporal.WeekFields;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.*;
 
 @Slf4j
@@ -268,14 +272,14 @@ public class MomentService {
 
     // ==================== 获取匹配结果 ====================
 
-    public MomentResultResponse getResult() {
+    public MomentResultResponse getResult(String weekTag) {
         Long userId = CurrentUser.getId();
-        String weekTag = getCurrentWeekTag();
+        String targetWeekTag = (weekTag == null || weekTag.isBlank()) ? getCurrentWeekTag() : weekTag;
 
         List<MomentEnrollment> enrollments = enrollmentMapper.selectList(
                 new LambdaQueryWrapper<MomentEnrollment>()
                         .eq(MomentEnrollment::getUserId, userId)
-                        .eq(MomentEnrollment::getWeekTag, weekTag)
+                        .eq(MomentEnrollment::getWeekTag, targetWeekTag)
         );
         if (enrollments == null || enrollments.isEmpty()) throw new BusinessException(ResultCode.MOMENT_NOT_ENROLLED);
 
@@ -288,16 +292,16 @@ public class MomentService {
         if (allUnmatched) {
             return MomentResultResponse.builder()
                     .matched(false)
-                    .weekTag(weekTag)
+                    .weekTag(targetWeekTag)
                     .build();
         }
 
-        MomentActivityWeek week = activityWeekService.getOrCreateWeek(weekTag);
+        MomentActivityWeek week = activityWeekService.getOrCreateWeek(targetWeekTag);
         if (!MomentWeekStatusPolicy.userMayViewPublishedResults(week.getStatus())) {
             throw new BusinessException(ResultCode.MOMENT_NO_RESULT);
         }
 
-        MomentMatchResult matchResult = findMatchResult(weekTag, userId);
+        MomentMatchResult matchResult = findMatchResult(targetWeekTag, userId);
         if (matchResult == null) {
             return MomentResultResponse.builder()
                     .matched(false)
@@ -756,5 +760,67 @@ public class MomentService {
     }
 
     private record ConfirmView(String status, String myChoice, Boolean datePrepUnlocked) {
+    }
+
+    public IPage<MomentResultResponse> getMatchHistory(Integer page, Integer size) {
+        Long userId = CurrentUser.getId();
+
+        // 查询所有参与过的周期（从报名表）
+        List<MomentEnrollment> enrollments = enrollmentMapper.selectList(
+                new LambdaQueryWrapper<MomentEnrollment>()
+                        .eq(MomentEnrollment::getUserId, userId)
+                        .orderByDesc(MomentEnrollment::getCreatedAt)
+        );
+
+        // 构建历史记录
+        List<MomentResultResponse> records = new ArrayList<>();
+        for (MomentEnrollment enrollment : enrollments) {
+            String weekTag = enrollment.getWeekTag();
+
+            // 查询该周期是否有匹配结果
+            MomentMatchResult matchResult = matchResultMapper.selectOne(
+                    new LambdaQueryWrapper<MomentMatchResult>()
+                            .eq(MomentMatchResult::getWeekTag, weekTag)
+                            .and(w -> w.eq(MomentMatchResult::getUserIdA, userId)
+                                    .or().eq(MomentMatchResult::getUserIdB, userId))
+            );
+
+            if (matchResult != null) {
+                // 匹配成功
+                records.add(buildHistoryResponse(matchResult));
+            } else {
+                // 未匹配
+                records.add(MomentResultResponse.builder()
+                        .matched(false)
+                        .weekTag(weekTag)
+                        .build());
+            }
+        }
+
+        // 手动分页
+        int start = (page - 1) * size;
+        int end = Math.min(start + size, records.size());
+        List<MomentResultResponse> pageRecords = start < records.size() ? records.subList(start, end) : new ArrayList<>();
+
+        Page<MomentResultResponse> responsePage = new Page<>(page, size);
+        responsePage.setTotal(records.size());
+        responsePage.setRecords(pageRecords);
+        return responsePage;
+    }
+
+    private MomentResultResponse buildHistoryResponse(MomentMatchResult result) {
+        Long userId = CurrentUser.getId();
+        boolean isA = result.getUserIdA().equals(userId);
+        Long matchedUserId = isA ? result.getUserIdB() : result.getUserIdA();
+        User matchedUser = userMapper.selectById(matchedUserId);
+
+        return MomentResultResponse.builder()
+                .matched(true)
+                .weekTag(result.getWeekTag())
+                .matchedUserId(matchedUserId)
+                .nickname(matchedUser != null ? matchedUser.getNickname() : "未知用户")
+                .avatarUrl(matchedUser != null ? matchedUser.getAvatarUrl() : null)
+                .gender(matchedUser != null ? matchedUser.getGender() : null)
+                .build();
     }
 }

@@ -279,7 +279,7 @@
 // ==========================================
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { Lock } from '@element-plus/icons-vue'
 import {
   confirmMomentChoice, getMomentDatePrep, getMomentResult,
@@ -289,6 +289,7 @@ import PairDateNegotiationCore from '@/views/moment/components/PairDateNegotiati
 import { DEFAULT_AVATAR, getMediaUrl } from '@/utils/shared'
 
 const router = useRouter()
+const route = useRoute()
 const loading = ref(true)
 const confirming = ref(false)
 const prepLoading = ref(false)
@@ -369,7 +370,8 @@ function goScreen(screen: number) {
 async function loadResult() {
   loading.value = true
   try {
-    const res = await getMomentResult()
+    const weekTag = route.query.weekTag as string | undefined
+    const res = await getMomentResult(weekTag)
     result.value = res.data.data
   } catch {
     result.value = { matched: false, weekTag: '' }
