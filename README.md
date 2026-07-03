@@ -1,142 +1,142 @@
-# Campus Love - 校园交友 App MVP
+# Campal
 
-基于 Spring Boot 3 + Vue 3 的校园社交交友平台，通过 MBTI、星座、八字、兴趣爱好等多维度匹配算法精准推荐。
+[English README](README.en.md)
 
-## 技术栈
+> 用虚拟 AI 推动真实社交
 
-| 层次 | 技术 |
-|------|------|
-| 前端 | Vue 3 + Vite 5 + TypeScript + Element Plus + Pinia |
-| 后端 | Spring Boot 3.2 + MyBatis-Plus + Spring Security + JWT |
-| 数据库 | MySQL 8.0 + Redis 7 + Flyway（版本化迁移） |
-| 向量存储 | MySQL JSON（1536 维，应用层相似度计算；可扩展 pgvector/专用向量库） |
-| 实时通信 | WebSocket |
-| API文档 | Swagger 3 / OpenAPI 3.0 |
+Campal 是一个围绕校园场景设计的 AI 社交产品原型。  
+我们相信，AI 不应该替代人与人的连接，而应该帮助人更容易迈出连接的第一步。
 
-## 前置依赖安装
+在校园里，很多人并不是不想社交，而是不知道怎么开始：
 
-1. **Java 21** — [Eclipse Temurin 21](https://adoptium.net/)，配置 `JAVA_HOME` 和 `PATH`
-2. **Maven 3.9+** — [下载](https://maven.apache.org/download.cgi)，配置 `PATH`
-3. **Node.js 18+** — [下载](https://nodejs.org/)
-4. **MySQL 8.0** + **Flyway 迁移（推荐）**
-   - **新环境 / 本地第一次搭建**：只建**空库**（不要手工执行 `schema.sql` 作为初始化主路径，避免与 Flyway 重复）：
-     ```sql
-     CREATE DATABASE campus_love DEFAULT CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
-     ```
-   - 在 `campus-love-backend/.env`（或环境变量）中配置 `DB_URL` / `DB_USERNAME` / `DB_PASSWORD`，使应用指向上述库。
-   - **启动后端**：Spring Boot 会自动运行 Flyway，按 `classpath:db/migration` 下 **`V1__baseline_core.sql` → `V46__…`** 顺序执行，并写入表 `flyway_schema_history`。
-   - **版本化脚本位置**：`campus-love-backend/src/main/resources/db/migration/`（唯一真相；`db/schema.sql` 为结构快照，仅供对照，勿与 Flyway 重复执行同一 DDL）。
-   - **关闭 Flyway**（仅调试，不推荐生产）：环境变量 `SPRING_FLYWAY_ENABLED=false`。
-   - **清空库并重新跑迁移（未上线/可丢数据时）**：自行在 MySQL 中 `DROP DATABASE campus_love;` 再 `CREATE DATABASE …`，然后重新启动后端即可（Flyway 会在空库上从 V1 重跑）。**有数据务必先备份。** 更细步骤见 [`docs/DATABASE_FLYWAY_OPERATIONS.md`](docs/DATABASE_FLYWAY_OPERATIONS.md)。
-5. **Redis** — Windows: [下载](https://github.com/tporadowski/redis/releases)，默认端口 6379
+- 想出去玩，却找不到能一起去的人
+- 对某个人产生好感，却不知道怎么自然地开启第一句话
+- 有表达欲、有情绪、有观点，却缺少一个能形成共鸣的公共空间
 
-### AI 头像工作室（图生图）
+Campal 想解决的不是“线上陪伴”问题，而是“真实连接的起步门槛”问题。
 
-- 后端 `.env` 需配置 **火山方舟**（与文本 AI 分离）：`ARK_API_KEY`、`ARK_BASE_URL`、`ARK_IMAGE_MODEL`（可选）、`AVATAR_STUDIO_FREE_QUOTA`、`AVATAR_STUDIO_TIMEOUT_SECONDS`。详见 `campus-love-backend/.env.example`。
-- `t_user.avatar_studio_used_count` 等结构由 Flyway **V44** 等迁移自动添加，无需再手工执行单文件 SQL。
+## 项目定位
 
-## 数据库与邮件配置
+Campal 不是一个鼓励用户沉溺在线上的社交平台。
 
-默认连接信息在 `campus-love-backend/src/main/resources/application.yml`：
-- MySQL: `localhost:3306/campus_love`，用户名 `root`，密码 `campus123`
-- Redis: `localhost:6379`
+我们更想把它做成一个**真实社交助推器**：
 
-**注册验证码邮件**：需配置 SMTP 才能发送验证码。在 `application.yml` 或环境变量中设置：
-- `MAIL_HOST`（默认 smtp.qq.com）
-- `MAIL_PORT`（默认 465）
-- `MAIL_USERNAME`（发件邮箱）
-- `MAIL_PASSWORD`（邮箱授权码，非登录密码）
+- 帮用户从“想去但没人陪”走向真实活动
+- 帮用户从“心动但不敢开始”走向更自然的第一次互动
+- 帮用户先在低压力的虚拟空间中理解彼此，再把理解带进现实
 
-QQ 邮箱：设置 → 账户 → POP3/IMAP 服务 → 开启并获取授权码。
+我们的核心判断很简单：
 
-## 启动后端
+**虚拟空间是桥，真实连接才是目的地。**
 
-**方式一（推荐，加载 .env 配置）**：
-```bash
-cd campus-love-backend
-# 首次需复制 .env.example 为 .env 并填写数据库等配置
-.\start.ps1
-```
+完整愿景见 [docs/vision.md](docs/vision.md)。
 
-**方式二（本地开发，免环境变量）**：
-```bash
-cd campus-love-backend
-# PowerShell: $env:SPRING_PROFILES_ACTIVE="dev"; mvn spring-boot:run
-# CMD: set SPRING_PROFILES_ACTIVE=dev && mvn spring-boot:run
-```
+## 核心产品方向
 
-后端启动在 `http://localhost:8082`，API 文档: `http://localhost:8082/api/swagger-ui.html`
+Campal 目前主要围绕三条产品线展开。
 
-## 启动前端
+### 1. 邀约
 
-```bash
-cd campus-love-frontend
-npm install
-npm run dev
-```
+邀约模块对应的是校园里最常见的社交困境之一：  
+**我想做点什么，但不知道找谁一起。**
 
-前端启动在 `http://localhost:5173`，已配置代理到后端 8080 端口。
+它不是传统意义上的“组局工具”，而是把“没有现成圈子”这件事，转化成一个可被快速回应的社交入口。任何人都可以发起活动，让共同想法先把人聚到一起。
 
-## 局域网 / 外网访问
+### 2. 心动时刻
 
-当前配置已支持**局域网**和**外网**访问：
+`Moment` 对应的是另一类高频却很容易沉默消失的场景：  
+**你注意到了某个人，但不知道该怎么迈出第一步。**
 
-| 配置项 | 说明 |
-|--------|------|
-| 后端 `server.address: 0.0.0.0` | 监听所有网卡，非本机设备可访问 |
-| 前端 `host: true` | Vite 监听 0.0.0.0，启动时会显示 `Network: http://192.168.x.x:5173` |
-| CORS / WebSocket | 已允许 `*` 及常见内网网段 |
+它通过 AI 辅助匹配、关系理解、结果解释和约会准备，降低第一次靠近时的尴尬和压力。重点不是抽象意义上的“更准匹配”，而是让“本来会擦肩而过的人”有机会进入一条更自然的真实相遇路径。
 
-**局域网使用**：同一 WiFi/校园网下，手机或他人电脑访问 `http://你的IP:5173`（如 `http://192.168.1.100:5173`）。
+### 3. 发现
 
-**外网使用**（无需公网 IP）：
+发现模块不只是一个内容流。
 
-**方式一：ngrok**
-1. 注册：打开 https://ngrok.com → Sign up（可用 Google/GitHub 登录）
-2. 登录后 Dashboard → Your Authtoken → 复制
-3. 配置 token（仅首次）：`npx -y ngrok config add-authtoken <你的token>`
-4. 启动：`npm run dev:public`，终端输出 `https://xxx.ngrok-free.app`
+它是校园表达的公共层，承接学生的日常、观点、情绪、八卦、讨论和共鸣。对 Campal 而言，这个模块的意义在于帮助用户形成“被看见”和“先理解彼此”的上下文，为后续的真实连接提供土壤。
 
-**方式二：localtunnel（需密码）**
-```bash
-npm run dev && npm run tunnel  # 分两个终端
-```
-访问时需输入隧道密码，密码获取：在运行隧道的电脑上打开 https://loca.lt/mytunnelpassword
+## 我们如何使用 AI
 
-## 功能模块
+我们不把 AI 当作陪伴替代品。
 
-- **认证**: 学校邮箱注册（当前支持深圳大学 @mails.szu.edu.cn）、邮箱验证码、JWT 登录
-- **个人主页**: 基础信息、MBTI、星座(自动计算)、八字、兴趣标签、头像上传
-- **匹配推荐**: 六维度加权评分(兴趣30% + MBTI25% + 星座15% + 八字15% + 专业10% + 年龄5%)，卡片滑动UI
-- **关注系统**: 单向/互相关注，权限分级
-- **即时聊天**: WebSocket 实时消息，单向关注每日消息限制
-- **朋友圈**: 互关用户动态流，点赞/评论
-- **行为与画像**: 浏览动态（`FEED_VIEW`）、点赞动态（`FEED_LIKE`）写入 `t_user_behavior_log`，汇总类目偏好并参与 OCEAN 短期/长期更新（详见 `docs/updates/2026-03-20-feed-behavior-portrait.md`）
+在 Campal 里，AI 的角色是辅助真实社交发生：
 
-## 项目结构
+- 帮助理解一个人的表达、兴趣和画像
+- 帮助降低匹配和初次破冰的心理门槛
+- 帮助把线上了解转化成线下见面的行动建议
+- 帮助用户在关系开始阶段少一些尴尬，多一些上下文
 
-```
-openclaw/
-├── campus-love-backend/          # Spring Boot 后端
-│   └── src/main/java/com/campus/love/
-│       ├── auth/                 # 认证（JWT + Security）
-│       ├── user/                 # 用户模块
-│       ├── match/                # 匹配推荐算法
-│       ├── follow/               # 关注系统
-│       ├── chat/                 # 聊天 + WebSocket
-│       ├── feed/                 # 朋友圈
-│       └── common/               # 公共（Result, 枚举, 工具, 配置）
-├── campus-love-frontend/         # Vue 3 前端
-│   └── src/
-│       ├── api/                  # API 接口层
-│       ├── constants/            # 常量管理
-│       ├── store/                # Pinia 状态管理
-│       ├── router/               # 路由
-│       ├── styles/               # 全局样式 + 变量
-│       └── views/                # 页面组件
+一句话概括：  
+**AI 的价值，不是让人更久停留在线上，而是让人更愿意走向彼此。**
+
+## 产品原则
+
+- **真实社交优先**：线上互动应该服务线下连接，而不是反过来吞噬它
+- **先解决第一步**：很多社交问题，本质上都是起步问题
+- **设计关系推进链路**：不是只做匹配，而是考虑匹配之后发生什么
+- **AI 是辅助，不是替代**：AI 用来提供上下文、信心和路径，而不是替用户完成关系
+- **从校园切入**：校园是高密度、强场景、强情绪、强错过的特殊社交环境
+
+## 关系推进路径
+
+Campal 的设计重点不是单点功能，而是一条完整的关系推进路径：
+
+1. 表达：用户通过资料、动态、兴趣和行为留下可被理解的痕迹
+2. 发现：用户看到原本不会遇见的人、内容和活动
+3. 起步：通过邀约、匹配和引导式交互降低开始成本
+4. 过渡：借助 AI 把线上理解变成线下行动
+5. 连接：目标是发生真实互动，而不是只提升应用停留时长
+
+## 这个仓库代表什么
+
+这个仓库更适合被理解为一个**产品原型与开放展示项目**，而不是成熟商业系统发布。
+
+它想展示的是：
+
+- 一个关于“AI 如何推动校园真实社交”的明确产品命题
+- 围绕这个命题设计的一组功能机制
+- 一个已经落到后端、Web 与管理后台多个表面的可运行原型
+
+## 仓库结构
+
+```text
+.
+├── campus-love-backend/   # Spring Boot 后端
+├── campus-love-frontend/  # Vue Web 前端
+├── campus-love-admin/     # 管理后台
+├── docs/                  # 对外公开文档
 └── README.md
 ```
 
-## 开发规范
+## 技术实现
 
-开发者与管理者请阅读 **[开发规范文档](docs/DEVELOPMENT_STANDARDS.md)**，包含：技术栈与版本、项目结构、命名规范、接口约定、Git 提交规范、Code Review 与发布流程等。
+项目当前包含：
+
+- Spring Boot
+- Vue 3
+- TypeScript
+- MySQL
+- Redis
+- Flyway
+- WebSocket
+
+技术是实现方式，不是这个项目最想强调的地方。  
+Campal 更重要的价值在于它如何把产品理念、关系机制和 AI 能力组织成一个完整原型。
+
+## 本地运行
+
+运行说明请分别查看：
+
+- [campus-love-backend](campus-love-backend/)
+- [campus-love-frontend/README.md](campus-love-frontend/README.md)
+
+本地运行前请自行准备环境变量和第三方服务配置，不要使用任何真实生产密钥或个人凭证。
+
+## 当前状态
+
+Campal 仍在持续演化中。  
+这个仓库围绕一个问题展开：
+
+**AI 能不能帮助更多年轻人开始真实社交，而不是进一步退回虚拟孤岛？**
+
+如果你也对这个问题感兴趣，欢迎交流。
