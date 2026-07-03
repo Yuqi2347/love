@@ -1,119 +1,132 @@
-# Campal Vision
+# Campal 愿景
 
-## One Line
+## 一句话
 
-Campal is an AI-powered campus social product prototype built to turn virtual understanding into real-world connection.
+Campal 是一个以校园为起点的 AI 社交产品原型，目标是把虚拟空间里的理解，推向现实世界里的连接。
 
-## The Problem
+## 我们看到的问题
 
-Many students are not rejecting social life. They are getting stuck before it begins.
+很多年轻人并不是不想社交，而是卡在社交发生之前。
 
-They want to go out, but do not know who to ask.  
-They notice someone, but do not know how to start.  
-They have thoughts, emotions, and interests, but no natural place for them to become shared context.
+他们想出去玩，却不知道找谁一起。  
+他们对某个人产生了好感，却不知道怎么自然地开始。  
+他们有想法、有情绪、有兴趣，却缺少一个能把这些东西变成共鸣与连接的场域。
 
-This is not just an issue of personality. It is a structural problem of modern social life. More and more social energy is absorbed by virtual environments, while real-world interaction becomes harder to initiate.
+这不只是性格问题，更是现代社交结构的问题。越来越多的社交能量被虚拟环境吸走，而现实互动的起步门槛却越来越高。
 
-AI may intensify that pattern if it is used only to replace people, entertain people, or keep people online longer.
+如果 AI 只是被用来陪伴、替代、娱乐，或者让人停留得更久，那么它很可能会加重这种趋势。
 
-Our position is different:
+我们的立场相反：
 
-**AI should be used to push people toward real connection, not to trap them in simulation.**
+**AI 应该推动人走向真实连接，而不是把人困在更精致的虚拟模拟里。**
 
-## Our Belief
+## 我们的判断
 
-Campal is not designed as a pure online social platform.
+Campal 不是一个纯线上社交平台。
 
-We see virtual space as a lower-pressure layer where people can:
+我们把虚拟空间看成一个低压力层，让用户可以先：
 
-- express themselves
-- understand others
-- discover overlap
-- gain confidence to begin
+- 表达自己
+- 理解别人
+- 发现重叠
+- 获得起步的信心
 
-But that layer is not the destination. The destination is real interaction: going somewhere together, meeting someone new, starting a conversation that would otherwise never happen.
+但这个层不是终点。
 
-## Product Thesis
+终点是现实中的互动，是一起去某个地方，是原本不会发生的一次见面，是一段本来可能错过的关系真正开始。
 
-We are building a social product around a simple thesis:
+## 产品命题
 
-1. Many social difficulties are first-step difficulties.
-2. AI can reduce the cost of that first step.
-3. Once the first step becomes easier, more real relationships can begin.
+我们围绕一个简单但很明确的命题来设计产品：
 
-This leads to a very different product logic from conventional social apps.
+1. 很多社交困难，本质上都是第一步困难。
+2. AI 可以降低第一步的成本。
+3. 当第一步变得更容易，更多真实关系才有机会开始。
 
-We do not optimize for endless chat volume or passive browsing alone.  
-We optimize for progression:
+这会导向一套与传统社交产品不同的逻辑。
 
-- from expression to discovery
-- from discovery to initiation
-- from initiation to meeting
-- from virtual familiarity to real-world connection
+我们不把目标放在无止境的聊天量、停留时长或被动刷内容上。  
+我们更看重一条推进链路：
 
-## How Campal Responds
+- 从表达，到发现
+- 从发现，到起步
+- 从起步，到见面
+- 从虚拟熟悉，到现实连接
 
-### Invite: from "I want to go" to "let's go"
+## Campal 如何回应这个问题
 
-One of the most common campus frustrations is simple: wanting to do something, but having no one to do it with.
+### 邀约：从“我想去”到“我们一起去”
 
-The invite system turns that dead end into a social starting point. Instead of waiting for an existing friend group, users can initiate an activity and let shared intent do the work of gathering people.
+校园里最常见的困境之一很简单：想做点什么，但没有人一起。
 
-This makes social participation less dependent on already having a circle.
+邀约模块要解决的就是这件事。它不是一个传统的“组局工具”，而是把“我没有现成圈子”这件事，转化成一个可以立刻被回应的社交入口。
 
-### Moment: from silent attraction to a real chance
+用户不必先拥有稳定社交圈，才能开始社交。  
+共同想法本身就可以成为聚集人的起点。
 
-Sometimes the most important social opportunities are not dramatic. They are the small moments that pass because no one knows how to act.
+### 心动时刻：从沉默心动到真实机会
 
-`Moment` is designed for that gap. It uses AI-assisted matching and post-match guidance to reduce awkwardness and make it easier for two people to move from mutual curiosity to actual contact.
+有些最重要的社交机会，并不是戏剧化的大事件，而是那些悄悄出现、又因为没人知道怎么迈步而消失的小瞬间。
 
-The point is not to let AI "decide love." The point is to give people a more human path into starting.
+`Moment` 想解决的就是这个缺口。  
+它通过 AI 辅助匹配、结果解释、关系理解和后续引导，降低第一次靠近时的尴尬与压力。
 
-### Feed: from isolated expression to shared context
+重点不是让 AI “决定爱情”。  
+重点是给本来可能擦肩而过的人，一个更自然、更有人味的开始方式。
 
-Real social connection often starts before direct interaction. It starts when people see what others care about, joke about, worry about, or feel strongly about.
+### 发现：从孤立表达，到共享上下文
 
-The feed exists as a campus public layer for that kind of expression. It gives users a place to leave traces of personality and perspective, which can later become bridges for resonance, understanding, or conversation.
+很多真实连接并不是从直接聊天开始，而是从“先看到对方在关心什么、表达什么、在意什么”开始。
 
-### AI support: from pressure to confidence
+发现模块的意义就在这里。  
+它是一个校园公共表达层，让动态、观点、情绪、玩笑、讨论和共鸣都能留下痕迹。
 
-AI plays a supporting role throughout the product:
+这些痕迹未来可能变成理解、认同、共鸣，或者一次真正的对话入口。
 
-- helping interpret profiles and signals
-- supporting matching and discovery
-- generating icebreaking context
-- offering date-prep or interaction guidance
+### AI 支持：从压力到信心
 
-Its role is not to replace emotional risk. Its role is to make that risk more approachable.
+AI 在 Campal 里的角色，是支持而不是替代。
 
-## Why Campus
+它会参与：
 
-Campus is a uniquely meaningful environment for this experiment.
+- 表达与画像的理解
+- 匹配与发现的辅助
+- 破冰上下文的生成
+- 约会准备与互动建议
 
-It is dense, time-bounded, emotionally formative, and full of missed intersections. People live near each other, move through overlapping routines, and are still actively becoming who they are.
+它不是为了替用户承担关系风险。  
+它的作用，是让这份风险变得更可接近一些。
 
-If a product can help rebuild real social initiative in campus life, that insight may extend far beyond campus.
+## 为什么从校园开始
 
-## Long-Term Direction
+校园是一个非常特别的环境。
 
-Over time, we want Campal to build richer digital understanding from real user expression and behavior.
+它高密度、强情绪、有时间边界，也充满了大量错过与潜在交集。大家住得近、路径重叠、彼此都还在成为自己的过程中。
 
-Not to create a fake substitute self, but to help people approach each other with more context, less randomness, and less unnecessary fear.
+如果一个产品能在校园里帮助人重新建立真实社交的主动性，这个洞察就不只属于校园。
 
-In that future:
+## 更长期的方向
 
-- virtual understanding helps real meetings happen sooner
-- missed encounters are easier to recover
-- AI becomes a bridge to human connection rather than a competitor to it
+我们希望 Campal 最终能从真实用户的表达与行为里，形成更丰富的数字理解。
 
-## What This Repository Represents
+但这不是为了制造一个“替代本人”的虚拟自我。  
+而是为了让人以更少随机、更少误解、更少不必要恐惧的方式靠近彼此。
 
-This repository is an open product showcase and working prototype.
+在那个方向里：
 
-It represents:
+- 虚拟理解会让真实见面更容易提前发生
+- 错过的相遇更容易被重新找回
+- AI 不再是人与人连接的竞争者，而是桥梁
 
-- a product point of view on AI and social life
-- a set of interaction mechanisms designed from that point of view
-- an implemented multi-surface prototype across backend, web, and admin environments
+## 这个仓库代表什么
 
-It does not claim to be a final social product. It is a serious exploration of how AI might help young people move toward each other, rather than away from each other.
+这个仓库是一个对外开放的产品展示与工作原型。
+
+它代表的是：
+
+- 一种关于 AI 与社交关系的产品观点
+- 一组围绕这种观点设计出来的功能机制
+- 一个已经落到后端、Web 与管理后台多个表面的实现原型
+
+它并不声称自己已经是最终形态的社交产品。  
+它更像是一场严肃的探索：AI 能不能帮助更多年轻人走向彼此，而不是离彼此更远。
