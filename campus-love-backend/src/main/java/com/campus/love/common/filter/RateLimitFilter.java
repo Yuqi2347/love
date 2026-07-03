@@ -44,6 +44,11 @@ public class RateLimitFilter extends OncePerRequestFilter {
                     filterChain.doFilter(request, response);
                     return;
                 }
+                // 点赞 POST /feed/like/... 不应占用「发帖」额度（POST_USER 仅 20 次/小时），否则多点几条赞即 429
+                if (path.contains("/like/")) {
+                    filterChain.doFilter(request, response);
+                    return;
+                }
                 applyUserLimit(RateLimitService.LimitType.POST_USER, request, filterChain, response);
                 return;
             } else if (path.contains("/match/action") && "POST".equals(request.getMethod())) {

@@ -26,14 +26,11 @@
         @click="viewDetail(item)"
       >
         <div v-if="item.matched" class="item-matched">
-          <div class="item-avatar-wrap">
-            <img v-if="item.avatarUrl" :src="item.avatarUrl" class="item-avatar" />
-            <div v-else class="item-avatar-placeholder">{{ item.nickname?.charAt(0) || '?' }}</div>
-          </div>
           <div class="item-info">
             <div class="item-week">{{ item.weekTag }}</div>
+            <div class="item-status">✓ 匹配成功</div>
+            <div class="item-label">匹配对象</div>
             <div class="item-name">{{ item.nickname || '匿名用户' }}</div>
-            <div v-if="item.yuanfenTitle" class="item-title">{{ item.yuanfenTitle }}</div>
           </div>
           <div class="item-arrow">→</div>
         </div>
@@ -152,36 +149,11 @@ onMounted(() => {
   gap: 16px;
 }
 
-.item-avatar-wrap {
-  width: 56px;
-  height: 56px;
-  flex-shrink: 0;
-}
-
-.item-avatar {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  object-fit: cover;
-}
-
-.item-avatar-placeholder {
-  width: 100%;
-  height: 100%;
-  border-radius: 50%;
-  background: linear-gradient(135deg, #f3b4c7, #d77fa2);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: white;
-  font-weight: 700;
-  font-size: 24px;
-}
-
 .item-info { flex: 1; }
 .item-week { font-size: 13px; color: $text-secondary; margin-bottom: 6px; }
+.item-status { font-size: 14px; font-weight: 600; color: #4caf50; margin-bottom: 8px; }
+.item-label { font-size: 12px; color: $text-secondary; margin-bottom: 4px; }
 .item-name { font-size: 18px; font-weight: 600; color: $text-primary; }
-.item-title { font-size: 14px; color: $primary; margin-top: 4px; }
 .item-arrow { font-size: 24px; color: $primary; }
 .item-fail-icon { font-size: 40px; }
 .item-fail-text { font-size: 15px; color: $text-secondary; margin-top: 4px; }

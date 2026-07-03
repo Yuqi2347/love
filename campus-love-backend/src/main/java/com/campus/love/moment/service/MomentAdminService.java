@@ -360,16 +360,17 @@ public class MomentAdminService {
 
         momentWeekDataService.deletePipelineDataForWeek(resolvedWeekTag);
 
-        // 删除本周报名记录：若仅把状态改回 WAITING，用户端仍会显示「正在为你寻找」
-        int enrollmentsDeleted = enrollmentMapper.delete(
-                new LambdaQueryWrapper<MomentEnrollment>()
+        // 将报名状态改回 WAITING，而不是删除
+        int enrollmentsReset = enrollmentMapper.update(null,
+                new LambdaUpdateWrapper<MomentEnrollment>()
                         .eq(MomentEnrollment::getWeekTag, resolvedWeekTag)
+                        .set(MomentEnrollment::getStatus, MomentEnrollment.STATUS_WAITING)
         );
 
         MomentActivityWeek week = activityWeekService.resetWeekToWaitingMatch(resolvedWeekTag);
         Map<String, Object> logDetail = new LinkedHashMap<>();
         logDetail.put("weekTag", resolvedWeekTag);
-        logDetail.put("enrollmentRowsDeleted", enrollmentsDeleted);
+        logDetail.put("enrollmentsReset", enrollmentsReset);
         logDetail.put("status", week.getStatus());
         archiveBatch.ifPresent(b -> logDetail.put("archiveSnapshotBatchId", b));
         logAction(
@@ -378,15 +379,15 @@ public class MomentAdminService {
                 ACTION_RESET_WEEK,
                 TARGET_WEEK,
                 null,
-                "已重置本周匹配数据，本周报名记录已清空（用户需重新报名）",
+                "已重置本周匹配数据，报名状态已恢复为待匹配",
                 detailJson(logDetail)
         );
 
         log.info("管理员重置本周心动时刻: weekTag={}", resolvedWeekTag);
         Map<String, Object> body = new LinkedHashMap<>();
         body.put("weekTag", resolvedWeekTag);
-        body.put("message", "本周匹配数据已清空，用户需重新报名参加本周活动");
-        body.put("enrollmentRowsDeleted", enrollmentsDeleted);
+        body.put("message", "本周匹配数据已清空，报名状态已恢复");
+        body.put("enrollmentsReset", enrollmentsReset);
         archiveBatch.ifPresent(b -> body.put("archiveSnapshotBatchId", b));
         return body;
     }

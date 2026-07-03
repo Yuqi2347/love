@@ -44,4 +44,11 @@ public class DiscoveryFeedResultCache {
         }
         return cache.get(key, loader);
     }
+
+    /** 置顶、点赞/取消点赞等变更后清空探索列表缓存（列表内含有当前用户的 liked 与 likeCount 快照） */
+    public void invalidateAll() {
+        if (cache != null) {
+            cache.invalidateAll();
+        }
+    }
 }

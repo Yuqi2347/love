@@ -39,7 +39,7 @@
     <div class="auth-right">
       <div class="auth-card">
         <h2 class="auth-title">创建账号</h2>
-        <p class="auth-desc">使用邮箱注册，不限制后缀</p>
+        <p class="auth-desc">{{ authSubtitle }}</p>
         <el-form ref="formRef" :model="form" :rules="rules" size="large" @submit.prevent="handleRegister">
           <el-form-item prop="nickname">
             <el-input v-model="form.nickname" placeholder="昵称（最多10字）" prefix-icon="User" maxlength="10" show-word-limit />
@@ -65,8 +65,35 @@
             </el-select>
           </el-form-item>
 
-          <!-- 邮箱输入 -->
-          <el-form-item prop="email" label="邮箱">
+          <!-- 校园邮箱（学号 + 后缀）：配置了 emailDomains 的学校 -->
+          <template v-if="isSzuStyleEmail">
+            <el-form-item prop="szuStudentId" label="学号">
+              <div class="email-input-wrapper">
+                <el-input
+                  v-model="form.szuStudentId"
+                  placeholder="校园邮箱前缀（学号）"
+                  prefix-icon="Message"
+                  class="email-full-input"
+                />
+                <button
+                  type="button"
+                  class="btn-send-code"
+                  :disabled="sendCodeCooldown > 0 || sendingCode || !isEmailValid"
+                  @click="handleSendCode"
+                >
+                  {{ sendCodeCooldown > 0 ? `${sendCodeCooldown}s后重发` : (sendingCode ? '发送中...' : '发送验证码') }}
+                </button>
+              </div>
+            </el-form-item>
+            <el-form-item prop="szuEmailDomain" label="邮箱后缀">
+              <el-radio-group v-model="form.szuEmailDomain" class="szu-domain-group">
+                <el-radio v-for="d in selectedSchoolDomains" :key="d" :label="d">@{{ d }}</el-radio>
+              </el-radio-group>
+              <p v-if="effectiveRegisterEmail" class="szu-email-preview">完整邮箱：{{ effectiveRegisterEmail }}</p>
+            </el-form-item>
+          </template>
+          <!-- 普通整邮箱输入 -->
+          <el-form-item v-else prop="email" label="邮箱">
             <div class="email-input-wrapper">
               <el-input
                 v-model="form.email"
@@ -130,7 +157,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref, reactive, computed, watch, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage, type FormInstance } from 'element-plus'
 import { register, sendVerifyCode, searchSchools as searchSchoolsApi, getPublicStats, type SchoolItem } from '@/api/authApi'
@@ -223,6 +250,10 @@ const form = reactive({
   nickname: '',
   school: '',
   email: '',
+  /** 配置了 emailDomains 的学校：本地部分（学号） */
+  szuStudentId: '',
+  /** 所选完整域名，如 mails.szu.edu.cn */
+  szuEmailDomain: '',
   verifyCode: '',
   password: '',
   confirmPassword: '',
@@ -239,11 +270,77 @@ function checkEmailSuffix(email: string, suffix: string): boolean {
   return domain === s || domain.endsWith('.' + s)
 }
 
+function getSelectedSchoolMeta(): SchoolItem | undefined {
+  const n = form.school?.trim()
+  if (!n) return undefined
+  return (
+    schoolOptions.value.find((s) => s.name === n) ??
+    prefetchedSchools.value.find((s) => s.name === n) ??
+    SCHOOLS_FALLBACK.find((s) => s.name === n)
+  )
+}
+
+const isSzuStyleEmail = computed(() => {
+  const d = getSelectedSchoolMeta()?.emailDomains
+  return Array.isArray(d) && d.length > 0
+})
+
+const selectedSchoolDomains = computed(() => getSelectedSchoolMeta()?.emailDomains ?? [])
+
+const effectiveRegisterEmail = computed(() => {
+  if (isSzuStyleEmail.value) {
+    const local = form.szuStudentId.trim()
+    const domain = (form.szuEmailDomain || '').trim()
+    if (!local || !domain) return ''
+    return `${local}@${domain}`
+  }
+  return form.email.trim()
+})
+
+/** 发验证码/注册前校验：校园邮箱必须是「学号@所选完整域名」，避免只传学号或后缀错位 */
+function assertCampusEmailMatchesSelection(email: string): boolean {
+  if (!isSzuStyleEmail.value) return true
+  const local = form.szuStudentId.trim()
+  const domain = (form.szuEmailDomain || '').trim()
+  const expected = local && domain ? `${local}@${domain}` : ''
+  if (!expected || email !== expected) {
+    ElMessage.error('校园邮箱需为学号与所选后缀拼接，请检查学号与邮箱后缀')
+    return false
+  }
+  return true
+}
+
+const authSubtitle = computed(() =>
+  isSzuStyleEmail.value
+    ? '该校支持学号注册：填写学号并选择校园邮箱后缀'
+    : '使用邮箱注册，不限制后缀'
+)
+
+watch(
+  () => form.school,
+  () => {
+    const domains = getSelectedSchoolMeta()?.emailDomains
+    if (Array.isArray(domains) && domains.length > 0) {
+      if (!domains.includes(form.szuEmailDomain)) {
+        const first = domains[0]
+        if (first) form.szuEmailDomain = first
+      }
+    } else {
+      form.szuStudentId = ''
+      form.szuEmailDomain = ''
+    }
+  }
+)
+
 const isEmailValid = computed(() => {
-  const email = form.email?.trim() || ''
-  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false
   if (!form.school?.trim()) return false
-  const school = schoolOptions.value.find(s => s.name === form.school.trim())
+  const email = effectiveRegisterEmail.value
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return false
+  const school = getSelectedSchoolMeta()
+  if (isSzuStyleEmail.value) {
+    const allowed = school?.emailDomains ?? []
+    if (!allowed.includes(form.szuEmailDomain)) return false
+  }
   if (!school?.emailSuffix) return true
   return checkEmailSuffix(email, school.emailSuffix)
 })
@@ -305,7 +402,7 @@ const validateEmail = (
     return
   }
   if (form.school?.trim()) {
-    const school = schoolOptions.value.find(s => s.name === form.school.trim())
+    const school = getSelectedSchoolMeta()
     if (school?.emailSuffix && !checkEmailSuffix(email, school.emailSuffix)) {
       callback(new Error(`请使用该校邮箱（@${school.emailSuffix}）`))
       return
@@ -314,35 +411,101 @@ const validateEmail = (
   callback()
 }
 
-const rules = {
-  nickname: [
-    { required: true, message: '请输入昵称', trigger: 'blur' },
-    { max: 10, message: '昵称最多10个字符', trigger: 'blur' },
-  ],
-  email: [
-    { required: true, message: '请输入邮箱', trigger: 'blur' },
-    { validator: validateEmail, trigger: ['blur', 'change'] },
-  ],
-  verifyCode: [
-    { required: true, message: '请输入验证码', trigger: 'blur' },
-    { len: 6, message: '验证码为6位数字', trigger: 'blur' },
-  ],
-  password: [
-    { required: true, message: '请输入密码', trigger: 'blur' },
-    { min: 6, message: '密码至少6位', trigger: 'blur' },
-  ],
-  confirmPassword: [
-    { required: true, message: '请确认密码', trigger: 'blur' },
-    { validator: validateConfirm, trigger: 'blur' },
-  ],
-}
-
-async function handleSendCode() {
-  const email = form.email.trim()
-  if (!email) {
-    ElMessage.warning('请先输入邮箱')
+function validateSzuStudentId(_rule: unknown, value: string, callback: (err?: Error) => void) {
+  const meta = getSelectedSchoolMeta()
+  const domains = meta?.emailDomains
+  if (!meta || !Array.isArray(domains) || !domains.length) {
+    callback()
     return
   }
+  const local = (value || '').trim()
+  if (!local) {
+    callback(new Error('请输入学号'))
+    return
+  }
+  if (!/^[a-zA-Z0-9._-]{2,64}$/.test(local)) {
+    callback(new Error('学号仅含字母、数字及 . _ -'))
+    return
+  }
+  const domain = form.szuEmailDomain
+  if (!domain || !domains.includes(domain)) {
+    callback(new Error('请选择邮箱后缀'))
+    return
+  }
+  const email = `${local}@${domain}`
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    callback(new Error('邮箱格式不正确'))
+    return
+  }
+  if (meta.emailSuffix && !checkEmailSuffix(email, meta.emailSuffix)) {
+    callback(new Error(`请使用该校邮箱（@${meta.emailSuffix}）`))
+    return
+  }
+  callback()
+}
+
+function validateSzuEmailDomain(_rule: unknown, value: string, callback: (err?: Error) => void) {
+  const meta = getSelectedSchoolMeta()
+  const domains = meta?.emailDomains
+  if (!Array.isArray(domains) || !domains.length) {
+    callback()
+    return
+  }
+  if (!value || !domains.includes(value)) {
+    callback(new Error('请选择邮箱后缀'))
+    return
+  }
+  callback()
+}
+
+const rules = computed(() => {
+  const base = {
+    nickname: [
+      { required: true, message: '请输入昵称', trigger: 'blur' },
+      { max: 10, message: '昵称最多10个字符', trigger: 'blur' },
+    ],
+    verifyCode: [
+      { required: true, message: '请输入验证码', trigger: 'blur' },
+      { len: 6, message: '验证码为6位数字', trigger: 'blur' },
+    ],
+    password: [
+      { required: true, message: '请输入密码', trigger: 'blur' },
+      { min: 6, message: '密码至少6位', trigger: 'blur' },
+    ],
+    confirmPassword: [
+      { required: true, message: '请确认密码', trigger: 'blur' },
+      { validator: validateConfirm, trigger: 'blur' },
+    ],
+  }
+  if (isSzuStyleEmail.value) {
+    return {
+      ...base,
+      szuStudentId: [
+        { required: true, message: '请输入学号', trigger: 'blur' },
+        { validator: validateSzuStudentId, trigger: ['blur', 'change'] },
+      ],
+      szuEmailDomain: [
+        { required: true, message: '请选择邮箱后缀', trigger: 'change' },
+        { validator: validateSzuEmailDomain, trigger: 'change' },
+      ],
+    }
+  }
+  return {
+    ...base,
+    email: [
+      { required: true, message: '请输入邮箱', trigger: 'blur' },
+      { validator: validateEmail, trigger: ['blur', 'change'] },
+    ],
+  }
+})
+
+async function handleSendCode() {
+  const email = effectiveRegisterEmail.value.trim()
+  if (!email) {
+    ElMessage.warning(isSzuStyleEmail.value ? '请先填写学号并选择邮箱后缀' : '请先输入邮箱')
+    return
+  }
+  if (!assertCampusEmailMatchesSelection(email)) return
   if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
     ElMessage.warning('请输入正确的邮箱格式')
     return
@@ -375,10 +538,13 @@ async function handleRegister() {
     return
   }
 
+  const registerEmail = effectiveRegisterEmail.value.trim()
+  if (!assertCampusEmailMatchesSelection(registerEmail)) return
+
   loading.value = true
   try {
     const res = await register({
-      email: form.email.trim(),
+      email: registerEmail,
       verifyCode: form.verifyCode,
       password: form.password,
       nickname: form.nickname,
@@ -716,6 +882,19 @@ onBeforeUnmount(() => {
 .email-full-input {
   flex: 1;
   min-width: 120px;
+}
+
+.szu-domain-group {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+
+.szu-email-preview {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: $text-secondary;
 }
 
 .btn-send-code {

@@ -95,9 +95,7 @@
           :class="{ 'feed-card--pinned': item.post.pinned }"
           @click="goPostDetail(item.post.id)"
         >
-          <div v-if="item.post.pinned" class="feed-pinned-badge">
-            <span class="pulse-dot"></span> 星标置顶
-          </div>
+          <div v-if="item.post.pinned" class="feed-pinned-badge">置顶</div>
           
           <div class="feed-header" @click.stop>
             <div class="avatar-glow-wrap" :style="{ '--glow-color': getAvatarGlow(item.post.userId) }">
@@ -108,14 +106,25 @@
                 @click="$router.push(`/profile/${item.post.userId}`)"
               />
             </div>
-            
+
             <div class="feed-user" @click="$router.push(`/profile/${item.post.userId}`)">
-              <div class="feed-name">{{ item.post.nickname }}</div>
+              <div class="feed-name">
+                {{ item.post.nickname }}
+              </div>
               <div class="feed-time">{{ formatTime(item.post.createdAt) }}</div>
             </div>
-            
+
             <button v-if="isAdmin && (reportCountByPostId[item.post.id] || 0) > 0" type="button" class="feed-icon-btn text-warning" @click.stop="$router.push(`/admin/reports?targetId=${item.post.id}`)">
               <el-icon><WarningFilled /></el-icon> {{ reportCountByPostId[item.post.id] }}
+            </button>
+            <button
+              v-if="isAdmin"
+              type="button"
+              class="feed-pin-text-btn"
+              :class="{ 'is-pinned': item.post.pinnedAt }"
+              @click.stop="handlePinPost(item.post)"
+            >
+              {{ item.post.pinnedAt ? '取消置顶' : '置顶' }}
             </button>
             <button type="button" :class="['feed-icon-btn', { reported: reportedPostIds.has(item.post.id) }]" @click.stop="handleReportClick(item.post.id, 'POST')">
               <el-icon><Flag /></el-icon>
@@ -127,13 +136,13 @@
           
           <div class="feed-content">
             <template v-if="shouldCollapse(item.post.content)">
-              <span v-if="isExpanded(item.post.id)">{{ item.post.content }}</span>
-              <span v-else>{{ getDisplayContent(item.post.content, item.post.id) }}</span>
+              <span v-if="isExpanded(item.post.id)" class="feed-text">{{ item.post.content }}</span>
+              <span v-else class="feed-text">{{ getDisplayContent(item.post.content, item.post.id) }}</span>
               <button class="expand-btn" @click.stop="toggleExpand(item.post.id)">
                 {{ isExpanded(item.post.id) ? '收起' : '展开信号' }}
               </button>
             </template>
-            <span v-else>{{ item.post.content }}</span>
+            <span v-else class="feed-text">{{ item.post.content }}</span>
           </div>
 
           <div v-if="item.post.images" class="feed-images" @click.stop>
@@ -751,6 +760,21 @@ async function handleReportClick(targetId: number, targetType: string) {
 
 function onReportSuccess() { reportedPostIds.value.add(reportTargetId.value); reportedPostIds.value = new Set(reportedPostIds.value) }
 
+async function handlePinPost(post: FeedPost) {
+  try {
+    if (post.pinnedAt) {
+      await unpinPost(post.id)
+      ElMessage.success('已取消置顶')
+    } else {
+      await pinPost(post.id)
+      ElMessage.success('已置顶')
+    }
+    await refreshPosts()
+  } catch (error) {
+    ElMessage.error('操作失败')
+  }
+}
+
 async function handleDeletePost(postId: number) {
   try {
     await ElMessageBox.confirm('确定消除这片宇宙的痕迹？', '提示', { type: 'warning' })
@@ -877,6 +901,43 @@ $border-light: rgba(255, 255, 255, 0.8);
     transform: translateY(-2px);
     box-shadow: 0 15px 40px rgba(31, 38, 135, 0.1);
   }
+
+  &.feed-card--pinned {
+    border-color: rgba($accent-pink, 0.35);
+    box-shadow: 0 10px 30px rgba(255, 51, 102, 0.08);
+  }
+}
+
+.feed-pinned-badge {
+  position: absolute;
+  top: 16px;
+  right: 18px;
+  font-size: 12px;
+  font-weight: 700;
+  color: $accent-pink;
+  letter-spacing: 0.05em;
+}
+
+.feed-pin-text-btn {
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba($accent-pink, 0.35);
+  background: rgba(255, 255, 255, 0.85);
+  color: $accent-pink;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s, border-color 0.2s;
+  &:hover {
+    background: rgba(255, 51, 102, 0.08);
+    border-color: rgba($accent-pink, 0.55);
+  }
+  &.is-pinned {
+    border-color: rgba($accent-pink, 0.55);
+    background: rgba(255, 51, 102, 0.1);
+  }
 }
 
 .feed-header { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
@@ -890,7 +951,7 @@ $border-light: rgba(255, 255, 255, 0.8);
 }
 
 .feed-user { flex: 1; }
-.feed-name { font-size: 16px; font-weight: 700; color: $text-main; }
+.feed-name { font-size: 16px; font-weight: 700; color: $text-main; display: flex; align-items: center; gap: 8px; }
 .feed-time { font-size: 12px; color: #94a3b8; margin-top: 2px; }
 
 .feed-icon-btn {
@@ -902,6 +963,7 @@ $border-light: rgba(255, 255, 255, 0.8);
 }
 
 .feed-content { font-size: 15px; line-height: 1.8; color: #334155; margin-bottom: 16px; }
+.feed-text { white-space: pre-wrap; word-wrap: break-word; }
 .expand-btn { color: $accent-blue; background: none; border: none; cursor: pointer; font-size: 14px; font-weight: 600; }
 
 .feed-images {
@@ -988,5 +1050,13 @@ $border-light: rgba(255, 255, 255, 0.8);
   font-size: 12px; color: $accent-blue;
   background: rgba(79, 140, 255, 0.1); border: 1px solid rgba(79, 140, 255, 0.2);
   padding: 4px 10px; border-radius: 999px;
+  white-space: nowrap;
+  display: inline-block;
+}
+.feed-ai-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 12px;
 }
 </style>

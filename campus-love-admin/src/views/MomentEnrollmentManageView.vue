@@ -1,5 +1,24 @@
 <template>
   <div class="moment-page">
+    <el-alert
+      v-if="serverWeekTag"
+      type="info"
+      show-icon
+      :closable="false"
+      class="page-tip"
+      :title="`服务端当前活动周：${serverWeekTag}（周次留空时按此周查询）`"
+    >
+      <template #default>
+        <p class="tip-lines">
+          活动周按<strong>北京时间</strong>、以<strong>周日</strong>为新一周起点编号；若昨天报名的用户今天「不见了」，请先核对是否已换周，并在上方输入<strong>昨天的周次</strong>再查。
+        </p>
+        <p class="tip-lines">
+          <strong>自动匹配</strong>由「匹配配置」里的开关 + 周几/时刻决定，到点会截止报名并跑匹配，<strong>不会删除</strong>报名记录，只会把状态改为已匹配/未匹配。
+          <strong>用户能看见缘分详情</strong>要等管理员「公布结果」或开启<strong>自动公布</strong>（可与周五倒计时一致，也可单独配置）。
+        </p>
+        <p v-if="autoMatchLine" class="tip-lines muted">{{ autoMatchLine }}</p>
+      </template>
+    </el-alert>
     <el-card class="toolbar-card">
       <div class="toolbar">
         <div class="toolbar-main">
@@ -104,9 +123,13 @@
 </template>
 
 <script setup lang="ts">
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { ElMessage } from 'element-plus'
-import { getMomentAdminEnrollments, removeMomentAdminEnrollment } from '@/api/adminApi'
+import {
+  getMomentAdminEnrollments,
+  getMomentAdminOverview,
+  removeMomentAdminEnrollment,
+} from '@/api/adminApi'
 import type { MomentEnrollmentAdminItem } from '@/api/adminApi'
 
 const loading = ref(false)
@@ -121,6 +144,37 @@ const filters = reactive({
   gender: undefined as number | undefined,
   status: '',
   keyword: '',
+})
+
+const serverWeekTag = ref('')
+const overviewAuto = ref<{
+  autoMatchEnabled: boolean
+  autoMatchDayOfWeek: number
+  autoMatchTime: string
+  autoPublishEnabled: boolean
+  autoPublishDayOfWeek: number
+  autoPublishTime: string
+} | null>(null)
+
+const weekdayCn = ['一', '二', '三', '四', '五', '六', '日']
+
+const autoMatchLine = computed(() => {
+  const o = overviewAuto.value
+  if (!o) return ''
+  const parts: string[] = []
+  if (o.autoMatchEnabled) {
+    const d = o.autoMatchDayOfWeek >= 1 && o.autoMatchDayOfWeek <= 7 ? weekdayCn[o.autoMatchDayOfWeek - 1] : '?'
+    parts.push(`当前已开启自动匹配：北京时间 周${d} ${o.autoMatchTime || '--'}`)
+  } else {
+    parts.push('当前未开启自动匹配（仅手动「触发匹配」时才会跑流水线）')
+  }
+  if (o.autoPublishEnabled) {
+    const pd = o.autoPublishDayOfWeek >= 1 && o.autoPublishDayOfWeek <= 7 ? weekdayCn[o.autoPublishDayOfWeek - 1] : '?'
+    parts.push(`自动公布：周${pd} ${o.autoPublishTime || '--'}（RESULT_READY 后生效）`)
+  } else {
+    parts.push('自动公布未开启时需手动「公布结果」后用户端才可见')
+  }
+  return parts.join('；')
 })
 
 function poolLabel(pool: string) {
@@ -193,10 +247,46 @@ function resetFilters() {
   handleSearch()
 }
 
-onMounted(loadData)
+async function loadOverviewHint() {
+  try {
+    const res = await getMomentAdminOverview()
+    const o = res.data.data
+    if (!o) return
+    serverWeekTag.value = o.weekTag || ''
+    overviewAuto.value = {
+      autoMatchEnabled: !!o.autoMatchEnabled,
+      autoMatchDayOfWeek: o.autoMatchDayOfWeek ?? 1,
+      autoMatchTime: o.autoMatchTime || '',
+      autoPublishEnabled: !!o.autoPublishEnabled,
+      autoPublishDayOfWeek: o.autoPublishDayOfWeek ?? 5,
+      autoPublishTime: o.autoPublishTime || '',
+    }
+  } catch {
+    /* 提示失败不阻断名单 */
+  }
+}
+
+onMounted(async () => {
+  await Promise.all([loadData(), loadOverviewHint()])
+})
 </script>
 
 <style lang="scss" scoped>
+.page-tip {
+  margin-bottom: 16px;
+}
+
+.tip-lines {
+  margin: 0 0 6px;
+  line-height: 1.55;
+  font-size: 13px;
+}
+
+.tip-lines.muted {
+  margin-bottom: 0;
+  color: var(--el-text-color-secondary);
+}
+
 .moment-page {
   display: flex;
   flex-direction: column;

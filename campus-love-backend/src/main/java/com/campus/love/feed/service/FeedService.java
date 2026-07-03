@@ -45,6 +45,8 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionSynchronization;
+import org.springframework.transaction.support.TransactionSynchronizationManager;
 
 import com.campus.love.common.constants.DateTimeConstants;
 import com.campus.love.common.enums.MsgTypeEnum;
@@ -543,6 +545,9 @@ public class FeedService {
         User liker = userMapper.selectById(userId);
         String likerNickname = liker != null ? liker.getNickname() : null;
         notificationService.notifyPostLike(post.getUserId(), userId, postId, likerNickname);
+
+        // 探索列表缓存了带当前用户 liked/likeCount 的 DTO，点赞后必须失效，否则刷新仍见旧状态并触发「已点赞」等误报
+        invalidateDiscoveryFeedCacheAfterCommit();
     }
 
     @Transactional
@@ -602,6 +607,24 @@ public class FeedService {
             post.setLikeCount(post.getLikeCount() - 1);
             feedPostMapper.updateById(post);
         }
+
+        invalidateDiscoveryFeedCacheAfterCommit();
+    }
+
+    /**
+     * 在事务提交后再清空探索流缓存，避免并发请求在提交前读到旧库并回填错误缓存。
+     */
+    private void invalidateDiscoveryFeedCacheAfterCommit() {
+        if (!TransactionSynchronizationManager.isSynchronizationActive()) {
+            discoveryFeedResultCache.invalidateAll();
+            return;
+        }
+        TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
+            @Override
+            public void afterCommit() {
+                discoveryFeedResultCache.invalidateAll();
+            }
+        });
     }
 
     @Transactional
@@ -744,6 +767,7 @@ public class FeedService {
         post.setPinnedAt(LocalDateTime.now());
         post.setPinnedBy(userId);
         feedPostMapper.updateById(post);
+        discoveryFeedResultCache.invalidateAll();
     }
 
     /** V39：取消置顶（仅管理员）—— 必须用 LambdaUpdateWrapper 显式写 NULL，updateById 不会更新 null 字段 */
@@ -760,6 +784,7 @@ public class FeedService {
                 .eq(FeedPost::getId, postId)
                 .set(FeedPost::getPinnedAt, null)
                 .set(FeedPost::getPinnedBy, null));
+        discoveryFeedResultCache.invalidateAll();
     }
 
     /** 重新生成 AI 标签（作者可触发，用于无标签或需刷新的帖子） */

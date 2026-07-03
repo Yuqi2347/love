@@ -1,6 +1,7 @@
 package com.campus.love.admin.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.campus.love.admin.dto.AdminFeedItem;
@@ -23,6 +24,7 @@ import com.campus.love.feed.entity.FeedLike;
 import com.campus.love.feed.entity.FeedPost;
 import com.campus.love.feed.mapper.FeedCommentMapper;
 import com.campus.love.feed.mapper.FeedLikeMapper;
+import com.campus.love.feed.cache.DiscoveryFeedResultCache;
 import com.campus.love.feed.mapper.FeedPostMapper;
 import com.campus.love.feed.service.FeedService;
 import com.campus.love.follow.entity.Follow;
@@ -111,6 +113,7 @@ public class AdminService {
     private final UserEmbeddingMapper userEmbeddingMapper;
     private final UserProfileVectorMapper userProfileVectorMapper;
     private final AdminStatsMapper adminStatsMapper;
+    private final DiscoveryFeedResultCache discoveryFeedResultCache;
 
     public IPage<AdminUserItem> listUsers(int page, int size, String keyword) {
         LambdaQueryWrapper<User> wrapper = new LambdaQueryWrapper<>();
@@ -504,5 +507,28 @@ public class AdminService {
         private long hasProfileCount;
         /** 已完善资料但无画像（待补充） */
         private long missingCount;
+    }
+
+    public void pinPost(Long postId, Long adminId) {
+        FeedPost post = feedPostMapper.selectById(postId);
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        post.setPinnedAt(java.time.LocalDateTime.now());
+        post.setPinnedBy(adminId);
+        feedPostMapper.updateById(post);
+        discoveryFeedResultCache.invalidateAll();
+    }
+
+    public void unpinPost(Long postId) {
+        FeedPost post = feedPostMapper.selectById(postId);
+        if (post == null) {
+            throw new BusinessException(ResultCode.NOT_FOUND, "帖子不存在");
+        }
+        feedPostMapper.update(null, new LambdaUpdateWrapper<FeedPost>()
+                .eq(FeedPost::getId, postId)
+                .set(FeedPost::getPinnedAt, null)
+                .set(FeedPost::getPinnedBy, null));
+        discoveryFeedResultCache.invalidateAll();
     }
 }

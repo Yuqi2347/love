@@ -21,12 +21,14 @@ import com.campus.love.moment.entity.MomentMatchConfirm;
 import com.campus.love.moment.entity.MomentActivityWeek;
 import com.campus.love.moment.entity.MomentMatchResult;
 import com.campus.love.moment.entity.MomentMatchResultContent;
+import com.campus.love.moment.entity.MomentMatchResetSnapshot;
 import com.campus.love.moment.entity.MomentProfile;
 import com.campus.love.moment.enums.MomentPool;
 import com.campus.love.moment.mapper.MomentEnrollmentMapper;
 import com.campus.love.moment.mapper.MomentMatchConfirmMapper;
 import com.campus.love.moment.mapper.MomentMatchResultContentMapper;
 import com.campus.love.moment.mapper.MomentMatchResultMapper;
+import com.campus.love.moment.mapper.MomentMatchResetSnapshotMapper;
 import com.campus.love.moment.mapper.MomentProfileMapper;
 import com.campus.love.profile.entity.UserPortrait;
 import com.campus.love.profile.service.OceanConfidenceService;
@@ -45,13 +47,16 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.math.BigDecimal;
+import java.time.DayOfWeek;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.Period;
 import java.time.ZoneId;
 import java.time.temporal.WeekFields;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.*;
 
 @Slf4j
@@ -59,11 +64,15 @@ import java.util.*;
 @RequiredArgsConstructor
 public class MomentService {
 
+    /** 与 PairDateTimeUtils、揭晓时间等业务约定一致，避免服务器默认时区与境内用户日历差一天导致周标签错位 */
+    private static final ZoneId MOMENT_BUSINESS_ZONE = ZoneId.of("Asia/Shanghai");
+
     private final MomentProfileMapper profileMapper;
     private final MomentEnrollmentMapper enrollmentMapper;
     private final MomentMatchResultMapper matchResultMapper;
     private final MomentMatchResultContentMapper matchResultContentMapper;
     private final MomentMatchConfirmMapper matchConfirmMapper;
+    private final MomentMatchResetSnapshotMapper momentMatchResetSnapshotMapper;
     private final UserMapper userMapper;
     private final ObjectMapper objectMapper;
     private final FileUploadService fileUploadService;
@@ -151,9 +160,22 @@ public class MomentService {
             log.warn("查询周状态失败", e);
         }
 
+        // 以匹配结果表为准纠偏：流水线/手工改库可能导致报名状态仍为 UNMATCHED 但已落库匹配结果
+        MomentMatchResult reconcileMatch = findMatchResult(weekTag, userId);
+        if (reconcileMatch != null) {
+            if (MomentEnrollment.STATUS_UNMATCHED.equals(status)) {
+                log.warn("心动状态纠偏: userId={} weekTag={} 报名为 UNMATCHED 但存在匹配结果，按已匹配展示", userId, weekTag);
+                status = MomentEnrollment.STATUS_MATCHED;
+            } else if ("NOT_ENROLLED".equals(status)
+                    && MomentWeekStatusPolicy.userMayViewPublishedResults(weekStatus)) {
+                log.warn("心动状态纠偏: userId={} weekTag={} 无报名记录但本周已发布且存在匹配结果，按已匹配展示", userId, weekTag);
+                status = MomentEnrollment.STATUS_MATCHED;
+            }
+        }
+
         String matchedTitle = null;
         if (MomentEnrollment.STATUS_MATCHED.equals(status)) {
-            MomentMatchResult matchResult = findMatchResult(weekTag, userId);
+            MomentMatchResult matchResult = reconcileMatch != null ? reconcileMatch : findMatchResult(weekTag, userId);
             if (matchResult != null) {
                 ensureResultContent(matchResult);
                 MomentMatchResultContent c = loadContentByMatchResultId(matchResult.getId());
@@ -274,14 +296,28 @@ public class MomentService {
 
     public MomentResultResponse getResult(String weekTag) {
         Long userId = CurrentUser.getId();
-        String targetWeekTag = (weekTag == null || weekTag.isBlank()) ? getCurrentWeekTag() : weekTag;
+        String targetWeekTag = (weekTag == null || weekTag.isBlank()) ? getCurrentWeekTag() : weekTag.trim();
 
         List<MomentEnrollment> enrollments = enrollmentMapper.selectList(
                 new LambdaQueryWrapper<MomentEnrollment>()
                         .eq(MomentEnrollment::getUserId, userId)
                         .eq(MomentEnrollment::getWeekTag, targetWeekTag)
         );
-        if (enrollments == null || enrollments.isEmpty()) throw new BusinessException(ResultCode.MOMENT_NOT_ENROLLED);
+        if (enrollments == null || enrollments.isEmpty()) {
+            MomentMatchResetSnapshot snap = loadLatestSnapshotWithContent(userId, targetWeekTag);
+            if (snap != null) {
+                return buildResultFromResetSnapshot(snap, userId, targetWeekTag);
+            }
+            MomentMatchResult orphan = findMatchResult(targetWeekTag, userId);
+            if (orphan != null) {
+                MomentActivityWeek w = activityWeekService.getOrCreateWeek(targetWeekTag);
+                if (MomentWeekStatusPolicy.userMayViewPublishedResults(w.getStatus())) {
+                    return buildMatchedMomentResponse(orphan, userId, targetWeekTag, false);
+                }
+                throw new BusinessException(ResultCode.MOMENT_NO_RESULT);
+            }
+            throw new BusinessException(ResultCode.MOMENT_NOT_ENROLLED);
+        }
 
         boolean anyWaiting = enrollments.stream().anyMatch(e -> MomentEnrollment.STATUS_WAITING.equals(e.getStatus()));
         if (anyWaiting) {
@@ -305,60 +341,11 @@ public class MomentService {
         if (matchResult == null) {
             return MomentResultResponse.builder()
                     .matched(false)
-                    .weekTag(weekTag)
+                    .weekTag(targetWeekTag)
                     .build();
         }
 
-        ensureResultContent(matchResult);
-        MomentMatchResultContent content = requireContent(matchResult.getId());
-
-        Long matchedUserId = matchResult.getUserIdA().equals(userId)
-                ? matchResult.getUserIdB()
-                : matchResult.getUserIdA();
-
-        User matchedUser = userMapper.selectById(matchedUserId);
-        if (matchedUser == null) {
-            return MomentResultResponse.builder()
-                    .matched(false)
-                    .weekTag(weekTag)
-                    .build();
-        }
-
-        Integer age = null;
-        if (matchedUser.getBirthDate() != null) {
-            age = Period.between(matchedUser.getBirthDate(), LocalDate.now()).getYears();
-        }
-
-        ConfirmView confirmView = resolveConfirmView(matchResult, userId);
-
-        Integer matchScorePercent = resolveMatchScorePercent(matchResult, content);
-
-        return MomentResultResponse.builder()
-                .matched(true)
-                .weekTag(weekTag)
-                .matchResultId(matchResult.getId())
-                .yuanfenTitle(content.getYuanfenTitle())
-                .matchedUserId(matchedUserId)
-                .nickname(matchedUser.getNickname())
-                .avatarUrl(matchedUser.getAvatarUrl())
-                .gender(matchedUser.getGender())
-                .school(matchedUser.getSchool())
-                .major(matchedUser.getMajor())
-                .grade(matchedUser.getGrade())
-                .bio(matchedUser.getBio())
-                .mbti(matchedUser.getMbti())
-                .zodiac(matchedUser.getZodiac())
-                .age(age)
-                .complementaryModes(momentResultContentService.parseJsonList(content.getComplementaryModes()))
-                .insightCards(momentResultContentService.buildInsightCards(content))
-                .goldenSentence(content.getGoldenSentence())
-                .dimensionLabels(momentResultContentService.parseJsonList(content.getDimensionLabels()))
-                .aboutMatchedUser(matchResult.getUserIdA().equals(userId) ? content.getAboutUserB() : content.getAboutUserA())
-                .confirmStatus(confirmView.status())
-                .myChoice(confirmView.myChoice())
-                .datePrepUnlocked(confirmView.datePrepUnlocked())
-                .matchScorePercent(matchScorePercent)
-                .build();
+        return buildMatchedMomentResponse(matchResult, userId, targetWeekTag, true);
     }
 
     @Transactional
@@ -381,7 +368,7 @@ public class MomentService {
             if (bothYue(confirm)) {
                 pairDateService.ensureNegotiationReadyForMatch(matchResult.getId());
             }
-            return getResult();
+            return getResult(weekTag);
         }
 
         boolean isA = Objects.equals(matchResult.getUserIdA(), currentUserId);
@@ -408,7 +395,7 @@ public class MomentService {
         if (bothYue(confirm)) {
             pairDateService.ensureNegotiationReadyForMatch(matchResult.getId());
         }
-        return getResult();
+        return getResult(weekTag);
     }
 
     @Transactional
@@ -484,6 +471,145 @@ public class MomentService {
 
     // ==================== 工具方法 ====================
 
+    /**
+     * 管理员重置后报名表可能已清空，但历史列表仍展示该周；此时从快照 JSON 还原详情，且不调用 getOrCreateConfirm。
+     */
+    private MomentMatchResetSnapshot loadLatestSnapshotWithContent(Long userId, String weekTag) {
+        List<MomentMatchResetSnapshot> list = momentMatchResetSnapshotMapper.selectList(
+                new LambdaQueryWrapper<MomentMatchResetSnapshot>()
+                        .eq(MomentMatchResetSnapshot::getWeekTag, weekTag)
+                        .and(w -> w.eq(MomentMatchResetSnapshot::getUserIdA, userId)
+                                .or()
+                                .eq(MomentMatchResetSnapshot::getUserIdB, userId))
+                        .isNotNull(MomentMatchResetSnapshot::getContentSnapshotJson)
+                        .orderByDesc(MomentMatchResetSnapshot::getArchivedAt)
+        );
+        for (MomentMatchResetSnapshot s : list) {
+            if (s.getContentSnapshotJson() != null && !s.getContentSnapshotJson().isBlank()) {
+                return s;
+            }
+        }
+        return null;
+    }
+
+    private MomentResultResponse buildResultFromResetSnapshot(MomentMatchResetSnapshot snap, Long userId, String responseWeekTag) {
+        MomentMatchResultContent content;
+        try {
+            content = objectMapper.readValue(snap.getContentSnapshotJson(), MomentMatchResultContent.class);
+        } catch (Exception e) {
+            log.warn("重置快照 content 反序列化失败 weekTag={} snapshotId={}", snap.getWeekTag(), snap.getId(), e);
+            throw new BusinessException(ResultCode.MOMENT_NO_RESULT, "历史匹配详情暂不可用");
+        }
+
+        MomentMatchResult ref = new MomentMatchResult();
+        ref.setId(snap.getOriginalMatchResultId());
+        ref.setWeekTag(snap.getWeekTag());
+        ref.setUserIdA(snap.getUserIdA());
+        ref.setUserIdB(snap.getUserIdB());
+        ref.setTotalScore(snap.getTotalScore());
+        ref.setCreatedAt(snap.getResultCreatedAt());
+
+        Long matchedUserId = Objects.equals(snap.getUserIdA(), userId) ? snap.getUserIdB() : snap.getUserIdA();
+        User matchedUser = userMapper.selectById(matchedUserId);
+        if (matchedUser == null) {
+            return MomentResultResponse.builder()
+                    .matched(false)
+                    .weekTag(responseWeekTag)
+                    .build();
+        }
+
+        Integer age = null;
+        if (matchedUser.getBirthDate() != null) {
+            age = Period.between(matchedUser.getBirthDate(), LocalDate.now()).getYears();
+        }
+
+        ConfirmView confirmView = resolveConfirmViewReadOnly(snap.getOriginalMatchResultId(), ref, userId);
+        Integer matchScorePercent = resolveMatchScorePercent(ref, content);
+
+        return MomentResultResponse.builder()
+                .matched(true)
+                .weekTag(responseWeekTag)
+                .matchResultId(snap.getOriginalMatchResultId())
+                .yuanfenTitle(content.getYuanfenTitle())
+                .matchedUserId(matchedUserId)
+                .nickname(matchedUser.getNickname())
+                .avatarUrl(matchedUser.getAvatarUrl())
+                .gender(matchedUser.getGender())
+                .school(matchedUser.getSchool())
+                .major(matchedUser.getMajor())
+                .grade(matchedUser.getGrade())
+                .bio(matchedUser.getBio())
+                .mbti(matchedUser.getMbti())
+                .zodiac(matchedUser.getZodiac())
+                .age(age)
+                .complementaryModes(momentResultContentService.parseJsonList(content.getComplementaryModes()))
+                .insightCards(momentResultContentService.buildInsightCards(content))
+                .goldenSentence(content.getGoldenSentence())
+                .dimensionLabels(momentResultContentService.parseJsonList(content.getDimensionLabels()))
+                .aboutMatchedUser(Objects.equals(snap.getUserIdA(), userId) ? content.getAboutUserB() : content.getAboutUserA())
+                .confirmStatus(confirmView.status())
+                .myChoice(confirmView.myChoice())
+                .datePrepUnlocked(confirmView.datePrepUnlocked())
+                .matchScorePercent(matchScorePercent)
+                .build();
+    }
+
+    private MomentResultResponse buildMatchedMomentResponse(MomentMatchResult matchResult, Long userId, String responseWeekTag,
+                                                            boolean writableConfirmFlow) {
+        ensureResultContent(matchResult);
+        MomentMatchResultContent content = requireContent(matchResult.getId());
+
+        Long matchedUserId = Objects.equals(matchResult.getUserIdA(), userId)
+                ? matchResult.getUserIdB()
+                : matchResult.getUserIdA();
+
+        User matchedUser = userMapper.selectById(matchedUserId);
+        if (matchedUser == null) {
+            return MomentResultResponse.builder()
+                    .matched(false)
+                    .weekTag(responseWeekTag)
+                    .build();
+        }
+
+        Integer age = null;
+        if (matchedUser.getBirthDate() != null) {
+            age = Period.between(matchedUser.getBirthDate(), LocalDate.now()).getYears();
+        }
+
+        ConfirmView confirmView = writableConfirmFlow
+                ? resolveConfirmView(matchResult, userId)
+                : resolveConfirmViewReadOnly(matchResult.getId(), matchResult, userId);
+
+        Integer matchScorePercent = resolveMatchScorePercent(matchResult, content);
+
+        return MomentResultResponse.builder()
+                .matched(true)
+                .weekTag(responseWeekTag)
+                .matchResultId(matchResult.getId())
+                .yuanfenTitle(content.getYuanfenTitle())
+                .matchedUserId(matchedUserId)
+                .nickname(matchedUser.getNickname())
+                .avatarUrl(matchedUser.getAvatarUrl())
+                .gender(matchedUser.getGender())
+                .school(matchedUser.getSchool())
+                .major(matchedUser.getMajor())
+                .grade(matchedUser.getGrade())
+                .bio(matchedUser.getBio())
+                .mbti(matchedUser.getMbti())
+                .zodiac(matchedUser.getZodiac())
+                .age(age)
+                .complementaryModes(momentResultContentService.parseJsonList(content.getComplementaryModes()))
+                .insightCards(momentResultContentService.buildInsightCards(content))
+                .goldenSentence(content.getGoldenSentence())
+                .dimensionLabels(momentResultContentService.parseJsonList(content.getDimensionLabels()))
+                .aboutMatchedUser(Objects.equals(matchResult.getUserIdA(), userId) ? content.getAboutUserB() : content.getAboutUserA())
+                .confirmStatus(confirmView.status())
+                .myChoice(confirmView.myChoice())
+                .datePrepUnlocked(confirmView.datePrepUnlocked())
+                .matchScorePercent(matchScorePercent)
+                .build();
+    }
+
     private MomentMatchResult findMatchResult(String weekTag, Long userId) {
         return matchResultMapper.selectOne(
                 new LambdaQueryWrapper<MomentMatchResult>()
@@ -530,6 +656,30 @@ public class MomentService {
         }
         if (hasAnyGuanzhu(confirm)) {
             return new ConfirmView(timedOut ? "TIMEOUT_GUANZHU" : "ANY_GUANZHU", myChoice, false);
+        }
+        return new ConfirmView("PENDING", myChoice, false);
+    }
+
+    /** 仅查询确认状态，不 insert 确认行、不写超时互关（用于重置后仅快照可读的历史详情）。 */
+    private ConfirmView resolveConfirmViewReadOnly(Long matchResultId, MomentMatchResult matchRef, Long currentUserId) {
+        if (matchResultId == null || matchRef == null) {
+            return new ConfirmView("PENDING", null, false);
+        }
+        MomentMatchConfirm confirm = matchConfirmMapper.selectOne(
+                new LambdaQueryWrapper<MomentMatchConfirm>()
+                        .eq(MomentMatchConfirm::getMatchResultId, matchResultId)
+        );
+        if (confirm == null) {
+            return new ConfirmView("PENDING", null, false);
+        }
+        String myChoice = Objects.equals(matchRef.getUserIdA(), currentUserId)
+                ? confirm.getChoiceA()
+                : confirm.getChoiceB();
+        if (bothYue(confirm)) {
+            return new ConfirmView("BOTH_YUE", myChoice, true);
+        }
+        if (hasAnyGuanzhu(confirm)) {
+            return new ConfirmView("ANY_GUANZHU", myChoice, false);
         }
         return new ConfirmView("PENDING", myChoice, false);
     }
@@ -663,8 +813,8 @@ public class MomentService {
     }
 
     public String getCurrentWeekTag() {
-        LocalDate now = LocalDate.now();
-        WeekFields wf = WeekFields.ISO;
+        LocalDate now = LocalDate.now(MOMENT_BUSINESS_ZONE);
+        WeekFields wf = WeekFields.of(DayOfWeek.SUNDAY, 1);
         int year = now.get(wf.weekBasedYear());
         int week = now.get(wf.weekOfWeekBasedYear());
         return String.format("%d-W%02d", year, week);
@@ -772,10 +922,22 @@ public class MomentService {
                         .orderByDesc(MomentEnrollment::getCreatedAt)
         );
 
+        // 查询被重置的历史记录（从快照表）
+        List<MomentMatchResetSnapshot> snapshots = momentMatchResetSnapshotMapper.selectList(
+                new LambdaQueryWrapper<MomentMatchResetSnapshot>()
+                        .and(w -> w.eq(MomentMatchResetSnapshot::getUserIdA, userId)
+                                .or().eq(MomentMatchResetSnapshot::getUserIdB, userId))
+                        .orderByDesc(MomentMatchResetSnapshot::getArchivedAt)
+        );
+
         // 构建历史记录
         List<MomentResultResponse> records = new ArrayList<>();
+        Set<String> processedWeeks = new HashSet<>();
+
         for (MomentEnrollment enrollment : enrollments) {
             String weekTag = enrollment.getWeekTag();
+            if (processedWeeks.contains(weekTag)) continue;
+            processedWeeks.add(weekTag);
 
             // 查询该周期是否有匹配结果
             MomentMatchResult matchResult = matchResultMapper.selectOne(
@@ -786,15 +948,20 @@ public class MomentService {
             );
 
             if (matchResult != null) {
-                // 匹配成功
                 records.add(buildHistoryResponse(matchResult));
             } else {
-                // 未匹配
                 records.add(MomentResultResponse.builder()
                         .matched(false)
                         .weekTag(weekTag)
                         .build());
             }
+        }
+
+        // 添加快照记录
+        for (MomentMatchResetSnapshot snapshot : snapshots) {
+            if (processedWeeks.contains(snapshot.getWeekTag())) continue;
+            processedWeeks.add(snapshot.getWeekTag());
+            records.add(buildHistoryResponseFromSnapshot(snapshot));
         }
 
         // 手动分页
@@ -817,6 +984,22 @@ public class MomentService {
         return MomentResultResponse.builder()
                 .matched(true)
                 .weekTag(result.getWeekTag())
+                .matchedUserId(matchedUserId)
+                .nickname(matchedUser != null ? matchedUser.getNickname() : "未知用户")
+                .avatarUrl(matchedUser != null ? matchedUser.getAvatarUrl() : null)
+                .gender(matchedUser != null ? matchedUser.getGender() : null)
+                .build();
+    }
+
+    private MomentResultResponse buildHistoryResponseFromSnapshot(MomentMatchResetSnapshot snapshot) {
+        Long userId = CurrentUser.getId();
+        boolean isA = snapshot.getUserIdA().equals(userId);
+        Long matchedUserId = isA ? snapshot.getUserIdB() : snapshot.getUserIdA();
+        User matchedUser = userMapper.selectById(matchedUserId);
+
+        return MomentResultResponse.builder()
+                .matched(true)
+                .weekTag(snapshot.getWeekTag())
                 .matchedUserId(matchedUserId)
                 .nickname(matchedUser != null ? matchedUser.getNickname() : "未知用户")
                 .avatarUrl(matchedUser != null ? matchedUser.getAvatarUrl() : null)

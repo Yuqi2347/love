@@ -1,0 +1,1357 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Campal Showcase · 心动时刻</title>
+    <style>
+      :root {
+        --bg: #f7f0f8;
+        --text: #241827;
+        --muted: #705f73;
+        --line: rgba(99, 73, 108, 0.12);
+        --panel: rgba(255, 255, 255, 0.76);
+        --panel-strong: rgba(255, 255, 255, 0.9);
+        --rose: #eb6d8f;
+        --rose-deep: #d94e78;
+        --violet: #8261e3;
+        --violet-deep: #6641ca;
+        --peach: #f1a06a;
+        --blue: #5e8ef4;
+        --gold: #f1c16d;
+        --shadow: 0 28px 82px rgba(104, 74, 103, 0.14);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at 10% 10%, rgba(241, 160, 106, 0.24), transparent 22%),
+          radial-gradient(circle at 90% 10%, rgba(130, 97, 227, 0.2), transparent 24%),
+          radial-gradient(circle at 50% 40%, rgba(235, 109, 143, 0.08), transparent 34%),
+          linear-gradient(180deg, #fff9fd 0%, #f7eef8 42%, #efe7f2 100%);
+      }
+
+      .page {
+        width: 1480px;
+        margin: 0 auto;
+        padding: 42px 40px 72px;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid rgba(255, 255, 255, 0.84);
+        border-radius: 30px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.1fr 0.9fr;
+        gap: 24px;
+      }
+
+      .hero-main {
+        padding: 34px 36px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero-main::after {
+        content: "";
+        position: absolute;
+        right: -60px;
+        top: -80px;
+        width: 240px;
+        height: 240px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(235, 109, 143, 0.22), transparent 70%);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.76);
+        color: var(--rose-deep);
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+      }
+
+      h1 {
+        margin: 18px 0 12px;
+        font-size: 54px;
+        line-height: 1.08;
+      }
+
+      .accent {
+        color: var(--rose-deep);
+      }
+
+      .lead {
+        margin: 0;
+        max-width: 760px;
+        color: var(--muted);
+        font-size: 18px;
+        line-height: 1.85;
+      }
+
+      .hero-points {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 24px;
+      }
+
+      .hero-point {
+        padding: 18px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.74);
+        border: 1px solid var(--line);
+      }
+
+      .hero-point strong {
+        display: block;
+        margin-bottom: 8px;
+      }
+
+      .hero-point span {
+        display: block;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .hero-side {
+        padding: 28px;
+        display: grid;
+        gap: 16px;
+      }
+
+      .aside-block {
+        padding: 20px 22px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid var(--line);
+      }
+
+      .aside-block strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 16px;
+      }
+
+      .aside-block span {
+        display: block;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.75;
+      }
+
+      .digits {
+        display: flex;
+        gap: 10px;
+        margin-top: 12px;
+      }
+
+      .digits b {
+        min-width: 72px;
+        padding: 14px 12px;
+        border-radius: 18px;
+        text-align: center;
+        color: var(--rose-deep);
+        font-size: 26px;
+        background: linear-gradient(135deg, rgba(235, 109, 143, 0.12), rgba(130, 97, 227, 0.12));
+      }
+
+      .section {
+        margin-top: 26px;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 0 0 14px;
+      }
+
+      .section-title h2 {
+        margin: 0;
+        font-size: 28px;
+      }
+
+      .section-title span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .phase-grid {
+        display: grid;
+        grid-template-columns: 0.86fr 1.14fr;
+        gap: 24px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 18px;
+      }
+
+      .module {
+        padding: 24px;
+      }
+
+      .module h3 {
+        margin: 0 0 8px;
+        font-size: 22px;
+      }
+
+      .module p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .progress-shell {
+        margin-top: 16px;
+        padding: 16px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.78);
+        border: 1px solid var(--line);
+      }
+
+      .progress-row {
+        display: flex;
+        justify-content: space-between;
+        margin-bottom: 10px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .bar {
+        height: 12px;
+        border-radius: 999px;
+        background: rgba(212, 198, 215, 0.6);
+        overflow: hidden;
+      }
+
+      .bar > i {
+        display: block;
+        width: 72%;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--rose), var(--violet));
+      }
+
+      .step-tabs {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .step-tab {
+        padding: 14px 12px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid var(--line);
+        text-align: center;
+      }
+
+      .step-tab strong {
+        display: block;
+        color: var(--rose-deep);
+        font-size: 13px;
+      }
+
+      .step-tab span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .question-grid {
+        margin-top: 16px;
+        display: grid;
+        gap: 12px;
+      }
+
+      .question {
+        padding: 16px 18px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid var(--line);
+      }
+
+      .question strong {
+        display: block;
+        margin-bottom: 10px;
+      }
+
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .chip {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(130, 97, 227, 0.1);
+        color: var(--violet-deep);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .chip.active {
+        background: linear-gradient(135deg, var(--rose), var(--rose-deep));
+        color: #fff;
+      }
+
+      .launch {
+        margin-top: 16px;
+        padding: 15px 18px;
+        border-radius: 18px;
+        color: #fff;
+        text-align: center;
+        font-weight: 700;
+        background: linear-gradient(135deg, var(--rose), var(--violet));
+      }
+
+      .waiting {
+        padding: 28px;
+      }
+
+      .waiting-top {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 16px;
+      }
+
+      .orbit-box {
+        min-height: 240px;
+        position: relative;
+        border-radius: 26px;
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0.8), rgba(250, 241, 249, 0.92));
+        border: 1px solid var(--line);
+        overflow: hidden;
+      }
+
+      .orbit,
+      .orbit2,
+      .orbit3 {
+        position: absolute;
+        inset: 50%;
+        border-radius: 999px;
+        border: 1px dashed rgba(130, 97, 227, 0.18);
+        transform: translate(-50%, -50%);
+      }
+
+      .orbit { width: 220px; height: 220px; }
+      .orbit2 { width: 160px; height: 160px; }
+      .orbit3 { width: 104px; height: 104px; }
+
+      .signal,
+      .signal-b,
+      .signal-c {
+        position: absolute;
+        border-radius: 999px;
+      }
+
+      .signal {
+        left: 19%;
+        top: 32%;
+        width: 22px;
+        height: 22px;
+        background: var(--rose);
+        box-shadow: 0 0 0 10px rgba(235, 109, 143, 0.14);
+      }
+
+      .signal-b {
+        right: 20%;
+        top: 42%;
+        width: 18px;
+        height: 18px;
+        background: var(--blue);
+        box-shadow: 0 0 0 10px rgba(94, 142, 244, 0.12);
+      }
+
+      .signal-c {
+        left: 46%;
+        bottom: 18%;
+        width: 16px;
+        height: 16px;
+        background: var(--peach);
+        box-shadow: 0 0 0 8px rgba(241, 160, 106, 0.12);
+      }
+
+      .center-heart {
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        transform: translate(-50%, -50%);
+        width: 88px;
+        height: 88px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        background: linear-gradient(135deg, rgba(235, 109, 143, 0.2), rgba(130, 97, 227, 0.2));
+        color: var(--rose-deep);
+        font-size: 38px;
+      }
+
+      .waiting-copy,
+      .waiting-stats,
+      .waiting-pipeline {
+        padding: 20px 22px;
+        border-radius: 24px;
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid var(--line);
+      }
+
+      .waiting-copy h3,
+      .waiting-stats h3,
+      .waiting-pipeline h3 {
+        margin: 0 0 8px;
+        font-size: 22px;
+      }
+
+      .waiting-copy p,
+      .waiting-stats p,
+      .waiting-pipeline p,
+      .waiting-pipeline li,
+      .waiting-stats li {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .inline-stats {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        margin-top: 14px;
+      }
+
+      .inline-stats div {
+        padding: 14px 12px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.84);
+        text-align: center;
+      }
+
+      .inline-stats b {
+        display: block;
+        color: var(--rose-deep);
+        font-size: 26px;
+      }
+
+      .inline-stats span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .pipeline-list,
+      .screen-grid,
+      .prep-grid,
+      .envelope-grid {
+        display: grid;
+        gap: 14px;
+      }
+
+      .pipeline-list {
+        margin-top: 14px;
+      }
+
+      .pipeline-list li {
+        list-style: none;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.84);
+        border: 1px solid var(--line);
+      }
+
+      .results {
+        padding: 28px;
+      }
+
+      .tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 18px;
+      }
+
+      .tab {
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .tab.active {
+        color: #fff;
+        border-color: transparent;
+        background: linear-gradient(135deg, var(--rose), var(--violet));
+      }
+
+      .screen-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .screen {
+        padding: 22px;
+        border-radius: 26px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid var(--line);
+      }
+
+      .screen-num {
+        display: inline-flex;
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(130, 97, 227, 0.1);
+        color: var(--violet-deep);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .screen h3 {
+        margin: 14px 0 10px;
+        font-size: 22px;
+      }
+
+      .screen p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .role-card {
+        margin-top: 14px;
+        padding: 18px;
+        border-radius: 22px;
+        background: linear-gradient(135deg, rgba(235, 109, 143, 0.1), rgba(241, 160, 106, 0.1));
+      }
+
+      .role-top {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 14px;
+      }
+
+      .identity-mark {
+        min-width: 104px;
+        padding: 12px 14px;
+        border-radius: 20px;
+        text-align: center;
+        background: linear-gradient(135deg, rgba(235, 109, 143, 0.12), rgba(130, 97, 227, 0.12));
+        border: 1px solid rgba(217, 78, 120, 0.12);
+      }
+
+      .identity-mark strong {
+        display: block;
+        color: var(--rose-deep);
+        font-size: 24px;
+        line-height: 1;
+      }
+
+      .identity-mark span {
+        display: block;
+        margin-top: 8px;
+        color: var(--muted);
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      .role-meta strong {
+        display: block;
+        font-size: 24px;
+      }
+
+      .role-meta span {
+        display: block;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .tag-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-top: 14px;
+      }
+
+      .tag {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(130, 97, 227, 0.1);
+        color: var(--violet-deep);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .score {
+        margin-top: 14px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        color: var(--rose-deep);
+        font-weight: 700;
+        background: rgba(255, 255, 255, 0.84);
+      }
+
+      .insight {
+        margin-top: 14px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .insight div {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.84);
+        border: 1px solid var(--line);
+      }
+
+      .insight strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 15px;
+      }
+
+      .decision {
+        margin-top: 14px;
+        padding: 16px 18px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.84);
+        border: 1px solid var(--line);
+      }
+
+      .decision strong {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--rose-deep);
+      }
+
+      .decision span {
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .buttons {
+        display: flex;
+        gap: 10px;
+        margin-top: 14px;
+      }
+
+      .btn {
+        flex: 1;
+        padding: 13px 16px;
+        border-radius: 16px;
+        text-align: center;
+        font-weight: 700;
+      }
+
+      .btn.primary {
+        color: #fff;
+        background: linear-gradient(135deg, var(--rose), var(--rose-deep));
+      }
+
+      .btn.secondary {
+        color: var(--violet-deep);
+        background: rgba(130, 97, 227, 0.1);
+      }
+
+      .prep-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin-top: 16px;
+      }
+
+      .prep {
+        padding: 18px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.84);
+        border: 1px solid var(--line);
+      }
+
+      .prep strong {
+        display: block;
+        margin-bottom: 8px;
+      }
+
+      .prep span {
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .envelope-grid {
+        grid-template-columns: 0.75fr 1.25fr;
+        margin-top: 18px;
+      }
+
+      .success-flow {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        margin: 16px 0 18px;
+      }
+
+      .mini-step {
+        padding: 14px 12px;
+        border-radius: 18px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid var(--line);
+      }
+
+      .mini-step b {
+        display: block;
+        margin-bottom: 6px;
+        color: var(--rose-deep);
+        font-size: 12px;
+        letter-spacing: 0.06em;
+      }
+
+      .mini-step span {
+        color: var(--muted);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+
+      .envelope {
+        padding: 24px;
+        min-height: 340px;
+        border-radius: 28px;
+        position: relative;
+        overflow: hidden;
+        background: linear-gradient(180deg, rgba(255,255,255,0.88), rgba(249,239,246,0.96));
+        border: 1px solid var(--line);
+      }
+
+      .envelope::before {
+        content: "";
+        position: absolute;
+        left: 50%;
+        top: 50%;
+        width: 320px;
+        height: 220px;
+        border-radius: 28px;
+        background: rgba(255,255,255,0.78);
+        border: 1px solid rgba(217, 78, 120, 0.16);
+        transform: translate(-50%, -34%);
+        box-shadow: 0 22px 50px rgba(217, 78, 120, 0.08);
+      }
+
+      .envelope::after {
+        content: "";
+        position: absolute;
+        inset: 18px;
+        border-radius: 24px;
+        border: 1px dashed rgba(217, 78, 120, 0.16);
+      }
+
+      .envelope-flap {
+        position: absolute;
+        left: 50%;
+        top: 34%;
+        width: 250px;
+        height: 140px;
+        transform: translateX(-50%);
+        clip-path: polygon(0 0, 100% 0, 50% 100%);
+        background: linear-gradient(180deg, #fce8f0, #f5dbe9);
+        border: 1px solid rgba(217, 78, 120, 0.12);
+      }
+
+      .wax {
+        position: absolute;
+        left: 50%;
+        top: 52%;
+        transform: translate(-50%, -50%);
+        width: 82px;
+        height: 82px;
+        border-radius: 999px;
+        display: grid;
+        place-items: center;
+        color: #fff;
+        font-weight: 800;
+        letter-spacing: 0.08em;
+        background: linear-gradient(135deg, var(--rose), var(--violet));
+        box-shadow: 0 16px 34px rgba(217, 78, 120, 0.24);
+      }
+
+      .env-copy {
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 24px;
+        text-align: center;
+      }
+
+      .env-copy strong {
+        display: block;
+        margin-bottom: 8px;
+        color: var(--rose-deep);
+        font-size: 22px;
+      }
+
+      .env-copy span {
+        color: var(--muted);
+        line-height: 1.7;
+      }
+
+      .sparkles {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+      }
+
+      .sparkles i {
+        position: absolute;
+        width: 8px;
+        height: 8px;
+        border-radius: 999px;
+        background: rgba(217, 78, 120, 0.26);
+        box-shadow: 0 0 0 8px rgba(217, 78, 120, 0.04);
+      }
+
+      .sparkles i:nth-child(1) { left: 16%; top: 20%; }
+      .sparkles i:nth-child(2) { right: 18%; top: 24%; background: rgba(130, 97, 227, 0.24); }
+      .sparkles i:nth-child(3) { left: 24%; bottom: 22%; background: rgba(241, 160, 106, 0.28); }
+      .sparkles i:nth-child(4) { right: 24%; bottom: 18%; }
+
+      .invite-card {
+        padding: 22px;
+        border-radius: 28px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.9), rgba(250,244,248,0.96));
+        border: 1px solid rgba(217, 78, 120, 0.14);
+        position: relative;
+        overflow: hidden;
+      }
+
+      .ribbon {
+        display: inline-flex;
+        padding: 8px 12px;
+        border-radius: 999px;
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        background: linear-gradient(135deg, var(--rose), var(--violet));
+      }
+
+      .invite-card h3 {
+        margin: 16px 0 10px;
+        font-size: 28px;
+      }
+
+      .invite-card p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .invite-lines {
+        display: grid;
+        gap: 12px;
+        margin-top: 16px;
+      }
+
+      .line {
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: rgba(255,255,255,0.84);
+        border: 1px solid var(--line);
+      }
+
+      .line strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 14px;
+        color: var(--rose-deep);
+      }
+
+      .line span {
+        color: var(--text);
+        line-height: 1.75;
+      }
+
+      .reason {
+        margin-top: 14px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: linear-gradient(135deg, rgba(130, 97, 227, 0.12), rgba(94, 142, 244, 0.1));
+        color: #49359f;
+        line-height: 1.8;
+      }
+
+      .draft-panel {
+        margin-top: 16px;
+        padding: 18px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.84);
+        border: 1px solid var(--line);
+      }
+
+      .draft-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        margin-bottom: 12px;
+      }
+
+      .draft-head strong {
+        font-size: 16px;
+      }
+
+      .draft-badge {
+        padding: 8px 12px;
+        border-radius: 999px;
+        background: rgba(235, 109, 143, 0.12);
+        color: var(--rose-deep);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .draft-steps {
+        display: grid;
+        gap: 10px;
+      }
+
+      .draft-step {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
+        padding: 12px 14px;
+        border-radius: 16px;
+        background: rgba(250, 246, 249, 0.92);
+      }
+
+      .draft-step span {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.6;
+      }
+
+      .draft-step b {
+        color: var(--violet-deep);
+        font-size: 12px;
+        letter-spacing: 0.04em;
+      }
+
+      @media (max-width: 1520px) {
+        .page {
+          width: 100%;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <article class="hero-main card">
+          <div class="eyebrow">MOMENT SHOWCASE · 心动时刻</div>
+          <h1>把一次原本会沉默消失的心动，<span class="accent">推进成更自然的真实相遇</span></h1>
+          <p class="lead">
+            心动时刻不是“更高效地恋爱”，而是帮助不善主动的人完成那一步最难的开始。
+            这张展示页不再只看结果，而是按真实前端流程拆成四段：
+            填表前、匹配中、匹配成功后的四屏，以及 AI 帮你生成专属邀约的最后承接。
+          </p>
+          <div class="hero-points">
+            <div class="hero-point">
+              <strong>匹配前</strong>
+              <span>用问卷和档案录入降低表达压力，让 AI 先理解你，而不是让你直接暴露在陌生关系里。</span>
+            </div>
+            <div class="hero-point">
+              <strong>匹配中</strong>
+              <span>把等待这件事做成“引力场调频”的感受，而不是单调的系统处理中。</span>
+            </div>
+            <div class="hero-point">
+              <strong>匹配后</strong>
+              <span>从揭晓、理解、决定，到 AI 帮你把约会和邀约都推到可以执行的程度。</span>
+            </div>
+          </div>
+        </article>
+
+        <aside class="hero-side card">
+          <div class="aside-block">
+            <strong>本周状态</strong>
+            <span>Week 28 · 活动报名开放中</span>
+            <span>286 人已报名，预计周五中午揭晓结果</span>
+          </div>
+          <div class="aside-block">
+            <strong>倒计时</strong>
+            <div class="digits">
+              <b>02</b>
+              <b>11</b>
+              <b>48</b>
+            </div>
+            <span>用于营造“这一周的心动正在逐步接近结果”的节奏感。</span>
+          </div>
+          <div class="aside-block">
+            <strong>隐私承诺</strong>
+            <span>在双方确认前，姓名、专业等敏感身份信息保持隐藏。</span>
+            <span>这不是把人推入风险，而是先把关系放在更安全的环境里起步。</span>
+          </div>
+        </aside>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>第一阶段：匹配前，先填写心动档案</h2>
+          <span>对应真实页面：MomentEnrollView</span>
+        </div>
+
+        <div class="phase-grid">
+          <div class="stack">
+            <article class="module card">
+              <h3>“填表前”的设计目标</h3>
+              <p>
+                这里不是一个冷冰冰的问卷，而是一个让用户逐步进入状态的档案录入流程。
+                它通过阶段感、完成度和低压力提问，把“我是谁、我喜欢什么样的人、我怎么理解关系”交给系统。
+              </p>
+
+              <div class="progress-shell">
+                <div class="progress-row">
+                  <span>档案完成度 72%</span>
+                  <span>当前阶段：理想星轨</span>
+                </div>
+                <div class="bar"><i></i></div>
+                <div class="step-tabs">
+                  <div class="step-tab">
+                    <strong>01</strong>
+                    <span>自我底色</span>
+                  </div>
+                  <div class="step-tab">
+                    <strong>02</strong>
+                    <span>理想星轨</span>
+                  </div>
+                  <div class="step-tab">
+                    <strong>03</strong>
+                    <span>底层引力</span>
+                  </div>
+                </div>
+              </div>
+            </article>
+
+            <article class="module card">
+              <h3>为什么这一步重要</h3>
+              <p>
+                很多关系之所以开始不了，不是因为没有感觉，而是因为没有上下文。
+                这一步的作用就是先建立上下文，再进入匹配，而不是直接让用户面对赤裸裸的“配对结果”。
+              </p>
+              <div class="launch">确认发射档案</div>
+            </article>
+          </div>
+
+          <article class="module card">
+            <h3>展示型问卷分块</h3>
+            <p>下面这些内容不需要全部截图逐题展示，但建议在长图里保留“系统正在理解用户”的感觉。</p>
+            <div class="question-grid">
+              <div class="question">
+                <strong>客观自评颜值</strong>
+                <div class="chips">
+                  <span class="chip">1</span>
+                  <span class="chip">4</span>
+                  <span class="chip active">7</span>
+                  <span class="chip">10</span>
+                </div>
+              </div>
+              <div class="question">
+                <strong>期望捕获的性别 / 年龄接受区间</strong>
+                <div class="chips">
+                  <span class="chip active">男生</span>
+                  <span class="chip">女生</span>
+                  <span class="chip active">大 0-2 岁</span>
+                  <span class="chip">年龄无所谓</span>
+                </div>
+              </div>
+              <div class="question">
+                <strong>关系预期与底层价值观</strong>
+                <div class="chips">
+                  <span class="chip active">慢热但真诚</span>
+                  <span class="chip">能聊很深的话题</span>
+                  <span class="chip active">不喜欢强社交型关系</span>
+                  <span class="chip">愿意花时间培养熟悉感</span>
+                </div>
+              </div>
+              <div class="question">
+                <strong>引力场策略</strong>
+                <div class="chips">
+                  <span class="chip active">接受适度放宽阈值</span>
+                  <span class="chip">更偏向绝对高匹配</span>
+                </div>
+              </div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>第二阶段：匹配中，等待不是空白页</h2>
+          <span>对应真实页面：MomentView 的 WAITING / 倒计时态</span>
+        </div>
+
+        <article class="waiting card">
+          <div class="waiting-top">
+            <div class="orbit-box">
+              <div class="orbit"></div>
+              <div class="orbit2"></div>
+              <div class="orbit3"></div>
+              <div class="signal"></div>
+              <div class="signal-b"></div>
+              <div class="signal-c"></div>
+              <div class="center-heart">♡</div>
+            </div>
+            <div class="waiting-copy">
+              <h3>宇宙正在为你调频…</h3>
+              <p>
+                你的心动档案已经接入引力场，系统正在综合表达、偏好与底层判断，寻找那个真正契合你的人。
+                这个阶段的重点是把“等待匹配”做成情绪仍然被承接的页面，而不是一句系统处理中。
+              </p>
+              <div class="inline-stats">
+                <div>
+                  <b>286</b>
+                  <span>本周已报名</span>
+                </div>
+                <div>
+                  <b>49</b>
+                  <span>进入高契合池</span>
+                </div>
+                <div>
+                  <b>Fri</b>
+                  <span>结果揭晓</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="phase-grid" style="margin-top: 18px;">
+            <div class="waiting-stats">
+              <h3>页面要传达的感受</h3>
+              <p>
+                用户不是在“等算法跑完”，而是在等待某种可能的相遇逐渐成形。
+                这种设计会让结果页出现时，用户更愿意继续往下看，而不是只把它当作一个通知页。
+              </p>
+            </div>
+            <div class="waiting-pipeline">
+              <h3>系统此时在做什么</h3>
+              <ul class="pipeline-list">
+                <li>匿名档案进入本周引力场</li>
+                <li>AI 进行多维匹配与关系理解</li>
+                <li>生成缘分标题、解释文本与后续建议</li>
+                <li>等待管理员或系统正式揭晓结果</li>
+              </ul>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>第三阶段：匹配成功后，不是只弹出一个名字</h2>
+          <span>对应真实页面：MomentResultView 四屏结构</span>
+        </div>
+
+        <article class="results card">
+          <div class="tabs">
+            <span class="tab active">心动揭晓</span>
+            <span class="tab active">你们之间</span>
+            <span class="tab active">关于 TA</span>
+            <span class="tab active">去见 TA</span>
+          </div>
+
+          <div class="success-flow">
+            <div class="mini-step">
+              <b>STEP 1</b>
+              <span>先揭晓结果，但仍保留一点边界和想象空间。</span>
+            </div>
+            <div class="mini-step">
+              <b>STEP 2</b>
+              <span>解释你们为什么会互相靠近，而不是只给一个分数。</span>
+            </div>
+            <div class="mini-step">
+              <b>STEP 3</b>
+              <span>给出 AI 关系提示，帮助用户判断要不要继续。</span>
+            </div>
+            <div class="mini-step">
+              <b>STEP 4</b>
+              <span>把第一次见面的内容、语气和邀请动作真正准备好。</span>
+            </div>
+          </div>
+
+          <div class="screen-grid">
+            <section class="screen">
+              <span class="screen-num">SCREEN 01</span>
+              <h3>心动揭晓</h3>
+              <p>先不是展示一张真实头像，而是先给出足够有吸引力、但仍保留想象空间的匹配对象信息。</p>
+
+              <div class="role-card">
+                <div class="role-top">
+                  <div class="role-meta">
+                    <strong>夏禾</strong>
+                    <span>22 岁 · 新闻传播学院 · 大三</span>
+                    <span>喜欢摄影、看展、沿海散步、深夜电台</span>
+                  </div>
+                  <div class="identity-mark">
+                    <strong>93%</strong>
+                    <span>匿名揭晓前的<br />关系信号卡</span>
+                  </div>
+                </div>
+                <div class="score">综合匹配度 93% · 缘分标题：刚好同频</div>
+                <div class="tag-row">
+                  <span class="tag">INFJ</span>
+                  <span class="tag">慢热但细腻</span>
+                  <span class="tag">关系推进偏自然</span>
+                </div>
+              </div>
+            </section>
+
+            <section class="screen">
+              <span class="screen-num">SCREEN 02</span>
+              <h3>你们之间</h3>
+              <p>系统要解释的不是“为什么分高”，而是“为什么你们可能真的会聊得来”。</p>
+              <div class="insight">
+                <div>
+                  <strong>是什么让你们靠近</strong>
+                  你们都更偏爱低压、真实、有情绪余地的相处方式，不喜欢高密度表演型社交。
+                </div>
+                <div>
+                  <strong>在一起会是什么感觉</strong>
+                  不是一下子很热闹，而是先有一种安静默契，再慢慢进入更稳定的靠近。
+                </div>
+                <div>
+                  <strong>有件事要提前知道</strong>
+                  TA 对真诚度和边界感很敏感，比起套路，更容易被认真对待打动。
+                </div>
+              </div>
+            </section>
+
+            <section class="screen">
+              <span class="screen-num">SCREEN 03</span>
+              <h3>关于 TA</h3>
+              <p>第三屏的重点不是推动马上见面，而是让用户觉得“我现在知道该怎么判断我要不要往前走一步”。</p>
+              <div class="decision">
+                <strong>AI 给出的关系提示</strong>
+                <span>TA 不是高反馈型热场选手，但如果你给出稳定而不冒犯的信号，关系很容易在几次自然互动后变得更近。</span>
+              </div>
+              <div class="buttons">
+                <div class="btn primary">心动，约起来</div>
+                <div class="btn secondary">先关注，慢慢来</div>
+              </div>
+            </section>
+
+            <section class="screen">
+              <span class="screen-num">SCREEN 04</span>
+              <h3>去见 TA</h3>
+              <p>一旦双方都愿意往前一步，系统不只告诉你“成功了”，而是给出可执行的见面方案。</p>
+              <div class="prep-grid">
+                <div class="prep">
+                  <strong>约会方式推荐</strong>
+                  <span>先去看校外小型摄影展，再沿海边散步，最后找一家灯光安静的咖啡馆坐一会儿。</span>
+                </div>
+                <div class="prep">
+                  <strong>破冰话题</strong>
+                  <span>“如果最近只能留住一个傍晚，你会选哪一种光线？”</span>
+                </div>
+                <div class="prep">
+                  <strong>打扮建议</strong>
+                  <span>简单、松弛、留一点个人风格感，不用太正式，要像你本来就会出现在这种场景里。</span>
+                </div>
+                <div class="prep">
+                  <strong>心理准备</strong>
+                  <span>别把第一次见面当作立刻证明什么。让真实对话先发生，比急着推进更重要。</span>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <div class="envelope-grid">
+            <section class="envelope">
+              <div class="sparkles">
+                <i></i>
+                <i></i>
+                <i></i>
+                <i></i>
+              </div>
+              <div class="envelope-flap"></div>
+              <div class="wax">CL</div>
+              <div class="env-copy">
+                <strong>专属心动邀约</strong>
+                <span>这是“去见 TA”之后最有记忆点的一幕。<br />不是普通按钮，而是一封被 AI 帮你准备好的专属邀请函。</span>
+              </div>
+            </section>
+
+            <section class="invite-card">
+              <span class="ribbon">🌸 AI 自动生成的一对一邀约</span>
+              <h3>周五傍晚一起去看海边日落吗？</h3>
+              <p>
+                这张卡片承接的不是抽象的“约会建议”，而是已经可以发给对方、可以落地执行的一次专属邀约。
+                它把前面 AI 给出的理解、场景和时间建议，收束成真正能发生的下一步。
+              </p>
+
+              <div class="draft-panel">
+                <div class="draft-head">
+                  <strong>AI 邀约生成过程</strong>
+                  <span class="draft-badge">正在润色你的第一句话</span>
+                </div>
+                <div class="draft-steps">
+                  <div class="draft-step">
+                    <span>读取你们的共同兴趣和关系节奏，避免文案太冒进。</span>
+                    <b>COMMON GROUND</b>
+                  </div>
+                  <div class="draft-step">
+                    <span>根据 TA 的偏好，把“摄影展 + 海边散步”组合成更自然的邀约路线。</span>
+                    <b>SCENE BUILDING</b>
+                  </div>
+                  <div class="draft-step">
+                    <span>把邀请语气控制在轻松、真诚、可被接受的范围内，降低第一次开口的压力。</span>
+                    <b>TONE TUNING</b>
+                  </div>
+                </div>
+              </div>
+
+              <div class="invite-lines">
+                <div class="line">
+                  <strong>发起人</strong>
+                  <span>你</span>
+                </div>
+                <div class="line">
+                  <strong>受邀人</strong>
+                  <span>夏禾</span>
+                </div>
+                <div class="line">
+                  <strong>约会方式</strong>
+                  <span>摄影展 + 海边散步 + 咖啡馆慢聊</span>
+                </div>
+                <div class="line">
+                  <strong>推荐时间</strong>
+                  <span>周五 18:20 - 21:00</span>
+                </div>
+                <div class="line">
+                  <strong>AI 生成的邀约文案</strong>
+                  <span>“上次看到你也喜欢拍黄昏和城市边缘的光，如果你愿意，这周五可以一起去看展，然后顺路去海边走走。”</span>
+                </div>
+              </div>
+
+              <div class="reason">
+                这个阶段最应该被展示出来的亮点是：Campal 并没有在“匹配成功”就停止，
+                而是继续把 AI 用在关系推进上，帮助用户从“知道 TA 是谁”走到“真的发出第一条邀请”。
+              </div>
+            </section>
+          </div>
+        </article>
+      </section>
+    </main>
+  </body>
+</html>

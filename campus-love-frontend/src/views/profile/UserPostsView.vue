@@ -37,13 +37,13 @@
         </div>
         <div class="feed-content">
           <template v-if="shouldCollapse(post.content)">
-            <span v-if="isExpanded(post.id)">{{ post.content }}</span>
-            <span v-else>{{ getDisplayContent(post.content, post.id) }}</span>
+            <span v-if="isExpanded(post.id)" class="feed-text">{{ post.content }}</span>
+            <span v-else class="feed-text">{{ getDisplayContent(post.content, post.id) }}</span>
             <button class="expand-btn" @click="toggleExpand(post.id)">
               {{ isExpanded(post.id) ? '收起' : '显示更多' }}
             </button>
           </template>
-          <span v-else>{{ post.content }}</span>
+          <span v-else class="feed-text">{{ post.content }}</span>
         </div>
         <div v-if="post.images" class="feed-images" @click.stop>
           <img

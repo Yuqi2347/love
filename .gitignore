@@ -66,6 +66,8 @@ frpc.toml
 # === Internal product / development docs (keep local, don't publish) ===
 /docs/*
 !/docs/vision.md
+!/docs/showcase/
+!/docs/showcase/**
 /mission.md
 /V1.2.0_DATE_INVITATION.md
 /V1.2.0_INVITATION_MODULE.md

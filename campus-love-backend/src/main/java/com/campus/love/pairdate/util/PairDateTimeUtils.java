@@ -8,8 +8,8 @@ import java.time.ZoneId;
 import java.time.temporal.WeekFields;
 
 /**
- * weekTag 为 ISO 周（与 {@link com.campus.love.moment.service.MomentService#getCurrentWeekTag} 一致），
- * 放榜日为该周周五，时间格从周六起算。
+ * weekTag 字符串为「周日为首日、最少 1 天即算第一周」的周序号（与 {@link com.campus.love.moment.service.MomentService#getCurrentWeekTag} 一致），
+ * 解析周界时使用 {@link WeekFields#ISO} 的周一锚点推算该周周五；放榜日为该周周五，时间格从上海时区起算。
  */
 public final class PairDateTimeUtils {
 

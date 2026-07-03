@@ -142,4 +142,20 @@ public class AdminController {
         int count = adminService.batchRegenerateMissing();
         return Result.success(count);
     }
+
+    @Operation(summary = "置顶帖子")
+    @PostMapping("/feed/pin/{postId}")
+    public Result<Void> pinPost(@PathVariable Long postId) {
+        requireAdmin();
+        adminService.pinPost(postId, CurrentUser.getId());
+        return Result.success();
+    }
+
+    @Operation(summary = "取消置顶帖子")
+    @PostMapping("/feed/unpin/{postId}")
+    public Result<Void> unpinPost(@PathVariable Long postId) {
+        requireAdmin();
+        adminService.unpinPost(postId);
+        return Result.success();
+    }
 }

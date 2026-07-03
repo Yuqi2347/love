@@ -1,0 +1,596 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Campal Showcase · 邀约</title>
+    <style>
+      :root {
+        --bg: #fbf6ef;
+        --panel: rgba(255, 255, 255, 0.72);
+        --panel-strong: rgba(255, 255, 255, 0.9);
+        --line: rgba(90, 68, 45, 0.12);
+        --text: #2a1f17;
+        --muted: #725f51;
+        --warm: #f06f4f;
+        --warm-deep: #dc5331;
+        --gold: #efb24f;
+        --pink: #ef709d;
+        --blue: #4f7df0;
+        --green: #3ca86a;
+        --shadow: 0 24px 70px rgba(103, 69, 31, 0.12);
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+        color: var(--text);
+        background:
+          radial-gradient(circle at top left, rgba(255, 204, 148, 0.5), transparent 28%),
+          radial-gradient(circle at 85% 12%, rgba(247, 165, 197, 0.32), transparent 25%),
+          linear-gradient(180deg, #fff9f2 0%, #f8f2ea 42%, #f4ede5 100%);
+      }
+
+      .page {
+        width: 1480px;
+        margin: 0 auto;
+        padding: 44px 42px 60px;
+      }
+
+      .hero {
+        display: grid;
+        grid-template-columns: 1.2fr 0.8fr;
+        gap: 26px;
+        align-items: stretch;
+      }
+
+      .card {
+        background: var(--panel);
+        border: 1px solid rgba(255, 255, 255, 0.76);
+        border-radius: 28px;
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+      }
+
+      .hero-main {
+        padding: 34px 36px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .hero-main::after {
+        content: "";
+        position: absolute;
+        right: -80px;
+        top: -80px;
+        width: 240px;
+        height: 240px;
+        border-radius: 999px;
+        background: radial-gradient(circle, rgba(240, 111, 79, 0.26), transparent 70%);
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        padding: 10px 16px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.7);
+        color: var(--warm-deep);
+        font-size: 14px;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+      }
+
+      h1 {
+        margin: 18px 0 12px;
+        font-size: 54px;
+        line-height: 1.08;
+      }
+
+      .accent {
+        color: var(--warm-deep);
+      }
+
+      .lead {
+        margin: 0;
+        max-width: 760px;
+        font-size: 18px;
+        line-height: 1.8;
+        color: var(--muted);
+      }
+
+      .hero-points {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 14px;
+        margin-top: 26px;
+      }
+
+      .hero-point {
+        padding: 18px 18px 16px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.72);
+        border: 1px solid var(--line);
+      }
+
+      .hero-point strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 15px;
+      }
+
+      .hero-point span {
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .hero-side {
+        padding: 28px;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+      }
+
+      .stat-grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+      }
+
+      .stat {
+        padding: 20px;
+        border-radius: 22px;
+        background: rgba(255, 255, 255, 0.8);
+        border: 1px solid var(--line);
+      }
+
+      .stat b {
+        display: block;
+        font-size: 34px;
+        color: var(--warm-deep);
+      }
+
+      .stat span {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .hint {
+        margin: 0;
+        padding: 18px 20px;
+        border-radius: 20px;
+        background: linear-gradient(135deg, rgba(240, 111, 79, 0.1), rgba(239, 112, 157, 0.1));
+        color: var(--text);
+        line-height: 1.8;
+      }
+
+      .section {
+        margin-top: 26px;
+      }
+
+      .section-title {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        margin: 0 0 14px;
+      }
+
+      .section-title h2 {
+        margin: 0;
+        font-size: 28px;
+      }
+
+      .section-title span {
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .toolbar {
+        padding: 18px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+
+      .pill {
+        padding: 11px 16px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.82);
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .pill.active {
+        color: #fff;
+        background: linear-gradient(135deg, var(--warm), var(--warm-deep));
+        border-color: transparent;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 24px;
+      }
+
+      .stack {
+        display: grid;
+        gap: 18px;
+      }
+
+      .invite-card {
+        padding: 22px 24px;
+        position: relative;
+        overflow: hidden;
+      }
+
+      .invite-card::before {
+        content: "";
+        position: absolute;
+        left: 0;
+        top: 26px;
+        width: 6px;
+        height: 84px;
+        border-radius: 0 12px 12px 0;
+        background: var(--warm);
+      }
+
+      .invite-card.private::before {
+        background: linear-gradient(180deg, var(--pink), #d94c7d);
+      }
+
+      .invite-top {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 14px;
+      }
+
+      .badge-row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+
+      .badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 12px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #fff;
+      }
+
+      .badge.type {
+        background: linear-gradient(135deg, #ff9b60, #ef6f4f);
+      }
+
+      .badge.private {
+        background: linear-gradient(135deg, #ef709d, #cb5dff);
+      }
+
+      .badge.status {
+        color: var(--green);
+        background: rgba(60, 168, 106, 0.12);
+      }
+
+      .badge.wait {
+        color: var(--blue);
+        background: rgba(79, 125, 240, 0.12);
+      }
+
+      .title {
+        margin: 16px 0 8px;
+        font-size: 28px;
+      }
+
+      .desc {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .meta {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        margin-top: 16px;
+      }
+
+      .meta span {
+        padding: 9px 12px;
+        border-radius: 999px;
+        background: rgba(255, 255, 255, 0.75);
+        border: 1px solid var(--line);
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .footer {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 18px;
+        margin-top: 18px;
+      }
+
+      .progress {
+        flex: 1;
+      }
+
+      .progress strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 14px;
+      }
+
+      .bar {
+        height: 10px;
+        border-radius: 999px;
+        background: rgba(224, 206, 187, 0.6);
+        overflow: hidden;
+      }
+
+      .bar > i {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: linear-gradient(90deg, var(--gold), var(--warm));
+      }
+
+      .urgency {
+        padding: 10px 14px;
+        border-radius: 999px;
+        color: #fff;
+        background: linear-gradient(135deg, #ff9861, #ff5f4d);
+        font-size: 12px;
+        font-weight: 700;
+      }
+
+      .mini-block {
+        padding: 22px 24px;
+      }
+
+      .mini-block h3 {
+        margin: 0 0 8px;
+        font-size: 22px;
+      }
+
+      .mini-block p {
+        margin: 0;
+        color: var(--muted);
+        line-height: 1.8;
+      }
+
+      .radar-item,
+      .history-item {
+        margin-top: 16px;
+        padding: 18px;
+        border-radius: 20px;
+        background: rgba(255, 255, 255, 0.76);
+        border: 1px solid var(--line);
+      }
+
+      .radar-item strong,
+      .history-item strong {
+        display: block;
+        margin-bottom: 8px;
+        font-size: 16px;
+      }
+
+      .radar-item span,
+      .history-item span {
+        display: block;
+        color: var(--muted);
+        font-size: 14px;
+        line-height: 1.7;
+      }
+
+      .quote {
+        margin-top: 18px;
+        padding: 18px 20px;
+        border-radius: 22px;
+        background: linear-gradient(135deg, rgba(240, 111, 79, 0.14), rgba(239, 178, 79, 0.14));
+        color: #57311f;
+        line-height: 1.8;
+      }
+    </style>
+  </head>
+  <body>
+    <main class="page">
+      <section class="hero">
+        <article class="hero-main card">
+          <div class="eyebrow">INVITE SHOWCASE · 同行邀约</div>
+          <h1>让“我想去”，更容易变成<span class="accent">“我们一起去”</span></h1>
+          <p class="lead">
+            邀约不是简单的活动发布页。它解决的是校园里最真实的社交困境之一：
+            你明明有想做的事，却没有一个天然的圈子可用。Campal 想把这一步变成可被回应的连接入口。
+          </p>
+          <div class="hero-points">
+            <div class="hero-point">
+              <strong>公共邀约</strong>
+              <span>把共同兴趣先暴露出来，让陌生人也能因为同一个想法聚到一起。</span>
+            </div>
+            <div class="hero-point">
+              <strong>私密心动邀约</strong>
+              <span>让两个人的靠近不必从生硬开场开始，而是从一张专属邀请卡进入。</span>
+            </div>
+            <div class="hero-point">
+              <strong>等待雷达</strong>
+              <span>如果你现在没有合适活动，也可以先留下偏好，等匹配的人主动靠近。</span>
+            </div>
+          </div>
+        </article>
+
+        <aside class="hero-side card">
+          <div class="stat-grid">
+            <div class="stat">
+              <b>128</b>
+              <span>本周公开邀约</span>
+            </div>
+            <div class="stat">
+              <b>32</b>
+              <span>已成行场次</span>
+            </div>
+            <div class="stat">
+              <b>4.8</b>
+              <span>平均社交引力值</span>
+            </div>
+            <div class="stat">
+              <b>18</b>
+              <span>等待雷达在线</span>
+            </div>
+          </div>
+          <p class="hint">
+            对外展示重点不是“有一个活动系统”，而是这套机制如何服务那些没有现成社交圈、
+            但又确实想发起真实连接的人。
+          </p>
+        </aside>
+      </section>
+
+      <section class="section">
+        <div class="section-title">
+          <h2>邀约列表如何展示真实社交机会</h2>
+          <span>基于前端真实结构重构的展示稿</span>
+        </div>
+        <div class="toolbar card">
+          <span class="pill active">公共邀约</span>
+          <span class="pill">与我相关</span>
+          <span class="pill">我发起的</span>
+          <span class="pill">我加入的</span>
+          <span class="pill">推荐</span>
+          <span class="pill">近一周内</span>
+        </div>
+      </section>
+
+      <section class="section grid">
+        <div class="stack">
+          <article class="invite-card card">
+            <div class="invite-top">
+              <div class="badge-row">
+                <span class="badge type">夜跑同行</span>
+              </div>
+              <span class="badge status">报名中</span>
+            </div>
+            <h3 class="title">南区操场 8 公里夜跑局</h3>
+            <p class="desc">
+              想找几个配速 6'30 左右的同学一起跑，结束后可以顺路去买夜宵。
+              不要求认识，主要是别再一个人鸽自己。
+            </p>
+            <div class="meta">
+              <span>发起人：林川 · 计算机 22 级</span>
+              <span>周三 20:10 - 21:30</span>
+              <span>南区操场东门集合</span>
+            </div>
+            <div class="footer">
+              <div class="progress">
+                <strong>4 / 6 人已加入</strong>
+                <div class="bar"><i style="width: 67%"></i></div>
+              </div>
+              <span class="urgency">急需同行</span>
+            </div>
+          </article>
+
+          <article class="invite-card private card">
+            <div class="invite-top">
+              <div class="badge-row">
+                <span class="badge private">心动专属</span>
+              </div>
+              <span class="badge wait">等待回应</span>
+            </div>
+            <h3 class="title">周五晚风散步邀请</h3>
+            <p class="desc">
+              “上次在 Moment 里聊到你也喜欢海边和摄影，如果你愿意，
+              这周五可以一起去看日落。” 这类私密邀约让靠近不必从生硬开场开始。
+            </p>
+            <div class="meta">
+              <span>发起人：周沐</span>
+              <span>目标对象：夏禾</span>
+              <span>周五 18:20 · 海边栈道</span>
+            </div>
+            <div class="footer">
+              <div class="progress">
+                <strong>1v1 专属邀约</strong>
+                <div class="bar"><i style="width: 100%; background: linear-gradient(90deg, #ef709d, #cb5dff)"></i></div>
+              </div>
+            </div>
+          </article>
+
+          <article class="invite-card card">
+            <div class="invite-top">
+              <div class="badge-row">
+                <span class="badge type" style="background: linear-gradient(135deg, #4f7df0, #5fa8ff)">看展搭子</span>
+              </div>
+              <span class="badge status">即将满员</span>
+            </div>
+            <h3 class="title">周末去看新媒体艺术展</h3>
+            <p class="desc">
+              已经买好双人学生票，想再拼两位一起去。看展结束可以顺路咖啡馆坐一会儿，
+              更适合第一次见面不想太有压力的人。
+            </p>
+            <div class="meta">
+              <span>发起人：顾迟 · 设计学院</span>
+              <span>周六 14:30 - 17:10</span>
+              <span>市美术馆 A 厅</span>
+            </div>
+            <div class="footer">
+              <div class="progress">
+                <strong>3 / 4 人已加入 · 社交评分 4.9</strong>
+                <div class="bar"><i style="width: 76%"></i></div>
+              </div>
+            </div>
+          </article>
+        </div>
+
+        <div class="stack">
+          <article class="mini-block card">
+            <h3>等待雷达</h3>
+            <p>不是每个人都想主动发活动，也不是每次都有明确计划。等待雷达让用户先留下偏好，把“我想有人一起做这类事”持续挂在系统里。</p>
+            <div class="radar-item">
+              <strong>苏青 · 已开启等待</strong>
+              <span>偏好：图书馆自习 / 校园散步 / 夜晚咖啡馆</span>
+              <span>时间：本周三至周五 19:00 后</span>
+            </div>
+            <div class="radar-item">
+              <strong>陆野 · 自动接受开启</strong>
+              <span>偏好：羽毛球 / 吃宵夜 / 音乐节</span>
+              <span>说明：一旦匹配到同方向邀约，可以直接上车</span>
+            </div>
+          </article>
+
+          <article class="mini-block card">
+            <h3>历史与引力值</h3>
+            <p>邀约不是孤立动作。历史记录、成行次数和社交评分会慢慢沉淀出“这个人发起活动是否靠谱”的信号。</p>
+            <div class="history-item">
+              <strong>近一月成行 6 次</strong>
+              <span>最近一场：周日清晨骑行 + 早餐</span>
+            </div>
+            <div class="history-item">
+              <strong>平均引力值 4.8</strong>
+              <span>来自 17 次真实活动后的双向评价</span>
+            </div>
+          </article>
+
+          <article class="mini-block card">
+            <h3>这个模块想表达什么</h3>
+            <p>
+              邀约最重要的不是“发帖”，而是把原本依赖熟人圈子的社交机会，变成一个任何人都能发起、任何人都能回应的开放入口。
+            </p>
+            <div class="quote">
+              对外讲法建议：<br />
+              “Campal 试图让那些没有现成圈子的人，也拥有发起真实连接的能力。”
+            </div>
+          </article>
+        </div>
+      </section>
+    </main>
+  </body>
+</html>

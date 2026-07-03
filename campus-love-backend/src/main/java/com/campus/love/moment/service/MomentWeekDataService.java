@@ -53,8 +53,9 @@ public class MomentWeekDataService {
         if (!resultIds.isEmpty()) {
             matchResultContentMapper.delete(new LambdaQueryWrapper<MomentMatchResultContent>()
                     .in(MomentMatchResultContent::getMatchResultId, resultIds));
-            matchConfirmMapper.delete(new LambdaQueryWrapper<MomentMatchConfirm>()
-                    .in(MomentMatchConfirm::getMatchResultId, resultIds));
+            // 保留确认记录，以便历史查看时能看到之前的确认状态
+            // matchConfirmMapper.delete(new LambdaQueryWrapper<MomentMatchConfirm>()
+            //         .in(MomentMatchConfirm::getMatchResultId, resultIds));
             momentYueIntentMapper.delete(new LambdaQueryWrapper<MomentYueIntent>()
                     .in(MomentYueIntent::getMatchResultId, resultIds));
         }

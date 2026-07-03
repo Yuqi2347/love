@@ -9,6 +9,7 @@ export const SCHOOLS_FALLBACK: SchoolItem[] = [
     name: '深圳大学',
     domain: 'mails.szu.edu.cn',
     emailSuffix: 'szu.edu.cn',
+    emailDomains: ['mails.szu.edu.cn', 'email.szu.edu.cn'],
     campuses: ['沧海校区', '粤海校区', '丽湖校区'],
   },
 ]

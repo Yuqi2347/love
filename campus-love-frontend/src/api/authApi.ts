@@ -7,6 +7,8 @@ export interface SchoolItem {
   domain: string
   /** 邮箱后缀，用于注册校验（如 szu.edu.cn） */
   emailSuffix?: string
+  /** 可选：完整域名列表，存在时注册页可「学号 + @域名」拼接（如深圳大学双后缀） */
+  emailDomains?: string[]
   /** 学校可选校区列表 */
   campuses?: string[]
 }

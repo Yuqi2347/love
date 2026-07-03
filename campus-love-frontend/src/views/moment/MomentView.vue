@@ -281,7 +281,9 @@ const baseRevealAt = computed(() => {
 const displayRevealAt = computed(() => {
   const t0 = baseRevealAt.value
   if (t0 == null || resultPublished.value) return null
-  if (status.value !== 'NOT_ENROLLED') return t0
+  // 已匹配或未匹配状态，使用原始时间
+  if (status.value === 'MATCHED' || status.value === 'UNMATCHED') return t0
+  // 未报名或等待匹配状态，如果时间已过，推算到下一个周五
   const weekMs = 7 * 24 * 60 * 60 * 1000
   let t = t0
   let guard = 0
@@ -303,8 +305,13 @@ const showRevealOverdueWait = computed(() => {
   if (resultPublished.value) return false
   const t0 = baseRevealAt.value
   if (t0 == null) return false
-  if (status.value === 'NOT_ENROLLED') return false
-  return nowMs.value >= t0
+  // 未报名和等待匹配状态不显示"已过期"提示，继续显示倒计时
+  if (status.value === 'NOT_ENROLLED' || status.value === 'WAITING') return false
+  // 只有在已匹配或未匹配状态下，才判断是否过期
+  if (status.value === 'MATCHED' || status.value === 'UNMATCHED') {
+    return nowMs.value >= t0
+  }
+  return false
 })
 
 const countdownParts = computed(() => {

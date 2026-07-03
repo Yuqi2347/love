@@ -19,6 +19,9 @@
 
     <div v-else class="result-shell">
       <section class="result-hero glass-panel panel-entrance">
+        <button class="back-btn" @click="$router.back()">
+          <el-icon><ArrowLeft /></el-icon>
+        </button>
         <div class="hero-badges">
           <span class="hero-badge glass-pill"><span class="pulse-dot"></span> 心动解密</span>
           <span class="hero-week glass-pill">本周结果</span>
@@ -152,7 +155,7 @@
           <header class="sheet-header">
             <span class="sheet-badge glass-pill">SCREEN 03</span>
             <h2>关于 TA</h2>
-            <p>现在你可以决定，是立刻往前一步，还是留一点时间慢慢靠近。</p>
+            <p class="sheet-subtitle-small">现在你可以决定，是立刻往前一步，还是留一点时间慢慢靠近。</p>
           </header>
 
           <div class="content-stack">
@@ -280,7 +283,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { ElMessage } from 'element-plus'
 import { useRouter, useRoute } from 'vue-router'
-import { Lock } from '@element-plus/icons-vue'
+import { Lock, ArrowLeft } from '@element-plus/icons-vue'
 import {
   confirmMomentChoice, getMomentDatePrep, getMomentResult,
   type MomentDatePrepResponse, type MomentResultResponse,
@@ -541,7 +544,25 @@ $max-width: 600px;
 .empty-state__icon { margin-bottom: 20px; font-size: 48px; }
 
 // ================= Hero 区 =================
-.result-hero { padding: 24px 28px; display: flex; flex-direction: column; align-items: center;}
+.result-hero { padding: 24px 28px; display: flex; flex-direction: column; align-items: center; position: relative;}
+.back-btn {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.9);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s;
+  box-shadow: 0 4px 12px rgba(215, 127, 162, 0.1);
+  &:hover { transform: scale(1.05); background: rgba(255, 255, 255, 1); }
+}
 .hero-badges { display: flex; gap: 12px; margin-bottom: 20px; }
 .hero-badge, .hero-week, .sheet-badge { padding: 6px 14px; font-size: 11px; font-weight: 800; color: $accent-pink; letter-spacing: 1px; }
 
@@ -568,6 +589,7 @@ $max-width: 600px;
 .sheet-header { text-align: center; margin-bottom: 28px; display: flex; flex-direction: column; align-items: center; gap: 12px; }
 .sheet-header h2 { margin: 0; color: $text-main; font-size: 28px; font-family: $serif; font-weight: 700; }
 .sheet-header p { margin: 0; color: $text-sub; font-size: 14px; max-width: 360px; line-height: 1.6;}
+.sheet-subtitle-small { font-size: 12px !important; }
 
 .content-stack { display: flex; flex-direction: column; gap: 16px; }
 
