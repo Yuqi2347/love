@@ -114,6 +114,6 @@ It represents:
 
 - a product point of view on AI and social life
 - a set of interaction mechanisms designed from that point of view
-- an implemented multi-surface prototype across backend, web, admin, and mini-program environments
+- an implemented multi-surface prototype across backend, web, and admin environments
 
 It does not claim to be a final social product. It is a serious exploration of how AI might help young people move toward each other, rather than away from each other.
