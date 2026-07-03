@@ -4,18 +4,18 @@
 
 spring:
   datasource:
-    username: ${DB_USERNAME:root}
-    password: ${DB_PASSWORD:campus123}
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
   mail:
-    username: ${MAIL_USERNAME:dev@example.com}
-    password: ${MAIL_PASSWORD:dev}
-    from: ${MAIL_FROM:dev@example.com}
+    username: ${MAIL_USERNAME:}
+    password: ${MAIL_PASSWORD:}
+    from: ${MAIL_FROM:}
 
 app:
   jwt:
-    secret: ${JWT_SECRET:dev-jwt-secret-must-be-at-least-32-bytes-long}
+    secret: ${JWT_SECRET:}
   security:
     enforce-secrets: false
 
 ai:
-  api-key: ${AI_API_KEY:sk-dev-placeholder}
+  api-key: ${AI_API_KEY:}

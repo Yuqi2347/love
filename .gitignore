@@ -80,6 +80,8 @@ __pycache__/
 venv/
 *.egg-info/
 .eggs/
+*.backup
+*.new
 
 # img2img 等脚本生成的输出
 output/
@@ -94,3 +96,9 @@ test*.png
 .cursor/
 img2img.py
 weapp/project.private.config.json
+
+# === Internal backend docs / ops scripts ===
+/campus-love-backend/docs/
+/campus-love-backend/scripts/perf/
+/campus-love-backend/scripts/db-backup-restore-drill.sh
+/campus-love-backend/scripts/db-common.sh
